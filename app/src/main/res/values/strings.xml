@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">PillPronto</string>
+    <string name="reminder_channel_name">Remindere medicație</string>
+    <string name="reminder_channel_desc">Notificări pentru administrarea medicamentelor la timp</string>
+</resources>

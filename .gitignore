@@ -1,0 +1,40 @@
+# ==== Android / Gradle ====
+*.iml
+.gradle/
+/build/
+/captures/
+app/build/
+**/build/
+.externalNativeBuild/
+.cxx/
+
+# Fișiere locale de mediu (nu se urcă)
+/local.properties
+
+# ==== IDE ====
+/.idea/
+*.ipr
+*.iws
+.DS_Store
+Thumbs.db
+
+# ==== Artefacte de build ====
+*.apk
+*.aab
+*.ap_
+*.dex
+*.class
+
+# ==== SECRETE — NU urca niciodată ====
+*.keystore
+*.jks
+keystore.properties
+key.properties
+google-services.json
+*.p12
+secrets.properties
+local.env
+
+# ==== Loguri / temporare ====
+*.log
+/hs_err_pid*
