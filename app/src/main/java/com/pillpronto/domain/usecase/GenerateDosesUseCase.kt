@@ -12,6 +12,9 @@ class GenerateDosesUseCase @Inject constructor(
     private val doseRepository: DoseRepository
 ) {
     suspend operator fun invoke(treatment: Treatment, horizonDays: Long) {
+        // Tratamentele "la nevoie" (PRN) nu au orar fix — nu se genereaza doze programate pentru ele.
+        if (treatment.asNeeded) return
+
         val now = LocalDateTime.now()
         val start = maxOf(treatment.startDate, LocalDate.now())
         val end = treatment.endDate?.let { minOf(it, start.plusDays(horizonDays)) }

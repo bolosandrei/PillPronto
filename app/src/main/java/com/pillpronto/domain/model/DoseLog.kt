@@ -8,5 +8,8 @@ data class DoseLog(
     val treatmentId: Long,
     val scheduledAt: LocalDateTime,
     val status: DoseStatus = DoseStatus.PENDING,
-    val takenAt: LocalDateTime? = null
+    val takenAt: LocalDateTime? = null,
+    // Doza logata ad-hoc pentru un tratament "la nevoie" (PRN) — exclusa din calculul PDC/MPR,
+    // pentru ca nu exista o "doza programata" fata de care sa se raporteze aderenta.
+    val isAsNeeded: Boolean = false
 )

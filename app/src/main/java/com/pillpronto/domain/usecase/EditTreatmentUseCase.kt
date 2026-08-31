@@ -14,8 +14,7 @@ class EditTreatmentUseCase @Inject constructor(
 ) {
     suspend operator fun invoke(treatment: Treatment, horizonDays: Long = 30) {
         require(treatment.id != 0L) { "Editarea necesita un id valid" }
-        require(treatment.medicationName.isNotBlank()) { "Numele medicamentului este obligatoriu" }
-        require(treatment.times.isNotEmpty()) { "Cel putin o ora de administrare este necesara" }
+        validateTreatment(treatment)
         treatmentRepository.upsertTreatment(treatment)
         doseRepository.deleteFuturePending(treatment.id, LocalDateTime.now())
         generateDoses(treatment, horizonDays)

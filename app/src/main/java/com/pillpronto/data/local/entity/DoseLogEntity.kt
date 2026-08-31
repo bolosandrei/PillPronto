@@ -22,5 +22,6 @@ data class DoseLogEntity(
     val treatmentId: Long,
     val scheduledAt: String,       // ISO LocalDateTime
     val status: String,            // DoseStatus name
-    val takenAt: String?           // ISO LocalDateTime sau null
+    val takenAt: String?,          // ISO LocalDateTime sau null
+    val isAsNeeded: Boolean = false // doza PRN logata ad-hoc — exclusa din PDC/MPR
 )

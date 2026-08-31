@@ -36,6 +36,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
@@ -47,6 +48,7 @@ import com.pillpronto.core.ui.theme.DoseMissed
 import com.pillpronto.core.ui.theme.DoseTaken
 import com.pillpronto.domain.model.DoseItem
 import com.pillpronto.domain.model.DoseStatus
+import com.pillpronto.domain.model.Treatment
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
@@ -64,6 +66,7 @@ private const val DATE_WINDOW_FUTURE_DAYS = 60L
 fun TodayScreen(padding: PaddingValues, vm: TodayViewModel = hiltViewModel()) {
     val doses by vm.doses.collectAsStateWithLifecycle()
     val selectedDate by vm.selectedDate.collectAsStateWithLifecycle()
+    val asNeededTreatments by vm.asNeededTreatments.collectAsStateWithLifecycle()
     val today = remember { LocalDate.now() }
     val context = LocalContext.current
 
@@ -84,7 +87,13 @@ fun TodayScreen(padding: PaddingValues, vm: TodayViewModel = hiltViewModel()) {
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(titleFor(selectedDate, today), style = MaterialTheme.typography.headlineSmall)
+            Text(
+                titleFor(selectedDate, today),
+                style = MaterialTheme.typography.headlineSmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false)
+            )
             if (selectedDate != today) {
                 TextButton(onClick = { vm.onDateSelected(today) }) { Text("Azi") }
             }
@@ -99,6 +108,16 @@ fun TodayScreen(padding: PaddingValues, vm: TodayViewModel = hiltViewModel()) {
 
         if (!canExact) {
             ExactAlarmBanner(onOpenSettings = { Permissions.openExactAlarmSettings(context) })
+        }
+
+        // Actiune rapida pentru tratamentele "la nevoie" (PRN) — doar pe ziua curenta, nu are sens
+        // sa "loghezi acum" pentru o zi din trecut/viitor selectata din fereastra glisanta.
+        if (selectedDate == today && asNeededTreatments.isNotEmpty()) {
+            AsNeededSection(
+                treatments = asNeededTreatments,
+                onLog = { vm.onLogAsNeeded(it) },
+                modifier = Modifier.padding(top = 12.dp)
+            )
         }
 
         if (doses.isEmpty()) {
@@ -196,6 +215,29 @@ private fun DateChip(date: LocalDate, isSelected: Boolean, isToday: Boolean, onC
     }
 }
 
+/** Card cu actiune rapida pentru tratamentele "la nevoie" (PRN) — fara orar, logate ad-hoc. */
+@Composable
+private fun AsNeededSection(treatments: List<Treatment>, onLog: (Long) -> Unit, modifier: Modifier = Modifier) {
+    Card(modifier.fillMaxWidth()) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("La nevoie", style = MaterialTheme.typography.titleSmall)
+            treatments.forEach { t ->
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(t.medicationName, style = MaterialTheme.typography.bodyLarge)
+                        Text(t.dosage, style = MaterialTheme.typography.bodySmall)
+                    }
+                    OutlinedButton(onClick = { onLog(t.id) }) { Text("Am luat o doză") }
+                }
+            }
+        }
+    }
+}
+
 @Composable
 private fun ExactAlarmBanner(onOpenSettings: () -> Unit) {
     Card(
@@ -221,7 +263,9 @@ private fun DoseRow(item: DoseItem, onTake: () -> Unit, onSkip: () -> Unit) {
         Column(Modifier.padding(12.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(item.medicationName, style = MaterialTheme.typography.titleMedium)
-                Text(item.dose.scheduledAt.toLocalTime().format(HM))
+                Text(
+                    if (item.dose.isAsNeeded) "la nevoie" else item.dose.scheduledAt.toLocalTime().format(HM)
+                )
             }
             Text(item.dosage, style = MaterialTheme.typography.bodySmall)
             when (item.dose.status) {

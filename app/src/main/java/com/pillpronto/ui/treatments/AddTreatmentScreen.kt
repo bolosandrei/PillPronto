@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -23,6 +24,7 @@ import androidx.compose.material3.InputChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimePicker
@@ -34,6 +36,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -69,17 +72,34 @@ fun AddTreatmentScreen(padding: PaddingValues, onDone: () -> Unit, vm: AddTreatm
         OutlinedTextField(state.name, vm::onName, label = { Text("Medicament") }, modifier = Modifier.fillMaxWidth())
         OutlinedTextField(state.dosage, vm::onDosage, label = { Text("Dozaj (ex. 500 mg)") }, modifier = Modifier.fillMaxWidth())
 
-        Text("Ore de administrare", style = MaterialTheme.typography.titleSmall)
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            state.times.forEach { time ->
-                InputChip(
-                    selected = false,
-                    onClick = { vm.removeTime(time) },
-                    label = { Text(time.format(HM)) },
-                    trailingIcon = { Icon(Icons.Filled.Close, contentDescription = "Elimină") }
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(Modifier.weight(1f).padding(end = 8.dp)) {
+                Text("La nevoie (fără orar fix)", style = MaterialTheme.typography.titleSmall)
+                Text(
+                    "Fără remindere; înregistrezi o doză oricând, din lista de tratamente.",
+                    style = MaterialTheme.typography.bodySmall
                 )
             }
-            AssistChip(onClick = { showTimePicker = true }, label = { Text("+ oră") })
+            Switch(checked = state.asNeeded, onCheckedChange = vm::onAsNeededToggle)
+        }
+
+        if (!state.asNeeded) {
+            Text("Ore de administrare", style = MaterialTheme.typography.titleSmall)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                state.times.forEach { time ->
+                    InputChip(
+                        selected = false,
+                        onClick = { vm.removeTime(time) },
+                        label = { Text(time.format(HM)) },
+                        trailingIcon = { Icon(Icons.Filled.Close, contentDescription = "Elimină") }
+                    )
+                }
+                AssistChip(onClick = { showTimePicker = true }, label = { Text("+ oră") })
+            }
         }
 
         OutlinedButton(onClick = { showStartPicker = true }, modifier = Modifier.fillMaxWidth()) {

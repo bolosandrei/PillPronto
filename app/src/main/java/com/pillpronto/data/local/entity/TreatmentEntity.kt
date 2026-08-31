@@ -11,5 +11,6 @@ data class TreatmentEntity(
     val timesCsv: String,          // "08:00,20:00"
     val startDate: String,         // ISO LocalDate
     val endDate: String?,          // ISO LocalDate sau null
-    val active: Boolean
+    val active: Boolean,
+    val asNeeded: Boolean = false  // "la nevoie" (PRN) — fara orar fix
 )

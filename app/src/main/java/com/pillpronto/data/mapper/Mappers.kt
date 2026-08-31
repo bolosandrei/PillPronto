@@ -22,7 +22,8 @@ fun Treatment.toEntity(): TreatmentEntity = TreatmentEntity(
     timesCsv = times.sorted().joinToString(",") { it.format(TIME_FMT) },
     startDate = startDate.toString(),
     endDate = endDate?.toString(),
-    active = active
+    active = active,
+    asNeeded = asNeeded
 )
 
 fun TreatmentEntity.toDomain(): Treatment = Treatment(
@@ -32,7 +33,8 @@ fun TreatmentEntity.toDomain(): Treatment = Treatment(
     times = timesCsv.split(",").filter { it.isNotBlank() }.map { LocalTime.parse(it, TIME_FMT) },
     startDate = LocalDate.parse(startDate),
     endDate = endDate?.let { LocalDate.parse(it) },
-    active = active
+    active = active,
+    asNeeded = asNeeded
 )
 
 // --- DoseLog ---
@@ -41,7 +43,8 @@ fun DoseLog.toEntity(): DoseLogEntity = DoseLogEntity(
     treatmentId = treatmentId,
     scheduledAt = scheduledAt.toString(),
     status = status.name,
-    takenAt = takenAt?.toString()
+    takenAt = takenAt?.toString(),
+    isAsNeeded = isAsNeeded
 )
 
 fun DoseLogEntity.toDomain(): DoseLog = DoseLog(
@@ -49,7 +52,8 @@ fun DoseLogEntity.toDomain(): DoseLog = DoseLog(
     treatmentId = treatmentId,
     scheduledAt = LocalDateTime.parse(scheduledAt),
     status = DoseStatus.valueOf(status),
-    takenAt = takenAt?.let { LocalDateTime.parse(it) }
+    takenAt = takenAt?.let { LocalDateTime.parse(it) },
+    isAsNeeded = isAsNeeded
 )
 
 fun DoseItemView.toDomain(): DoseItem = DoseItem(

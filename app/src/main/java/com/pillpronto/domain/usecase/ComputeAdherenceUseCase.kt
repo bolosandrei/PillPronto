@@ -12,6 +12,9 @@ import java.time.LocalDateTime
  * - PDC = zile "acoperite" (toate dozele zilei TAKEN) / total zile cu doze programate.
  * - MPR = doze luate / doze programate.
  * Definitii operationale simplificate; de aliniat la metrica finala a tezei.
+ *
+ * Dozele "la nevoie" (PRN, isAsNeeded = true) sunt excluse: nu exista o "doza programata"
+ * fata de care sa se raporteze aderenta, deci le-am include ar denatura PDC/MPR.
  */
 class ComputeAdherenceUseCase @Inject constructor(
     private val doseRepository: DoseRepository
@@ -21,7 +24,7 @@ class ComputeAdherenceUseCase @Inject constructor(
         val logs = doseRepository.getLogsBetween(
             start.atStartOfDay(),
             today.atTime(LocalDateTime.MAX.toLocalTime())
-        )
+        ).filter { !it.isAsNeeded }
         if (logs.isEmpty()) return AdherenceStats.EMPTY
 
         val taken = logs.count { it.status == DoseStatus.TAKEN }

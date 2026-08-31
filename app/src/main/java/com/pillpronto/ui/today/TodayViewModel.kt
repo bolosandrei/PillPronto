@@ -4,7 +4,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.pillpronto.domain.model.DoseItem
 import com.pillpronto.domain.model.DoseStatus
+import com.pillpronto.domain.model.Treatment
+import com.pillpronto.domain.usecase.LogAsNeededDoseUseCase
 import com.pillpronto.domain.usecase.LogDoseUseCase
+import com.pillpronto.domain.usecase.ObserveActiveAsNeededTreatmentsUseCase
 import com.pillpronto.domain.usecase.ObserveTodayDosesUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -22,7 +25,9 @@ import javax.inject.Inject
 @HiltViewModel
 class TodayViewModel @Inject constructor(
     observeTodayDoses: ObserveTodayDosesUseCase,
-    private val logDose: LogDoseUseCase
+    observeActiveAsNeededTreatments: ObserveActiveAsNeededTreatmentsUseCase,
+    private val logDose: LogDoseUseCase,
+    private val logAsNeededDose: LogAsNeededDoseUseCase
 ) : ViewModel() {
 
     // Ziua afisata pe ecranul "Azi" — implicit ziua curenta, selectabila din fereastra glisanta de date.
@@ -33,10 +38,16 @@ class TodayViewModel @Inject constructor(
         .flatMapLatest { date -> observeTodayDoses(date) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList<DoseItem>())
 
+    // Tratamentele "la nevoie" (PRN) — actiune rapida de logare, afisata doar pe ziua curenta.
+    val asNeededTreatments = observeActiveAsNeededTreatments().stateIn(
+        viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList<Treatment>()
+    )
+
     fun onDateSelected(date: LocalDate) {
         _selectedDate.value = date
     }
 
     fun onTake(doseId: Long) = viewModelScope.launch { logDose(doseId, DoseStatus.TAKEN) }
     fun onSkip(doseId: Long) = viewModelScope.launch { logDose(doseId, DoseStatus.SKIPPED) }
+    fun onLogAsNeeded(treatmentId: Long) = viewModelScope.launch { logAsNeededDose(treatmentId) }
 }

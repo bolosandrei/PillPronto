@@ -19,6 +19,9 @@ import java.time.LocalDate
 import java.time.LocalTime
 import javax.inject.Inject
 
+// Plafon de bun-simt pentru numele medicamentului (evita input absurd de lung in UI/notificari).
+const val MAX_MEDICATION_NAME_LENGTH = 200
+
 data class AddTreatmentUiState(
     val isEditing: Boolean = false,
     val name: String = "",
@@ -26,6 +29,7 @@ data class AddTreatmentUiState(
     val times: List<LocalTime> = listOf(LocalTime.of(8, 0), LocalTime.of(20, 0)),
     val startDate: LocalDate = LocalDate.now(),
     val endDate: LocalDate? = null,
+    val asNeeded: Boolean = false,
     val error: String? = null,
     val saved: Boolean = false
 )
@@ -56,7 +60,8 @@ class AddTreatmentViewModel @Inject constructor(
                             dosage = t.dosage,
                             times = t.times,
                             startDate = t.startDate,
-                            endDate = t.endDate
+                            endDate = t.endDate,
+                            asNeeded = t.asNeeded
                         )
                     }
                 }
@@ -68,6 +73,7 @@ class AddTreatmentViewModel @Inject constructor(
     fun onDosage(v: String) = _state.update { it.copy(dosage = v) }
     fun onStartDate(d: LocalDate) = _state.update { it.copy(startDate = d) }
     fun onEndDate(d: LocalDate?) = _state.update { it.copy(endDate = d) }
+    fun onAsNeededToggle(v: Boolean) = _state.update { it.copy(asNeeded = v) }
 
     fun addTime(time: LocalTime) = _state.update { s ->
         if (s.times.contains(time)) s else s.copy(times = (s.times + time).sorted())
@@ -77,8 +83,15 @@ class AddTreatmentViewModel @Inject constructor(
 
     fun save() {
         val s = _state.value
-        if (s.name.isBlank()) { _state.update { it.copy(error = "Introdu numele medicamentului") }; return }
-        if (s.times.isEmpty()) { _state.update { it.copy(error = "Adaugă cel puțin o oră") }; return }
+        val name = s.name.trim()
+        if (name.isBlank()) { _state.update { it.copy(error = "Introdu numele medicamentului") }; return }
+        if (name.length > MAX_MEDICATION_NAME_LENGTH) {
+            _state.update { it.copy(error = "Numele medicamentului este prea lung (max $MAX_MEDICATION_NAME_LENGTH caractere)") }
+            return
+        }
+        if (!s.asNeeded && s.times.isEmpty()) {
+            _state.update { it.copy(error = "Adaugă cel puțin o oră (sau bifează \"la nevoie\")") }; return
+        }
         if (s.endDate != null && s.endDate.isBefore(s.startDate)) {
             _state.update { it.copy(error = "Data de final nu poate fi înainte de start") }; return
         }
@@ -87,11 +100,12 @@ class AddTreatmentViewModel @Inject constructor(
             try {
                 val treatment = Treatment(
                     id = if (s.isEditing) treatmentId else 0L,
-                    medicationName = s.name.trim(),
+                    medicationName = name,
                     dosage = s.dosage.trim().ifBlank { "1 doză" },
-                    times = s.times,
+                    times = if (s.asNeeded) emptyList() else s.times,
                     startDate = s.startDate,
-                    endDate = s.endDate
+                    endDate = s.endDate,
+                    asNeeded = s.asNeeded
                 )
                 if (s.isEditing) {
                     reminderCoordinator.cancelFutureFor(treatmentId)

@@ -9,7 +9,7 @@ import com.pillpronto.data.local.entity.TreatmentEntity
 
 @Database(
     entities = [TreatmentEntity::class, DoseLogEntity::class],
-    version = 1,
+    version = 2, // v2: Treatment.asNeeded + DoseLog.isAsNeeded (PRN). fallbackToDestructiveMigration.
     exportSchema = false
 )
 abstract class PillProntoDatabase : RoomDatabase() {

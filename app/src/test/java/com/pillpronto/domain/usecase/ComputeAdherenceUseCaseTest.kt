@@ -56,4 +56,19 @@ class ComputeAdherenceUseCaseTest {
         assertEquals(2, stats.totalDays)
         assertEquals(1, stats.missedDoses)
     }
+
+    @Test
+    fun `dozele la nevoie (PRN) sunt excluse din PDC si MPR`() = runTest {
+        // Ziua 18: doza programata luata (acoperita) + o doza PRN luata separat (nu conteaza).
+        val logs = listOf(
+            DoseLog(1, 1, at(18, 8), DoseStatus.TAKEN),
+            DoseLog(2, 2, at(18, 14), DoseStatus.TAKEN, takenAt = at(18, 14), isAsNeeded = true)
+        )
+        val uc = ComputeAdherenceUseCase(FakeDoseRepository(logs))
+        val stats = uc(windowDays = 30, today = today)
+        assertEquals(1.0, stats.pdc, 0.0001)
+        assertEquals(1.0, stats.mpr, 0.0001)
+        assertEquals(1, stats.totalScheduledDoses)
+        assertEquals(1, stats.coveredDays)
+    }
 }
