@@ -20,6 +20,9 @@ class DoseRepositoryImpl @Inject constructor(
     override fun observeDosesForDate(date: LocalDate): Flow<List<DoseItem>> =
         dao.observeForDate(date.toString()).map { list -> list.map { it.toDomain() } }
 
+    override fun observeHistoryForTreatment(treatmentId: Long): Flow<List<DoseLog>> =
+        dao.observeHistoryForTreatment(treatmentId).map { list -> list.map { it.toDomain() } }
+
     override suspend fun getLogsBetween(start: LocalDateTime, end: LocalDateTime): List<DoseLog> =
         dao.getBetween(start.toString(), end.toString()).map { it.toDomain() }
 

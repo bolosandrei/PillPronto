@@ -35,7 +35,7 @@ private val HM = DateTimeFormatter.ofPattern("HH:mm")
 fun TreatmentsScreen(
     padding: PaddingValues,
     onAdd: () -> Unit,
-    onEdit: (Long) -> Unit,
+    onOpenDetail: (Long) -> Unit,
     vm: TreatmentsViewModel = hiltViewModel()
 ) {
     val treatments by vm.treatments.collectAsStateWithLifecycle()
@@ -48,7 +48,11 @@ fun TreatmentsScreen(
             } else {
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 12.dp)) {
                     items(treatments, key = { it.id }) { t ->
-                        TreatmentCard(t, onEdit = { onEdit(t.id) }, onLogAsNeeded = { vm.onLogAsNeeded(t.id) })
+                        TreatmentCard(
+                            t,
+                            onOpenDetail = { onOpenDetail(t.id) },
+                            onLogAsNeeded = { vm.onLogAsNeeded(t.id) }
+                        )
                     }
                 }
             }
@@ -60,8 +64,8 @@ fun TreatmentsScreen(
 }
 
 @Composable
-private fun TreatmentCard(t: Treatment, onEdit: () -> Unit, onLogAsNeeded: () -> Unit) {
-    Card(Modifier.fillMaxWidth().clickable(onClick = onEdit)) {
+private fun TreatmentCard(t: Treatment, onOpenDetail: () -> Unit, onLogAsNeeded: () -> Unit) {
+    Card(Modifier.fillMaxWidth().clickable(onClick = onOpenDetail)) {
         Column(Modifier.padding(12.dp)) {
             Text(t.medicationName, style = MaterialTheme.typography.titleMedium)
             Text(

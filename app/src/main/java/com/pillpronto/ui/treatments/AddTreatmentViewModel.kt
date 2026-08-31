@@ -31,7 +31,10 @@ data class AddTreatmentUiState(
     val endDate: LocalDate? = null,
     val asNeeded: Boolean = false,
     val error: String? = null,
-    val saved: Boolean = false
+    val saved: Boolean = false,
+    // Distinct de "saved": la stergere, tratamentul nu mai exista — navigarea trebuie sa
+    // sara peste ecranul de detaliu (daca a fost punctul de intrare), nu doar sa faca un pas inapoi.
+    val deleted: Boolean = false
 )
 
 @HiltViewModel
@@ -127,7 +130,7 @@ class AddTreatmentViewModel @Inject constructor(
             try {
                 reminderCoordinator.cancelFutureFor(treatmentId)
                 deleteTreatment(treatmentId)
-                _state.update { it.copy(saved = true) }
+                _state.update { it.copy(saved = true, deleted = true) }
             } catch (e: Exception) {
                 _state.update { it.copy(error = e.message ?: "Eroare la ștergere") }
             }

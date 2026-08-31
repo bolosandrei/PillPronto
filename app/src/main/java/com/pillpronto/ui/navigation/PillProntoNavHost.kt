@@ -22,6 +22,7 @@ import androidx.navigation.navArgument
 import com.pillpronto.ui.adherence.AdherenceScreen
 import com.pillpronto.ui.today.TodayScreen
 import com.pillpronto.ui.treatments.AddTreatmentScreen
+import com.pillpronto.ui.treatments.TreatmentDetailScreen
 import com.pillpronto.ui.treatments.TreatmentsScreen
 
 @Composable
@@ -56,7 +57,7 @@ fun PillProntoNavHost() {
                 TreatmentsScreen(
                     padding,
                     onAdd = { navController.navigate(Route.AddEditTreatment.create()) },
-                    onEdit = { id -> navController.navigate(Route.AddEditTreatment.create(id)) }
+                    onOpenDetail = { id -> navController.navigate(Route.TreatmentDetail.create(id)) }
                 )
             }
             composable(Route.Adherence.path) { AdherenceScreen(padding) }
@@ -66,7 +67,26 @@ fun PillProntoNavHost() {
                     type = NavType.LongType; defaultValue = -1L
                 })
             ) {
-                AddTreatmentScreen(padding, onDone = { navController.popBackStack() })
+                AddTreatmentScreen(
+                    padding,
+                    onDone = { deleted ->
+                        if (deleted) {
+                            // Tratamentul nu mai exista — sare peste ecranul de detaliu (daca a fost punctul de intrare).
+                            navController.popBackStack(Route.Treatments.path, inclusive = false)
+                        } else {
+                            navController.popBackStack()
+                        }
+                    }
+                )
+            }
+            composable(
+                route = Route.TreatmentDetail.path,
+                arguments = listOf(navArgument(Route.TreatmentDetail.ARG) { type = NavType.LongType })
+            ) {
+                TreatmentDetailScreen(
+                    padding,
+                    onEdit = { id -> navController.navigate(Route.AddEditTreatment.create(id)) }
+                )
             }
         }
     }

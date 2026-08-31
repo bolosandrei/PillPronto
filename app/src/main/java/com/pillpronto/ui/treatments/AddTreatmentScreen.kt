@@ -52,9 +52,13 @@ private val DMY = DateTimeFormatter.ofPattern("dd.MM.yyyy")
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
-fun AddTreatmentScreen(padding: PaddingValues, onDone: () -> Unit, vm: AddTreatmentViewModel = hiltViewModel()) {
+fun AddTreatmentScreen(
+    padding: PaddingValues,
+    onDone: (deleted: Boolean) -> Unit,
+    vm: AddTreatmentViewModel = hiltViewModel()
+) {
     val state by vm.state.collectAsStateWithLifecycle()
-    LaunchedEffect(state.saved) { if (state.saved) onDone() }
+    LaunchedEffect(state.saved) { if (state.saved) onDone(state.deleted) }
 
     var showTimePicker by remember { mutableStateOf(false) }
     var showStartPicker by remember { mutableStateOf(false) }

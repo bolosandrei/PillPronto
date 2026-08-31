@@ -44,6 +44,16 @@ interface DoseDao {
     @Query("SELECT * FROM dose_logs WHERE scheduledAt BETWEEN :startIso AND :endIso")
     suspend fun getBetween(startIso: String, endIso: String): List<DoseLogEntity>
 
+    /** Istoricul de administrare al unui tratament (doar doze cu status final — nu cele programate/viitoare). */
+    @Query(
+        """
+        SELECT * FROM dose_logs
+        WHERE treatmentId = :treatmentId AND status != 'PENDING'
+        ORDER BY scheduledAt DESC
+        """
+    )
+    fun observeHistoryForTreatment(treatmentId: Long): Flow<List<DoseLogEntity>>
+
     @Query("UPDATE dose_logs SET status = :status, takenAt = :takenAt WHERE id = :doseId")
     suspend fun updateStatus(doseId: Long, status: String, takenAt: String?)
 

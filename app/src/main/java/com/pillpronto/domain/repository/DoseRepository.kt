@@ -9,6 +9,7 @@ import java.time.LocalDateTime
 
 interface DoseRepository {
     fun observeDosesForDate(date: LocalDate): Flow<List<DoseItem>>
+    fun observeHistoryForTreatment(treatmentId: Long): Flow<List<DoseLog>>
     suspend fun getLogsBetween(start: LocalDateTime, end: LocalDateTime): List<DoseLog>
     suspend fun insertDoses(doses: List<DoseLog>)
     suspend fun updateStatus(doseId: Long, status: DoseStatus, takenAt: LocalDateTime?)

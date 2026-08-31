@@ -15,6 +15,8 @@ class FakeDoseRepository(private var logs: List<DoseLog> = emptyList()) : DoseRe
     fun setLogs(newLogs: List<DoseLog>) { logs = newLogs }
 
     override fun observeDosesForDate(date: LocalDate): Flow<List<DoseItem>> = flowOf(emptyList())
+    override fun observeHistoryForTreatment(treatmentId: Long): Flow<List<DoseLog>> =
+        flowOf(logs.filter { it.treatmentId == treatmentId && it.status != DoseStatus.PENDING })
     override suspend fun getLogsBetween(start: LocalDateTime, end: LocalDateTime): List<DoseLog> = logs
     override suspend fun insertDoses(doses: List<DoseLog>) { logs = logs + doses }
     override suspend fun updateStatus(doseId: Long, status: DoseStatus, takenAt: LocalDateTime?) {}

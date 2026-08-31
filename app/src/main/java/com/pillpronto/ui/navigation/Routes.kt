@@ -8,6 +8,10 @@ sealed class Route(val path: String, val label: String) {
         const val ARG = "treatmentId"
         fun create(id: Long = -1L) = "treatment_form?treatmentId=$id"
     }
+    data object TreatmentDetail : Route("treatment_detail/{treatmentId}", "Detalii tratament") {
+        const val ARG = "treatmentId"
+        fun create(id: Long) = "treatment_detail/$id"
+    }
 
     companion object {
         val bottomBar = listOf(Today, Treatments, Adherence)
