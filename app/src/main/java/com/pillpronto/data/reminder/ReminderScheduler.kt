@@ -10,19 +10,18 @@ import android.content.Intent
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import com.pillpronto.MainActivity
 import com.pillpronto.R
-import com.pillpronto.domain.model.Treatment
 import dagger.hilt.android.qualifiers.ApplicationContext
-import java.time.LocalDateTime
 import java.time.ZoneId
+import java.time.LocalDateTime
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Programeaza remindere ca alarme EXACTE (AlarmManager). Alarma e doar un "nudge";
- * sursa de adevar pentru aderenta ramane DoseLog din baza de date.
- * Nota: pe Android 12+ e nevoie de permisiunea SCHEDULE_EXACT_ALARM (verificata mai jos).
- * Battery optimization pe Xiaomi/Huawei/Samsung se trateaza in Faza 7.
+ * Programeaza remindere ca alarme EXACTE per-doza (carauza: doseId).
+ * Notificarea: tap -> deschide app; butoane "Confirma"/"Omite" -> marcheaza doza direct.
+ * Sursa de adevar pentru aderenta ramane DoseLog. Battery optimization -> Faza 7.
  */
 @Singleton
 class ReminderScheduler @Inject constructor(
@@ -42,38 +41,17 @@ class ReminderScheduler @Inject constructor(
     fun canScheduleExact(): Boolean =
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) alarmManager.canScheduleExactAlarms() else true
 
-    /** Programeaza urmatoarea aparitie pentru fiecare ora din tratament. */
-    fun scheduleTreatment(treatment: Treatment) {
-        treatment.times.forEachIndexed { index, time ->
-            val next = nextOccurrence(time.hour, time.minute)
-            schedule(
-                requestCode = requestCode(treatment.id, index),
-                triggerAtMillis = next,
-                medicationName = treatment.medicationName,
-                dosage = treatment.dosage,
-                hour = time.hour,
-                minute = time.minute
-            )
-        }
-    }
-
-    fun cancelTreatment(treatment: Treatment) {
-        treatment.times.indices.forEach { index ->
-            val pi = buildPendingIntent(requestCode(treatment.id, index), null, null, 0, 0)
-            alarmManager.cancel(pi)
-        }
-    }
-
     @SuppressLint("MissingPermission")
-    fun schedule(
-        requestCode: Int,
-        triggerAtMillis: Long,
-        medicationName: String,
-        dosage: String,
-        hour: Int,
-        minute: Int
-    ) {
-        val pi = buildPendingIntent(requestCode, medicationName, dosage, hour, minute)
+    fun scheduleDose(doseId: Long, triggerAtMillis: Long, medName: String, dosage: String) {
+        val intent = Intent(context, ReminderReceiver::class.java).apply {
+            putExtra(EXTRA_DOSE_ID, doseId)
+            putExtra(EXTRA_MED_NAME, medName)
+            putExtra(EXTRA_DOSAGE, dosage)
+        }
+        val pi = PendingIntent.getBroadcast(
+            context, doseId.toInt(), intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
         if (canScheduleExact()) {
             alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, pi)
         } else {
@@ -81,50 +59,70 @@ class ReminderScheduler @Inject constructor(
         }
     }
 
-    fun showNotification(medicationName: String, dosage: String) {
+    fun cancelDose(doseId: Long) {
+        val intent = Intent(context, ReminderReceiver::class.java)
+        val pi = PendingIntent.getBroadcast(
+            context, doseId.toInt(), intent,
+            PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE
+        )
+        pi?.let { alarmManager.cancel(it) }
+        cancelNotification(doseId)
+    }
+
+    fun showDoseNotification(doseId: Long, medName: String, dosage: String) {
+        val openIntent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP
+        }
+        val contentPi = PendingIntent.getActivity(
+            context, doseId.toInt(), openIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val takePi = actionPendingIntent(doseId, ACTION_TAKE, medName, dosage)
+        val skipPi = actionPendingIntent(doseId, ACTION_SKIP, medName, dosage)
+
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
-            .setContentTitle("E timpul pentru $medicationName")
-            .setContentText("Doza: $dosage. Atinge aplicatia pentru a confirma.")
+            .setContentTitle("E timpul pentru $medName")
+            .setContentText("Doza: $dosage")
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
+            .setContentIntent(contentPi)
+            .addAction(0, "Confirmă", takePi)
+            .addAction(0, "Omite", skipPi)
             .build()
         try {
-            NotificationManagerCompat.from(context).notify(medicationName.hashCode(), notification)
+            NotificationManagerCompat.from(context).notify(doseId.toInt(), notification)
         } catch (_: SecurityException) {
             // POST_NOTIFICATIONS neacordata; se solicita din UI.
         }
     }
 
-    private fun buildPendingIntent(
-        requestCode: Int, medicationName: String?, dosage: String?, hour: Int, minute: Int
-    ): PendingIntent {
-        val intent = Intent(context, ReminderReceiver::class.java).apply {
-            putExtra(EXTRA_MED_NAME, medicationName)
+    fun cancelNotification(doseId: Long) =
+        NotificationManagerCompat.from(context).cancel(doseId.toInt())
+
+    private fun actionPendingIntent(doseId: Long, action: String, medName: String, dosage: String): PendingIntent {
+        val intent = Intent(context, DoseActionReceiver::class.java).apply {
+            this.action = action
+            putExtra(EXTRA_DOSE_ID, doseId)
+            putExtra(EXTRA_MED_NAME, medName)
             putExtra(EXTRA_DOSAGE, dosage)
-            putExtra(EXTRA_HOUR, hour)
-            putExtra(EXTRA_MINUTE, minute)
         }
+        val code = (doseId.toInt() * 10) + if (action == ACTION_TAKE) 1 else 2
         return PendingIntent.getBroadcast(
-            context, requestCode, intent,
+            context, code, intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
     }
 
-    private fun nextOccurrence(hour: Int, minute: Int): Long {
-        val now = LocalDateTime.now()
-        var next = now.withHour(hour).withMinute(minute).withSecond(0).withNano(0)
-        if (!next.isAfter(now)) next = next.plusDays(1)
-        return next.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
-    }
-
-    private fun requestCode(treatmentId: Long, index: Int): Int = (treatmentId * 100 + index).toInt()
-
     companion object {
         const val CHANNEL_ID = "medication_reminders"
+        const val EXTRA_DOSE_ID = "extra_dose_id"
         const val EXTRA_MED_NAME = "extra_med_name"
         const val EXTRA_DOSAGE = "extra_dosage"
-        const val EXTRA_HOUR = "extra_hour"
-        const val EXTRA_MINUTE = "extra_minute"
+        const val ACTION_TAKE = "com.pillpronto.action.TAKE"
+        const val ACTION_SKIP = "com.pillpronto.action.SKIP"
+
+        fun toEpochMillis(dt: LocalDateTime): Long =
+            dt.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
     }
 }

@@ -13,10 +13,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavDestination.Companion.hierarchy
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import com.pillpronto.ui.adherence.AdherenceScreen
 import com.pillpronto.ui.today.TodayScreen
 import com.pillpronto.ui.treatments.AddTreatmentScreen
@@ -48,18 +50,23 @@ fun PillProntoNavHost() {
             }
         }
     ) { padding ->
-        NavHost(
-            navController = navController,
-            startDestination = Route.Today.path,
-            modifier = Modifier
-        ) {
+        NavHost(navController = navController, startDestination = Route.Today.path, modifier = Modifier) {
             composable(Route.Today.path) { TodayScreen(padding) }
             composable(Route.Treatments.path) {
-                TreatmentsScreen(padding, onAdd = { navController.navigate(Route.AddTreatment.path) })
+                TreatmentsScreen(
+                    padding,
+                    onAdd = { navController.navigate(Route.AddEditTreatment.create()) },
+                    onEdit = { id -> navController.navigate(Route.AddEditTreatment.create(id)) }
+                )
             }
             composable(Route.Adherence.path) { AdherenceScreen(padding) }
-            composable(Route.AddTreatment.path) {
-                AddTreatmentScreen(onDone = { navController.popBackStack() })
+            composable(
+                route = Route.AddEditTreatment.path,
+                arguments = listOf(navArgument(Route.AddEditTreatment.ARG) {
+                    type = NavType.LongType; defaultValue = -1L
+                })
+            ) {
+                AddTreatmentScreen(padding, onDone = { navController.popBackStack() })
             }
         }
     }

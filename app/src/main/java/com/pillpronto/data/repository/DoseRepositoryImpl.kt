@@ -34,4 +34,19 @@ class DoseRepositoryImpl @Inject constructor(
 
     override suspend fun markOverdueAsMissed(now: LocalDateTime, graceMinutes: Long) =
         dao.markOverdueMissed(now.minusMinutes(graceMinutes).toString())
+
+    override suspend fun getUpcomingPendingItems(now: LocalDateTime, until: LocalDateTime): List<DoseItem> =
+        dao.getUpcomingPendingItems(now.toString(), until.toString()).map { it.toDomain() }
+
+    override suspend fun getItemById(doseId: Long): DoseItem? =
+        dao.getItemById(doseId)?.toDomain()
+
+    override suspend fun getFuturePendingIds(treatmentId: Long, from: LocalDateTime): List<Long> =
+        dao.getFuturePendingIds(treatmentId, from.toString())
+
+    override suspend fun deleteFuturePending(treatmentId: Long, from: LocalDateTime) =
+        dao.deleteFuturePending(treatmentId, from.toString())
+
+    override suspend fun getMaxScheduled(treatmentId: Long): LocalDateTime? =
+        dao.getMaxScheduled(treatmentId)?.let { LocalDateTime.parse(it) }
 }

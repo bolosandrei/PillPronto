@@ -1,5 +1,6 @@
 package com.pillpronto.ui.treatments
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -28,7 +29,12 @@ import java.time.format.DateTimeFormatter
 private val HM = DateTimeFormatter.ofPattern("HH:mm")
 
 @Composable
-fun TreatmentsScreen(padding: PaddingValues, onAdd: () -> Unit, vm: TreatmentsViewModel = hiltViewModel()) {
+fun TreatmentsScreen(
+    padding: PaddingValues,
+    onAdd: () -> Unit,
+    onEdit: (Long) -> Unit,
+    vm: TreatmentsViewModel = hiltViewModel()
+) {
     val treatments by vm.treatments.collectAsStateWithLifecycle()
 
     Box(Modifier.fillMaxSize().padding(padding)) {
@@ -39,7 +45,7 @@ fun TreatmentsScreen(padding: PaddingValues, onAdd: () -> Unit, vm: TreatmentsVi
             } else {
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 12.dp)) {
                     items(treatments, key = { it.id }) { t ->
-                        Card(Modifier.fillMaxWidth()) {
+                        Card(Modifier.fillMaxWidth().clickable { onEdit(t.id) }) {
                             Column(Modifier.padding(12.dp)) {
                                 Text(t.medicationName, style = MaterialTheme.typography.titleMedium)
                                 Text("${t.dosage} • ${t.times.joinToString(", ") { it.format(HM) }}")

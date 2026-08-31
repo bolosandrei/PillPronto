@@ -4,7 +4,7 @@ import com.pillpronto.domain.model.Treatment
 import com.pillpronto.domain.repository.TreatmentRepository
 import javax.inject.Inject
 
-/** Salveaza un tratament si returneaza id-ul; genereaza dozele in orizontul dat. */
+/** Salveaza un tratament nou, genereaza dozele. Programarea alarmelor -> ReminderCoordinator (in VM). */
 class AddTreatmentUseCase @Inject constructor(
     private val treatmentRepository: TreatmentRepository,
     private val generateDoses: GenerateDosesUseCase
