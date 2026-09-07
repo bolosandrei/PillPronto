@@ -1,14 +1,33 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
 }
 
+// Credentiale Supabase — local.properties e gitignored, niciodata in cod/VCS.
+// Vezi docs/user-management-plan.md pentru cum se obtin (Project Settings -> API).
+val localProperties = Properties().apply {
+    val file = rootProject.file("local.properties")
+    if (file.exists()) file.inputStream().use { load(it) }
+}
+fun requiredLocalProperty(key: String): String =
+    localProperties.getProperty(key)
+        ?: throw GradleException(
+            "Lipseste \"$key\" din local.properties. Adauga-l (vezi docs/user-management-plan.md) " +
+                "inainte de a compila — necesar pentru SDK-ul Supabase."
+        )
+
 android {
     namespace = "com.pillpronto"
-    compileSdk = 35
+    // 36, nu 35: androidx.browser (adus tranzitiv de auth-kt, pentru flow-uri OAuth cu Custom
+    // Tabs — relevant la Google Sign-In, Faza 1.5b urmatoare) cere compileSdk >= 36.
+    // targetSdk ramane 35 — nu schimbam comportament la runtime, doar API-urile de compilare.
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.pillpronto"
@@ -18,6 +37,9 @@ android {
         versionName = "0.1.0"
         // HiltTestRunner instantiaza HiltTestApplication in loc de PillProntoApp — necesar pt. @HiltAndroidTest.
         testInstrumentationRunner = "com.pillpronto.HiltTestRunner"
+
+        buildConfigField("String", "SUPABASE_URL", "\"${requiredLocalProperty("SUPABASE_URL")}\"")
+        buildConfigField("String", "SUPABASE_PUBLISHABLE_KEY", "\"${requiredLocalProperty("SUPABASE_PUBLISHABLE_KEY")}\"")
     }
 
     buildTypes {
@@ -38,6 +60,14 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
+    }
+    testOptions {
+        unitTests {
+            // Fara Robolectric, android.util.Log (si alte stub-uri android.jar) arunca
+            // "not mocked" in teste JVM pure — returneaza valori implicite in loc, silentios.
+            isReturnDefaultValues = true
+        }
     }
 }
 
@@ -69,6 +99,12 @@ dependencies {
     ksp(libs.room.compiler)
 
     implementation(libs.kotlinx.coroutines.android)
+
+    implementation(platform(libs.supabase.bom))
+    implementation(libs.supabase.postgrest)
+    implementation(libs.supabase.auth)
+    implementation(libs.ktor.client.android)
+    implementation(libs.kotlinx.serialization.json)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)

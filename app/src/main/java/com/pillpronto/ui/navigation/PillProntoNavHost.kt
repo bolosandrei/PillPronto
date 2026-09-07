@@ -1,6 +1,7 @@
 package com.pillpronto.ui.navigation
 
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Medication
 import androidx.compose.material.icons.filled.QueryStats
@@ -23,7 +24,9 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.pillpronto.R
+import com.pillpronto.ui.account.AccountScreen
 import com.pillpronto.ui.adherence.AdherenceScreen
+import com.pillpronto.ui.onboarding.OnboardingScreen
 import com.pillpronto.ui.today.TodayScreen
 import com.pillpronto.ui.treatments.AddTreatmentScreen
 import com.pillpronto.ui.treatments.TreatmentDetailScreen
@@ -105,6 +108,18 @@ fun PillProntoNavHost(openTodayRequests: Flow<Unit> = emptyFlow()) {
                     onEdit = { id -> navController.navigate(Route.AddEditTreatment.create(id)) }
                 )
             }
+            composable(Route.Account.path) {
+                AccountScreen(
+                    padding,
+                    onNeedsOnboarding = { navController.navigate(Route.Onboarding.path) }
+                )
+            }
+            composable(Route.Onboarding.path) {
+                OnboardingScreen(
+                    padding,
+                    onDone = { navController.popBackStack() }
+                )
+            }
         }
     }
 }
@@ -112,6 +127,7 @@ fun PillProntoNavHost(openTodayRequests: Flow<Unit> = emptyFlow()) {
 private fun iconFor(path: String) = when (path) {
     Route.Today.path -> Icons.Filled.CalendarToday
     Route.Treatments.path -> Icons.Filled.Medication
+    Route.Account.path -> Icons.Filled.AccountCircle
     else -> Icons.Filled.QueryStats
 }
 
@@ -119,5 +135,6 @@ private fun iconFor(path: String) = when (path) {
 private fun labelResFor(path: String): Int = when (path) {
     Route.Today.path -> R.string.nav_today
     Route.Treatments.path -> R.string.nav_treatments
+    Route.Account.path -> R.string.nav_account
     else -> R.string.nav_adherence
 }

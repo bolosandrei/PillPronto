@@ -2,8 +2,9 @@
 
 > Document de arhitectură + plan de implementare. Scris la brainstorming-ul din 2026-09-07.
 > Completează `CLAUDE.md` (nu-l duplică) — citit împreună cu acesta la sesiunile viitoare.
-> Status: **1.5a implementată** (2026-09-07) — schema + RLS + migrare Room. **1.5b-1.5g rămân
-> neimplementate.** Vezi secțiunea 8 pentru etapele propuse și starea fiecăreia.
+> Status: **1.5a + 1.5b implementate** (2026-09-07) — schema + RLS + migrare Room, apoi SDK
+> Supabase Android + autentificare email/parolă + onboarding rol. **Google Sign-In + 1.5c-1.5g
+> rămân neimplementate.** Vezi secțiunea 8 pentru etapele propuse și starea fiecăreia.
 
 ---
 
@@ -80,7 +81,7 @@ Note:
 
 ## 5. Autentificare
 
-- Supabase Auth: email/parolă + Google Sign-In.
+- Supabase Auth: email/parolă (✅ 1.5b) + Google Sign-In (deferred — vezi 1.5b în secțiunea 8).
 - **Profil dependent** (pacient vârstnic fără cont propriu): NU necesită `auth.users` separat —
   doar un rând `patient_profiles` cu `owner_caregiver_id` populat. Telefonul pacientului rămâne
   logat pe contul aparținătorului (sau pe un mod "device pacient" fără ecran de login vizibil).
@@ -113,12 +114,38 @@ construiască peste ea (toate vor referi `patient_profile_id`).
     (UUID, `LocalPatientProfileProvider` — devine `patient_profiles.id` la 1.5b, fără reconciliere).
     `PillProntoDatabase` la `version = 3`.
   - Schema SQL + RLS scrise în `supabase/migrations/0001_init_schema.sql` +
-    `0002_rls_policies.sql` — **neexecutate încă**, necesită proiect Supabase real (regiune UE).
-  - **Rămas de făcut de utilizator, în afara codului:** cont + proiect nou pe supabase.com
-    (regiune UE), rulare celor 2 fișiere SQL via Dashboard → SQL Editor, notare `Project URL` +
-    `anon public key` pentru 1.5b.
-- **1.5b — Auth Android:** ecrane login/signup (email+parolă, Google Sign-In), onboarding
-  ("Sunt pacient" vs. "Sunt aparținător/profesionist") — integrare Supabase Kotlin SDK.
+    `0002_rls_policies.sql` — **executate** de utilizator pe proiectul Supabase real (regiune UE).
+- **1.5b — Auth Android email/parolă + onboarding ✅ IMPLEMENTAT (2026-09-07):**
+  - SDK Supabase Kotlin conectat (`SupabaseModule`, BOM 3.5.0, Auth + Postgrest), credențiale din
+    `local.properties` → `BuildConfig` (niciodată în cod). `compileSdk` ridicat la 36
+    (`androidx.browser`, adus tranzitiv de `auth-kt`, o cere).
+  - Strat domeniu: `AuthRepository`/`ProfileRepository` + use-cases (`SignUpUseCase`,
+    `SignInUseCase`, `SignOutUseCase`, `ObserveAuthSessionUseCase`, `GetProfileUseCase`,
+    `CompleteOnboardingUseCase`); `AuthSessionState` traduce `SessionStatus` din SDK — vendor-ul
+    nu se scurge în domeniu.
+  - Tab nou „Cont" (al 4-lea, bottom bar) — `AccountScreen` (toggle autentificare/înregistrare,
+    validare tipizată `AccountError`) + `OnboardingScreen` (alegere rol, scrie `profiles` +
+    `patient_profiles` doar pt. Pacient — vezi decizia despre cei doi UUID diferiți, secțiunea 2).
+  - **Cont opțional, nu obligatoriu** — aplicația rămâne 100% funcțională fără login (decizie
+    explicită, consecventă cu minimizarea GDPR deja stabilită).
+  - **Exclus deliberat, urmează separat:** Google Sign-In (necesită 2 OAuth Client ID-uri distincte
+    în Google Cloud Console — Web + Android cu SHA-1 — plus înregistrarea lor în Supabase
+    Dashboard; blocaj extern separat de cel de la 1.5a).
+  - Teste: `AccountViewModelTest` (9), `OnboardingViewModelTest` (5) — `FakeAuthRepository`,
+    `FakeProfileRepository`, `MainDispatcherRule` noi în `util/` (primul ViewModel testat cu
+    `viewModelScope` din proiect).
+  - **Bug-uri găsite și rezolvate în testarea pe device reală** (2026-09-07, cont real creat):
+    1. `Log.e(...)` arunca "not mocked" în testele JVM (fără Robolectric) și mânca silențios
+       rezultatul unui test — fix: `testOptions.unitTests.isReturnDefaultValues = true`.
+    2. Limita implicită Supabase de 2-4 emailuri/oră (SMTP shared, gratuit) apărea ca eroare
+       generică `AUTH_FAILED` — fix: `AccountError.RATE_LIMITED` distinct, detectat din mesajul
+       excepției (`AuthRestException` cu `over_email_send_rate_limit`).
+    3. **Bug real, nu artefact de testare**: `AccountViewModel` reface profilul doar la *schimbarea*
+       sesiunii, nu și după un onboarding reușit cât timp sesiunea era deja `Authenticated` —
+       userul era retrimis la nesfârșit pe un ecran de onboarding gol după ce contul chiar fusese
+       creat cu succes, iar o reîncercare lovea coliziune de cheie primară. Fix: `AccountViewModel.refresh()`
+       public, apelat din `AccountScreen` via `LifecycleEventEffect(ON_RESUME)` + `completeOnboarding`
+       schimbat din `insert` în `upsert` (idempotent, tolerează reîncercări).
 - **1.5c — Sync layer:** `SyncWorker`, outbox local, pull la pornire + periodic.
 - **1.5d — Flux Aparținător:** creare profil dependent, invitație (cod/QR), ecran „Pacienții mei"
   cu situația curentă per pacient, notificare la doză ratată.

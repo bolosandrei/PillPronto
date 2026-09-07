@@ -1,8 +1,12 @@
 package com.pillpronto.core.di
 
+import com.pillpronto.data.repository.AuthRepositoryImpl
 import com.pillpronto.data.repository.DoseRepositoryImpl
+import com.pillpronto.data.repository.ProfileRepositoryImpl
 import com.pillpronto.data.repository.TreatmentRepositoryImpl
+import com.pillpronto.domain.repository.AuthRepository
 import com.pillpronto.domain.repository.DoseRepository
+import com.pillpronto.domain.repository.ProfileRepository
 import com.pillpronto.domain.repository.TreatmentRepository
 import dagger.Binds
 import dagger.Module
@@ -21,4 +25,12 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindDoseRepository(impl: DoseRepositoryImpl): DoseRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindAuthRepository(impl: AuthRepositoryImpl): AuthRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindProfileRepository(impl: ProfileRepositoryImpl): ProfileRepository
 }
