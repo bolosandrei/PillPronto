@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Glyph capsula (pastila) in doua tonuri, centrat in safe zone-ul iconului adaptive (66dp). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:pivotX="54"
+        android:pivotY="54"
+        android:rotation="45">
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M54,42 L38,42 A12,12 0 0,0 38,66 L54,66 Z" />
+        <path
+            android:fillColor="#4DD8DE"
+            android:pathData="M54,42 L70,42 A12,12 0 0,1 70,66 L54,66 Z" />
+    </group>
+</vector>

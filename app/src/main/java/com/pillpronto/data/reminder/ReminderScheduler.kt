@@ -72,6 +72,7 @@ class ReminderScheduler @Inject constructor(
     fun showDoseNotification(doseId: Long, medName: String, dosage: String) {
         val openIntent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_SINGLE_TOP
+            putExtra(MainActivity.EXTRA_OPEN_TODAY, true)
         }
         val contentPi = PendingIntent.getActivity(
             context, doseId.toInt(), openIntent,
@@ -82,13 +83,13 @@ class ReminderScheduler @Inject constructor(
 
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
-            .setContentTitle("E timpul pentru $medName")
-            .setContentText("Doza: $dosage")
+            .setContentTitle(context.getString(R.string.reminder_notification_title, medName))
+            .setContentText(context.getString(R.string.reminder_notification_text, dosage))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
             .setContentIntent(contentPi)
-            .addAction(0, "Confirmă", takePi)
-            .addAction(0, "Omite", skipPi)
+            .addAction(0, context.getString(R.string.common_confirm_take), takePi)
+            .addAction(0, context.getString(R.string.common_skip), skipPi)
             .build()
         try {
             NotificationManagerCompat.from(context).notify(doseId.toInt(), notification)

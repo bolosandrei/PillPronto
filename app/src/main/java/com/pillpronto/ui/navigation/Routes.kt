@@ -1,14 +1,16 @@
 package com.pillpronto.ui.navigation
 
-sealed class Route(val path: String, val label: String) {
-    data object Today : Route("today", "Azi")
-    data object Treatments : Route("treatments", "Tratamente")
-    data object Adherence : Route("adherence", "Aderență")
-    data object AddEditTreatment : Route("treatment_form?treatmentId={treatmentId}", "Tratament") {
+// Etichetele afisate (bottom bar) sunt localizate separat via labelResFor() in PillProntoNavHost,
+// nu stocate aici — Route ramane fara dependenta de resurse Android.
+sealed class Route(val path: String) {
+    data object Today : Route("today")
+    data object Treatments : Route("treatments")
+    data object Adherence : Route("adherence")
+    data object AddEditTreatment : Route("treatment_form?treatmentId={treatmentId}") {
         const val ARG = "treatmentId"
         fun create(id: Long = -1L) = "treatment_form?treatmentId=$id"
     }
-    data object TreatmentDetail : Route("treatment_detail/{treatmentId}", "Detalii tratament") {
+    data object TreatmentDetail : Route("treatment_detail/{treatmentId}") {
         const val ARG = "treatmentId"
         fun create(id: Long) = "treatment_detail/$id"
     }

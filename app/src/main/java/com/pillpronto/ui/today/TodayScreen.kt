@@ -10,15 +10,22 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.ChevronLeft
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -34,6 +41,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
@@ -43,13 +51,16 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.DisposableEffect
+import com.pillpronto.R
 import com.pillpronto.core.permissions.Permissions
+import com.pillpronto.core.ui.components.DatePickerDialogBox
 import com.pillpronto.core.ui.theme.DoseMissed
 import com.pillpronto.core.ui.theme.DoseTaken
 import com.pillpronto.domain.model.DoseItem
 import com.pillpronto.domain.model.DoseStatus
 import com.pillpronto.domain.model.Treatment
 import java.time.LocalDate
+import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.util.Locale
@@ -57,10 +68,7 @@ import java.util.Locale
 private val HM = DateTimeFormatter.ofPattern("HH:mm")
 private val RO_LOCALE = Locale("ro")
 private val FULL_DATE = DateTimeFormatter.ofPattern("d MMMM yyyy", RO_LOCALE)
-
-// Fereastra glisanta de date de pe ecranul "Azi": cate zile in trecut/viitor sunt selectabile.
-private const val DATE_WINDOW_PAST_DAYS = 60L
-private const val DATE_WINDOW_FUTURE_DAYS = 60L
+private val MONTH_YEAR = DateTimeFormatter.ofPattern("LLLL yyyy", RO_LOCALE)
 
 @Composable
 fun TodayScreen(padding: PaddingValues, vm: TodayViewModel = hiltViewModel()) {
@@ -69,6 +77,7 @@ fun TodayScreen(padding: PaddingValues, vm: TodayViewModel = hiltViewModel()) {
     val asNeededTreatments by vm.asNeededTreatments.collectAsStateWithLifecycle()
     val today = remember { LocalDate.now() }
     val context = LocalContext.current
+    var showMonthPicker by remember { mutableStateOf(false) }
 
     // Reevalueaza statusul permisiunii de alarme exacte cand revenim din setari.
     var canExact by remember { mutableStateOf(Permissions.canScheduleExactAlarms(context)) }
@@ -95,15 +104,23 @@ fun TodayScreen(padding: PaddingValues, vm: TodayViewModel = hiltViewModel()) {
                 modifier = Modifier.weight(1f, fill = false)
             )
             if (selectedDate != today) {
-                TextButton(onClick = { vm.onDateSelected(today) }) { Text("Azi") }
+                TextButton(onClick = { vm.onDateSelected(today) }) { Text(stringResource(R.string.nav_today)) }
             }
         }
+
+        MonthYearHeader(
+            selectedDate = selectedDate,
+            onPrevious = vm::onPreviousMonth,
+            onNext = vm::onNextMonth,
+            onOpenPicker = { showMonthPicker = true },
+            modifier = Modifier.padding(top = 8.dp)
+        )
 
         DateStrip(
             today = today,
             selectedDate = selectedDate,
             onDateSelected = vm::onDateSelected,
-            modifier = Modifier.padding(top = 12.dp)
+            modifier = Modifier.padding(top = 4.dp)
         )
 
         if (!canExact) {
@@ -134,22 +151,67 @@ fun TodayScreen(padding: PaddingValues, vm: TodayViewModel = hiltViewModel()) {
             }
         }
     }
+
+    if (showMonthPicker) {
+        DatePickerDialogBox(
+            initial = selectedDate,
+            onConfirm = { vm.onDateSelected(it); showMonthPicker = false },
+            onDismiss = { showMonthPicker = false }
+        )
+    }
 }
 
+@Composable
 private fun titleFor(date: LocalDate, today: LocalDate): String = when (date) {
-    today -> "Dozele de azi"
-    today.minusDays(1) -> "Dozele de ieri"
-    today.plusDays(1) -> "Dozele de mâine"
-    else -> "Dozele din ${date.format(FULL_DATE)}"
+    today -> stringResource(R.string.today_title_today)
+    today.minusDays(1) -> stringResource(R.string.today_title_yesterday)
+    today.plusDays(1) -> stringResource(R.string.today_title_tomorrow)
+    else -> stringResource(R.string.today_title_other_day, date.format(FULL_DATE))
 }
 
+@Composable
 private fun emptyMessageFor(date: LocalDate, today: LocalDate): String =
-    if (date == today)
-        "Nicio doză programată azi. Adaugă un tratament din tab-ul Tratamente."
-    else
-        "Nicio doză programată în această zi."
+    if (date == today) stringResource(R.string.today_empty_today)
+    else stringResource(R.string.today_empty_other_day)
 
-/** Fereastra glisanta de date: selectie orizontala intre trecut si viitor, implicit ziua curenta. */
+/** Randul cu luna/anul afisate — sageti pentru ajustare fina, eticheta deschide picker-ul
+ * nativ (an + navigare pe luni) pentru salt direct la o data indepartata. */
+@Composable
+private fun MonthYearHeader(
+    selectedDate: LocalDate,
+    onPrevious: () -> Unit,
+    onNext: () -> Unit,
+    onOpenPicker: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val label = selectedDate.format(MONTH_YEAR).replaceFirstChar { it.uppercase() }
+    Row(
+        modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        IconButton(onClick = onPrevious) {
+            Icon(Icons.Filled.ChevronLeft, contentDescription = stringResource(R.string.today_previous_month))
+        }
+        Row(
+            Modifier.clickable(onClick = onOpenPicker),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Text(label, style = MaterialTheme.typography.titleMedium)
+            Icon(
+                Icons.Filled.CalendarMonth,
+                contentDescription = stringResource(R.string.today_open_month_picker),
+                modifier = Modifier.size(20.dp)
+            )
+        }
+        IconButton(onClick = onNext) {
+            Icon(Icons.Filled.ChevronRight, contentDescription = stringResource(R.string.today_next_month))
+        }
+    }
+}
+
+/** Stripul de zile al lunii afisate (derivata din selectedDate) — selectie orizontala. */
 @Composable
 private fun DateStrip(
     today: LocalDate,
@@ -157,13 +219,14 @@ private fun DateStrip(
     onDateSelected: (LocalDate) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val dates = remember(today) {
-        (-DATE_WINDOW_PAST_DAYS..DATE_WINDOW_FUTURE_DAYS).map { today.plusDays(it) }
+    val yearMonth = YearMonth.from(selectedDate)
+    val dates = remember(yearMonth) {
+        (1..yearMonth.lengthOfMonth()).map { yearMonth.atDay(it) }
     }
-    val todayIndex = DATE_WINDOW_PAST_DAYS.toInt()
-    val listState = rememberLazyListState(initialFirstVisibleItemIndex = (todayIndex - 3).coerceAtLeast(0))
+    val listState = rememberLazyListState()
 
-    // Cand selectia se schimba (tap pe chip sau butonul "Azi"), readuce ziua selectata in vizor.
+    // Cand selectia se schimba (tap pe chip, sageata de luna, picker sau butonul "Azi"),
+    // readuce ziua selectata in vizor — inclusiv dupa ce stripul s-a regenerat pentru alta luna.
     LaunchedEffect(selectedDate) {
         val index = dates.indexOf(selectedDate)
         if (index >= 0) {
@@ -220,7 +283,7 @@ private fun DateChip(date: LocalDate, isSelected: Boolean, isToday: Boolean, onC
 private fun AsNeededSection(treatments: List<Treatment>, onLog: (Long) -> Unit, modifier: Modifier = Modifier) {
     Card(modifier.fillMaxWidth()) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("La nevoie", style = MaterialTheme.typography.titleSmall)
+            Text(stringResource(R.string.today_as_needed_section_title), style = MaterialTheme.typography.titleSmall)
             treatments.forEach { t ->
                 Row(
                     Modifier.fillMaxWidth(),
@@ -231,7 +294,7 @@ private fun AsNeededSection(treatments: List<Treatment>, onLog: (Long) -> Unit, 
                         Text(t.medicationName, style = MaterialTheme.typography.bodyLarge)
                         Text(t.dosage, style = MaterialTheme.typography.bodySmall)
                     }
-                    OutlinedButton(onClick = { onLog(t.id) }) { Text("Am luat o doză") }
+                    OutlinedButton(onClick = { onLog(t.id) }) { Text(stringResource(R.string.common_log_dose)) }
                 }
             }
         }
@@ -245,13 +308,13 @@ private fun ExactAlarmBanner(onOpenSettings: () -> Unit) {
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
     ) {
         Column(Modifier.padding(12.dp)) {
-            Text("Alarmele exacte sunt dezactivate", style = MaterialTheme.typography.titleSmall)
+            Text(stringResource(R.string.today_exact_alarm_banner_title), style = MaterialTheme.typography.titleSmall)
             Text(
-                "Fără această permisiune, reminderele pot întârzia. Activeaz-o pentru notificări la timp.",
+                stringResource(R.string.today_exact_alarm_banner_text),
                 style = MaterialTheme.typography.bodySmall
             )
             Button(onClick = onOpenSettings, modifier = Modifier.padding(top = 8.dp)) {
-                Text("Deschide setările")
+                Text(stringResource(R.string.today_open_settings))
             }
         }
     }
@@ -264,21 +327,22 @@ private fun DoseRow(item: DoseItem, onTake: () -> Unit, onSkip: () -> Unit) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(item.medicationName, style = MaterialTheme.typography.titleMedium)
                 Text(
-                    if (item.dose.isAsNeeded) "la nevoie" else item.dose.scheduledAt.toLocalTime().format(HM)
+                    if (item.dose.isAsNeeded) stringResource(R.string.common_as_needed)
+                    else item.dose.scheduledAt.toLocalTime().format(HM)
                 )
             }
             Text(item.dosage, style = MaterialTheme.typography.bodySmall)
             when (item.dose.status) {
-                DoseStatus.TAKEN -> Text("Luat ✓", color = DoseTaken)
-                DoseStatus.MISSED -> Text("Ratat", color = DoseMissed)
-                DoseStatus.SKIPPED -> Text("Omis", textDecoration = TextDecoration.LineThrough)
+                DoseStatus.TAKEN -> Text(stringResource(R.string.dose_status_taken), color = DoseTaken)
+                DoseStatus.MISSED -> Text(stringResource(R.string.dose_status_missed), color = DoseMissed)
+                DoseStatus.SKIPPED -> Text(stringResource(R.string.dose_status_skipped), textDecoration = TextDecoration.LineThrough)
                 DoseStatus.PENDING -> Row(
                     Modifier.fillMaxWidth().padding(top = 8.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Button(onClick = onTake) { Text("Confirmă") }
-                    OutlinedButton(onClick = onSkip) { Text("Omite") }
+                    Button(onClick = onTake) { Text(stringResource(R.string.common_confirm_take)) }
+                    OutlinedButton(onClick = onSkip) { Text(stringResource(R.string.common_skip)) }
                 }
             }
         }

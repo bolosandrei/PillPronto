@@ -9,9 +9,12 @@ import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.annotation.StringRes
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -19,17 +22,31 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.pillpronto.R
 import com.pillpronto.ui.adherence.AdherenceScreen
 import com.pillpronto.ui.today.TodayScreen
 import com.pillpronto.ui.treatments.AddTreatmentScreen
 import com.pillpronto.ui.treatments.TreatmentDetailScreen
 import com.pillpronto.ui.treatments.TreatmentsScreen
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emptyFlow
 
 @Composable
-fun PillProntoNavHost() {
+fun PillProntoNavHost(openTodayRequests: Flow<Unit> = emptyFlow()) {
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination
+
+    // Tap pe notificarea de reminder -> readu utilizatorul pe tab-ul "Azi" (ziua curenta),
+    // indiferent unde era navigat in aplicatie cand a fost deschisa (vezi MainActivity).
+    LaunchedEffect(Unit) {
+        openTodayRequests.collect {
+            navController.navigate(Route.Today.path) {
+                popUpTo(Route.Today.path) { inclusive = true }
+                launchSingleTop = true
+            }
+        }
+    }
 
     Scaffold(
         bottomBar = {
@@ -44,8 +61,8 @@ fun PillProntoNavHost() {
                                 restoreState = true
                             }
                         },
-                        icon = { Icon(iconFor(route.path), contentDescription = route.label) },
-                        label = { Text(route.label) }
+                        icon = { Icon(iconFor(route.path), contentDescription = stringResource(labelResFor(route.path))) },
+                        label = { Text(stringResource(labelResFor(route.path))) }
                     )
                 }
             }
@@ -96,4 +113,11 @@ private fun iconFor(path: String) = when (path) {
     Route.Today.path -> Icons.Filled.CalendarToday
     Route.Treatments.path -> Icons.Filled.Medication
     else -> Icons.Filled.QueryStats
+}
+
+@StringRes
+private fun labelResFor(path: String): Int = when (path) {
+    Route.Today.path -> R.string.nav_today
+    Route.Treatments.path -> R.string.nav_treatments
+    else -> R.string.nav_adherence
 }

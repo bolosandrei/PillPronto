@@ -14,9 +14,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.pillpronto.R
 import com.pillpronto.core.ui.theme.DoseMissed
 import com.pillpronto.core.ui.theme.DoseTaken
 import com.pillpronto.domain.model.AdherenceStats
@@ -28,17 +30,17 @@ fun AdherenceScreen(padding: PaddingValues, vm: AdherenceViewModel = hiltViewMod
 
     Column(Modifier.fillMaxSize().padding(padding).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("Aderența (ultimele 30 zile)", style = MaterialTheme.typography.headlineSmall)
-        MetricCard("PDC — Proportion of Days Covered", stats.pdc, threshold = AdherenceStats.ADHERENCE_THRESHOLD)
-        MetricCard("MPR — Medication Possession Ratio", stats.mpr)
+        Text(stringResource(R.string.adherence_title), style = MaterialTheme.typography.headlineSmall)
+        MetricCard(stringResource(R.string.adherence_pdc_title), stats.pdc, threshold = AdherenceStats.ADHERENCE_THRESHOLD)
+        MetricCard(stringResource(R.string.adherence_mpr_title), stats.mpr)
         Card(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(12.dp)) {
-                Text("Detalii", style = MaterialTheme.typography.titleMedium)
-                Text("Doze luate: ${stats.takenDoses} / ${stats.totalScheduledDoses}")
-                Text("Doze ratate: ${stats.missedDoses}", color = DoseMissed)
-                Text("Zile acoperite: ${stats.coveredDays} / ${stats.totalDays}")
+                Text(stringResource(R.string.adherence_details_title), style = MaterialTheme.typography.titleMedium)
+                Text(stringResource(R.string.adherence_taken_doses, stats.takenDoses, stats.totalScheduledDoses))
+                Text(stringResource(R.string.adherence_missed_doses, stats.missedDoses), color = DoseMissed)
+                Text(stringResource(R.string.adherence_covered_days, stats.coveredDays, stats.totalDays))
                 Text(
-                    if (stats.isAdherent) "Status: aderent (PDC ≥ 0.80)" else "Status: sub prag (PDC < 0.80)",
+                    stringResource(if (stats.isAdherent) R.string.adherence_status_ok else R.string.adherence_status_low),
                     color = if (stats.isAdherent) DoseTaken else DoseMissed
                 )
             }
