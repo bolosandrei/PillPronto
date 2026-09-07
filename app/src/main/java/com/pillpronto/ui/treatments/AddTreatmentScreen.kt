@@ -16,8 +16,6 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
-import androidx.compose.material3.DatePicker
-import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.InputChip
@@ -28,7 +26,6 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimePicker
-import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -38,13 +35,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import java.time.Instant
-import java.time.LocalDate
+import com.pillpronto.R
+import com.pillpronto.core.ui.components.DatePickerDialogBox
 import java.time.LocalTime
-import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 
 private val HM = DateTimeFormatter.ofPattern("HH:mm")
@@ -70,11 +67,11 @@ fun AddTreatmentScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Text(
-            if (state.isEditing) "Editează tratament" else "Adaugă tratament",
+            stringResource(if (state.isEditing) R.string.add_treatment_title_edit else R.string.add_treatment_title_new),
             style = MaterialTheme.typography.headlineSmall
         )
-        OutlinedTextField(state.name, vm::onName, label = { Text("Medicament") }, modifier = Modifier.fillMaxWidth())
-        OutlinedTextField(state.dosage, vm::onDosage, label = { Text("Dozaj (ex. 500 mg)") }, modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(state.name, vm::onName, label = { Text(stringResource(R.string.add_treatment_name_label)) }, modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(state.dosage, vm::onDosage, label = { Text(stringResource(R.string.add_treatment_dosage_label)) }, modifier = Modifier.fillMaxWidth())
 
         Row(
             Modifier.fillMaxWidth(),
@@ -82,9 +79,9 @@ fun AddTreatmentScreen(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(Modifier.weight(1f).padding(end = 8.dp)) {
-                Text("La nevoie (fără orar fix)", style = MaterialTheme.typography.titleSmall)
+                Text(stringResource(R.string.add_treatment_as_needed_title), style = MaterialTheme.typography.titleSmall)
                 Text(
-                    "Fără remindere; înregistrezi o doză oricând, din lista de tratamente.",
+                    stringResource(R.string.add_treatment_as_needed_desc),
                     style = MaterialTheme.typography.bodySmall
                 )
             }
@@ -92,33 +89,33 @@ fun AddTreatmentScreen(
         }
 
         if (!state.asNeeded) {
-            Text("Ore de administrare", style = MaterialTheme.typography.titleSmall)
+            Text(stringResource(R.string.add_treatment_times_title), style = MaterialTheme.typography.titleSmall)
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 state.times.forEach { time ->
                     InputChip(
                         selected = false,
                         onClick = { vm.removeTime(time) },
                         label = { Text(time.format(HM)) },
-                        trailingIcon = { Icon(Icons.Filled.Close, contentDescription = "Elimină") }
+                        trailingIcon = { Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.add_treatment_remove_time_content_desc)) }
                     )
                 }
-                AssistChip(onClick = { showTimePicker = true }, label = { Text("+ oră") })
+                AssistChip(onClick = { showTimePicker = true }, label = { Text(stringResource(R.string.add_treatment_add_time)) })
             }
         }
 
         OutlinedButton(onClick = { showStartPicker = true }, modifier = Modifier.fillMaxWidth()) {
-            Text("Început: ${state.startDate.format(DMY)}")
+            Text(stringResource(R.string.common_start_label, state.startDate.format(DMY)))
         }
         OutlinedButton(onClick = { showEndPicker = true }, modifier = Modifier.fillMaxWidth()) {
-            Text("Sfârșit: ${state.endDate?.format(DMY) ?: "fără dată"}")
+            Text(stringResource(R.string.common_end_label, state.endDate?.format(DMY) ?: stringResource(R.string.common_no_end_date)))
         }
 
-        state.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+        state.error?.let { Text(errorMessage(it), color = MaterialTheme.colorScheme.error) }
 
-        Button(onClick = vm::save, modifier = Modifier.fillMaxWidth()) { Text("Salvează") }
+        Button(onClick = vm::save, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.common_save)) }
         if (state.isEditing) {
             OutlinedButton(onClick = { showDeleteConfirm = true }, modifier = Modifier.fillMaxWidth()) {
-                Text("Șterge tratamentul", color = MaterialTheme.colorScheme.error)
+                Text(stringResource(R.string.add_treatment_delete_treatment), color = MaterialTheme.colorScheme.error)
             }
         }
     }
@@ -130,9 +127,9 @@ fun AddTreatmentScreen(
             confirmButton = {
                 TextButton(onClick = {
                     vm.addTime(LocalTime.of(tState.hour, tState.minute)); showTimePicker = false
-                }) { Text("Adaugă") }
+                }) { Text(stringResource(R.string.add_treatment_time_picker_add)) }
             },
-            dismissButton = { TextButton(onClick = { showTimePicker = false }) { Text("Anulează") } },
+            dismissButton = { TextButton(onClick = { showTimePicker = false }) { Text(stringResource(R.string.common_cancel)) } },
             text = { TimePicker(state = tState) }
         )
     }
@@ -156,38 +153,20 @@ fun AddTreatmentScreen(
     if (showDeleteConfirm) {
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = false },
-            title = { Text("Ștergi tratamentul?") },
-            text = { Text("Se vor șterge și dozele programate. Istoricul dozelor luate/ratate se pierde.") },
-            confirmButton = { TextButton(onClick = { showDeleteConfirm = false; vm.delete() }) { Text("Șterge") } },
-            dismissButton = { TextButton(onClick = { showDeleteConfirm = false }) { Text("Anulează") } }
+            title = { Text(stringResource(R.string.common_delete_treatment_title)) },
+            text = { Text(stringResource(R.string.common_delete_treatment_text)) },
+            confirmButton = { TextButton(onClick = { showDeleteConfirm = false; vm.delete() }) { Text(stringResource(R.string.common_delete)) } },
+            dismissButton = { TextButton(onClick = { showDeleteConfirm = false }) { Text(stringResource(R.string.common_cancel)) } }
         )
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun DatePickerDialogBox(
-    initial: LocalDate,
-    onConfirm: (LocalDate) -> Unit,
-    onDismiss: () -> Unit,
-    onClear: (() -> Unit)? = null
-) {
-    val dpState = rememberDatePickerState(
-        initialSelectedDateMillis = initial.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
-    )
-    DatePickerDialog(
-        onDismissRequest = onDismiss,
-        confirmButton = {
-            TextButton(onClick = {
-                val millis = dpState.selectedDateMillis
-                if (millis != null) {
-                    onConfirm(Instant.ofEpochMilli(millis).atZone(ZoneOffset.UTC).toLocalDate())
-                } else onDismiss()
-            }) { Text("OK") }
-        },
-        dismissButton = {
-            if (onClear != null) TextButton(onClick = onClear) { Text("Fără dată") }
-            else TextButton(onClick = onDismiss) { Text("Anulează") }
-        }
-    ) { DatePicker(state = dpState) }
+private fun errorMessage(error: AddTreatmentError): String = when (error) {
+    AddTreatmentError.EMPTY_NAME -> stringResource(R.string.add_treatment_error_empty_name)
+    AddTreatmentError.NAME_TOO_LONG -> stringResource(R.string.add_treatment_error_name_too_long, MAX_MEDICATION_NAME_LENGTH)
+    AddTreatmentError.NO_TIMES -> stringResource(R.string.add_treatment_error_no_times)
+    AddTreatmentError.END_BEFORE_START -> stringResource(R.string.add_treatment_error_end_before_start)
+    AddTreatmentError.SAVE_FAILED -> stringResource(R.string.add_treatment_error_save_failed)
+    AddTreatmentError.DELETE_FAILED -> stringResource(R.string.add_treatment_error_delete_failed)
 }

@@ -22,6 +22,12 @@ import javax.inject.Inject
 // Plafon de bun-simt pentru numele medicamentului (evita input absurd de lung in UI/notificari).
 const val MAX_MEDICATION_NAME_LENGTH = 200
 
+// Eroare tipizata, nu text brut — ViewModel-ul ramane fara dependenta de Context/resurse Android;
+// Composable-ul (AddTreatmentScreen) mapeaza fiecare caz la stringResource(...).
+enum class AddTreatmentError {
+    EMPTY_NAME, NAME_TOO_LONG, NO_TIMES, END_BEFORE_START, SAVE_FAILED, DELETE_FAILED
+}
+
 data class AddTreatmentUiState(
     val isEditing: Boolean = false,
     val name: String = "",
@@ -30,7 +36,7 @@ data class AddTreatmentUiState(
     val startDate: LocalDate = LocalDate.now(),
     val endDate: LocalDate? = null,
     val asNeeded: Boolean = false,
-    val error: String? = null,
+    val error: AddTreatmentError? = null,
     val saved: Boolean = false,
     // Distinct de "saved": la stergere, tratamentul nu mai exista — navigarea trebuie sa
     // sara peste ecranul de detaliu (daca a fost punctul de intrare), nu doar sa faca un pas inapoi.
@@ -87,16 +93,16 @@ class AddTreatmentViewModel @Inject constructor(
     fun save() {
         val s = _state.value
         val name = s.name.trim()
-        if (name.isBlank()) { _state.update { it.copy(error = "Introdu numele medicamentului") }; return }
+        if (name.isBlank()) { _state.update { it.copy(error = AddTreatmentError.EMPTY_NAME) }; return }
         if (name.length > MAX_MEDICATION_NAME_LENGTH) {
-            _state.update { it.copy(error = "Numele medicamentului este prea lung (max $MAX_MEDICATION_NAME_LENGTH caractere)") }
+            _state.update { it.copy(error = AddTreatmentError.NAME_TOO_LONG) }
             return
         }
         if (!s.asNeeded && s.times.isEmpty()) {
-            _state.update { it.copy(error = "Adaugă cel puțin o oră (sau bifează \"la nevoie\")") }; return
+            _state.update { it.copy(error = AddTreatmentError.NO_TIMES) }; return
         }
         if (s.endDate != null && s.endDate.isBefore(s.startDate)) {
-            _state.update { it.copy(error = "Data de final nu poate fi înainte de start") }; return
+            _state.update { it.copy(error = AddTreatmentError.END_BEFORE_START) }; return
         }
 
         viewModelScope.launch {
@@ -119,7 +125,7 @@ class AddTreatmentViewModel @Inject constructor(
                 reminderCoordinator.syncReminders()
                 _state.update { it.copy(saved = true, error = null) }
             } catch (e: Exception) {
-                _state.update { it.copy(error = e.message ?: "Eroare la salvare") }
+                _state.update { it.copy(error = AddTreatmentError.SAVE_FAILED) }
             }
         }
     }
@@ -132,7 +138,7 @@ class AddTreatmentViewModel @Inject constructor(
                 deleteTreatment(treatmentId)
                 _state.update { it.copy(saved = true, deleted = true) }
             } catch (e: Exception) {
-                _state.update { it.copy(error = e.message ?: "Eroare la ștergere") }
+                _state.update { it.copy(error = AddTreatmentError.DELETE_FAILED) }
             }
         }
     }

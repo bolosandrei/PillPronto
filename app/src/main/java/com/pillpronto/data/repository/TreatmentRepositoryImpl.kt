@@ -1,5 +1,6 @@
 package com.pillpronto.data.repository
 
+import com.pillpronto.data.local.LocalPatientProfileProvider
 import com.pillpronto.data.local.dao.TreatmentDao
 import com.pillpronto.data.mapper.toDomain
 import com.pillpronto.data.mapper.toEntity
@@ -10,7 +11,8 @@ import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 
 class TreatmentRepositoryImpl @Inject constructor(
-    private val dao: TreatmentDao
+    private val dao: TreatmentDao,
+    private val localPatientProfileProvider: LocalPatientProfileProvider
 ) : TreatmentRepository {
 
     override fun observeTreatments(): Flow<List<Treatment>> =
@@ -23,7 +25,7 @@ class TreatmentRepositoryImpl @Inject constructor(
         dao.getById(id)?.toDomain()
 
     override suspend fun upsertTreatment(treatment: Treatment): Long =
-        dao.upsert(treatment.toEntity())
+        dao.upsert(treatment.toEntity(localPatientProfileProvider.patientProfileId))
 
     override suspend fun deleteTreatment(id: Long) = dao.deleteById(id)
 }

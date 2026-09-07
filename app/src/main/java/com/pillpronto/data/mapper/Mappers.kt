@@ -15,8 +15,9 @@ import java.time.format.DateTimeFormatter
 private val TIME_FMT: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
 
 // --- Treatment ---
-fun Treatment.toEntity(): TreatmentEntity = TreatmentEntity(
+fun Treatment.toEntity(patientProfileId: String): TreatmentEntity = TreatmentEntity(
     id = id,
+    patientProfileId = patientProfileId,
     medicationName = medicationName,
     dosage = dosage,
     timesCsv = times.sorted().joinToString(",") { it.format(TIME_FMT) },
@@ -38,8 +39,9 @@ fun TreatmentEntity.toDomain(): Treatment = Treatment(
 )
 
 // --- DoseLog ---
-fun DoseLog.toEntity(): DoseLogEntity = DoseLogEntity(
+fun DoseLog.toEntity(patientProfileId: String): DoseLogEntity = DoseLogEntity(
     id = id,
+    patientProfileId = patientProfileId,
     treatmentId = treatmentId,
     scheduledAt = scheduledAt.toString(),
     status = status.name,

@@ -1,6 +1,7 @@
 package com.pillpronto
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -15,12 +16,20 @@ import androidx.core.content.ContextCompat
 import com.pillpronto.core.ui.theme.PillProntoTheme
 import com.pillpronto.ui.navigation.PillProntoNavHost
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+
+    // Semnal pentru navigarea fortata pe tab-ul "Azi" cand app-ul e deschis dintr-o notificare
+    // de reminder (cold start prin onCreate SAU activitate deja pornita prin onNewIntent).
+    private val openTodayRequests = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        handleIntent(intent)
         setContent {
             PillProntoTheme {
                 val context = LocalContext.current
@@ -37,8 +46,24 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                PillProntoNavHost()
+                PillProntoNavHost(openTodayRequests = openTodayRequests.asSharedFlow())
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleIntent(intent)
+    }
+
+    private fun handleIntent(intent: Intent) {
+        if (intent.getBooleanExtra(EXTRA_OPEN_TODAY, false)) {
+            openTodayRequests.tryEmit(Unit)
+        }
+    }
+
+    companion object {
+        const val EXTRA_OPEN_TODAY = "com.pillpronto.extra.OPEN_TODAY"
     }
 }

@@ -17,10 +17,12 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.pillpronto.R
 import com.pillpronto.core.ui.theme.DoseMissed
 import com.pillpronto.core.ui.theme.DoseTaken
 import com.pillpronto.domain.model.DoseLog
@@ -42,7 +44,7 @@ fun TreatmentDetailScreen(
     Column(Modifier.fillMaxSize().padding(padding).padding(16.dp)) {
         val t = treatment
         if (t == null) {
-            Text("Se încarcă…", style = MaterialTheme.typography.bodyMedium)
+            Text(stringResource(R.string.treatment_detail_loading), style = MaterialTheme.typography.bodyMedium)
             return@Column
         }
 
@@ -51,19 +53,19 @@ fun TreatmentDetailScreen(
         Text(dateRangeSummary(t), Modifier.padding(top = 4.dp), style = MaterialTheme.typography.bodySmall)
 
         Button(onClick = { onEdit(t.id) }, modifier = Modifier.padding(top = 12.dp).fillMaxWidth()) {
-            Text("Editează tratamentul")
+            Text(stringResource(R.string.treatment_detail_edit_button))
         }
 
         HorizontalDivider(Modifier.padding(vertical = 16.dp))
 
-        Text("Istoric administrare", style = MaterialTheme.typography.titleMedium)
+        Text(stringResource(R.string.treatment_detail_history_title), style = MaterialTheme.typography.titleMedium)
         if (history.isNotEmpty()) {
             HistorySummary(history, Modifier.padding(top = 8.dp))
         }
 
         if (history.isEmpty()) {
             Text(
-                "Niciun istoric încă. Istoricul apare pe măsură ce confirmi sau omiți doze.",
+                stringResource(R.string.treatment_detail_history_empty),
                 Modifier.padding(top = 12.dp),
                 style = MaterialTheme.typography.bodyMedium
             )
@@ -78,15 +80,19 @@ fun TreatmentDetailScreen(
     }
 }
 
-private fun scheduleSummary(t: Treatment): String = when {
-    t.asNeeded -> "${t.dosage} • la nevoie"
-    else -> "${t.dosage} • ${t.times.joinToString(", ") { it.format(DateTimeFormatter.ofPattern("HH:mm")) }}"
-}
+@Composable
+private fun scheduleSummary(t: Treatment): String = stringResource(
+    R.string.common_dosage_and_detail,
+    t.dosage,
+    if (t.asNeeded) stringResource(R.string.common_as_needed)
+    else t.times.joinToString(", ") { it.format(DateTimeFormatter.ofPattern("HH:mm")) }
+)
 
+@Composable
 private fun dateRangeSummary(t: Treatment): String {
     val dmy = DateTimeFormatter.ofPattern("dd.MM.yyyy")
-    val start = "Început: ${t.startDate.format(dmy)}"
-    val end = "Sfârșit: ${t.endDate?.format(dmy) ?: "fără dată"}"
+    val start = stringResource(R.string.common_start_label, t.startDate.format(dmy))
+    val end = stringResource(R.string.common_end_label, t.endDate?.format(dmy) ?: stringResource(R.string.common_no_end_date))
     return "$start · $end"
 }
 
@@ -96,7 +102,7 @@ private fun HistorySummary(history: List<DoseLog>, modifier: Modifier = Modifier
     val missed = history.count { it.status == DoseStatus.MISSED }
     val skipped = history.count { it.status == DoseStatus.SKIPPED }
     Text(
-        "$taken luate • $missed ratate • $skipped omise",
+        stringResource(R.string.treatment_detail_history_summary, taken, missed, skipped),
         modifier,
         style = MaterialTheme.typography.bodySmall
     )
@@ -110,14 +116,15 @@ private fun HistoryRow(log: DoseLog) {
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Text(
-                if (log.isAsNeeded) "${log.scheduledAt.format(DMY_HM)} (la nevoie)" else log.scheduledAt.format(DMY_HM),
+                if (log.isAsNeeded) stringResource(R.string.treatment_detail_history_as_needed_suffix, log.scheduledAt.format(DMY_HM))
+                else log.scheduledAt.format(DMY_HM),
                 style = MaterialTheme.typography.bodyMedium
             )
             when (log.status) {
-                DoseStatus.TAKEN -> Text("Luat ✓", color = DoseTaken)
-                DoseStatus.MISSED -> Text("Ratat", color = DoseMissed)
-                DoseStatus.SKIPPED -> Text("Omis", textDecoration = TextDecoration.LineThrough)
-                DoseStatus.PENDING -> Text("Programat")
+                DoseStatus.TAKEN -> Text(stringResource(R.string.dose_status_taken), color = DoseTaken)
+                DoseStatus.MISSED -> Text(stringResource(R.string.dose_status_missed), color = DoseMissed)
+                DoseStatus.SKIPPED -> Text(stringResource(R.string.dose_status_skipped), textDecoration = TextDecoration.LineThrough)
+                DoseStatus.PENDING -> Text(stringResource(R.string.dose_status_pending))
             }
         }
     }

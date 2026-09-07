@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import javax.inject.Inject
@@ -46,6 +47,11 @@ class TodayViewModel @Inject constructor(
     fun onDateSelected(date: LocalDate) {
         _selectedDate.value = date
     }
+
+    // Navigare pe luna afisata — derivata din selectedDate, nu e stare separata de sincronizat.
+    // plusMonths/minusMonths clamps automat ziua la ultima zi valida a lunii noi (31 ian. -> 28/29 feb.).
+    fun onPreviousMonth() = _selectedDate.update { it.minusMonths(1) }
+    fun onNextMonth() = _selectedDate.update { it.plusMonths(1) }
 
     fun onTake(doseId: Long) = viewModelScope.launch { logDose(doseId, DoseStatus.TAKEN) }
     fun onSkip(doseId: Long) = viewModelScope.launch { logDose(doseId, DoseStatus.SKIPPED) }

@@ -35,9 +35,11 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.pillpronto.R
 import com.pillpronto.domain.model.Treatment
 import kotlinx.coroutines.launch
 import java.time.format.DateTimeFormatter
@@ -55,9 +57,9 @@ fun TreatmentsScreen(
 
     Box(Modifier.fillMaxSize().padding(padding)) {
         Column(Modifier.fillMaxSize().padding(16.dp)) {
-            Text("Tratamentele mele", style = MaterialTheme.typography.headlineSmall)
+            Text(stringResource(R.string.treatments_title), style = MaterialTheme.typography.headlineSmall)
             if (treatments.isEmpty()) {
-                Text("Niciun tratament. Apasă + pentru a adăuga.", Modifier.padding(top = 16.dp))
+                Text(stringResource(R.string.treatments_empty), Modifier.padding(top = 16.dp))
             } else {
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 12.dp)) {
                     items(treatments, key = { it.id }) { t ->
@@ -72,7 +74,7 @@ fun TreatmentsScreen(
             }
         }
         FloatingActionButton(onClick = onAdd, modifier = Modifier.align(Alignment.BottomEnd).padding(24.dp)) {
-            Icon(Icons.Filled.Add, contentDescription = "Adaugă tratament")
+            Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.treatments_add_content_desc))
         }
     }
 }
@@ -100,12 +102,16 @@ private fun TreatmentCard(t: Treatment, onOpenDetail: () -> Unit, onLogAsNeeded:
             Column(Modifier.padding(12.dp)) {
                 Text(t.medicationName, style = MaterialTheme.typography.titleMedium)
                 Text(
-                    if (t.asNeeded) "${t.dosage} • la nevoie"
-                    else "${t.dosage} • ${t.times.joinToString(", ") { it.format(HM) }}"
+                    stringResource(
+                        R.string.common_dosage_and_detail,
+                        t.dosage,
+                        if (t.asNeeded) stringResource(R.string.common_as_needed)
+                        else t.times.joinToString(", ") { it.format(HM) }
+                    )
                 )
                 if (t.asNeeded) {
                     Row(Modifier.padding(top = 8.dp)) {
-                        OutlinedButton(onClick = onLogAsNeeded) { Text("Am luat o doză") }
+                        OutlinedButton(onClick = onLogAsNeeded) { Text(stringResource(R.string.common_log_dose)) }
                     }
                 }
             }
@@ -118,16 +124,16 @@ private fun TreatmentCard(t: Treatment, onOpenDetail: () -> Unit, onLogAsNeeded:
                 showDeleteConfirm = false
                 scope.launch { dismissState.snapTo(SwipeToDismissBoxValue.Settled) }
             },
-            title = { Text("Ștergi tratamentul?") },
-            text = { Text("Se vor șterge și dozele programate. Istoricul dozelor luate/ratate se pierde.") },
+            title = { Text(stringResource(R.string.common_delete_treatment_title)) },
+            text = { Text(stringResource(R.string.common_delete_treatment_text)) },
             confirmButton = {
-                TextButton(onClick = { showDeleteConfirm = false; onDelete() }) { Text("Șterge") }
+                TextButton(onClick = { showDeleteConfirm = false; onDelete() }) { Text(stringResource(R.string.common_delete)) }
             },
             dismissButton = {
                 TextButton(onClick = {
                     showDeleteConfirm = false
                     scope.launch { dismissState.snapTo(SwipeToDismissBoxValue.Settled) }
-                }) { Text("Anulează") }
+                }) { Text(stringResource(R.string.common_cancel)) }
             }
         )
     }
@@ -143,7 +149,7 @@ private fun SwipeDeleteBackground() {
     ) {
         Icon(
             Icons.Filled.Delete,
-            contentDescription = "Șterge",
+            contentDescription = stringResource(R.string.treatments_swipe_delete_content_desc),
             tint = MaterialTheme.colorScheme.onErrorContainer,
             modifier = Modifier.padding(end = 24.dp)
         )

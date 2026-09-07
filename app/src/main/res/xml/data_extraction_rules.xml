@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- GDPR: datele de sanatate raman on-device; excludem din backup cloud si din transfer intre dispozitive.
+     Echivalentul modern (API 31+) al backup_rules.xml, pastrat pentru compatibilitate API < 31. -->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="database" path="pillpronto.db" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="database" path="pillpronto.db" />
+    </device-transfer>
+</data-extraction-rules>

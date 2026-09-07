@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Limbile suportate de aplicatie. Azi doar romana; scaffolding pentru switch RO/EN viitor
+     (vezi CLAUDE.md, backlog) — la adaugarea traducerilor (values-en/) se adauga si <locale android:name="en"/>. -->
+<locale-config xmlns:android="http://schemas.android.com/apk/res/android">
+    <locale android:name="ro" />
+</locale-config>
