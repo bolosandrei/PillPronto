@@ -1,5 +1,6 @@
 package com.pillpronto.data.repository
 
+import com.pillpronto.data.local.LocalPatientProfileProvider
 import com.pillpronto.data.local.dao.DoseDao
 import com.pillpronto.data.mapper.toDomain
 import com.pillpronto.data.mapper.toEntity
@@ -14,7 +15,8 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 
 class DoseRepositoryImpl @Inject constructor(
-    private val dao: DoseDao
+    private val dao: DoseDao,
+    private val localPatientProfileProvider: LocalPatientProfileProvider
 ) : DoseRepository {
 
     override fun observeDosesForDate(date: LocalDate): Flow<List<DoseItem>> =
@@ -27,7 +29,7 @@ class DoseRepositoryImpl @Inject constructor(
         dao.getBetween(start.toString(), end.toString()).map { it.toDomain() }
 
     override suspend fun insertDoses(doses: List<DoseLog>) =
-        dao.insertAll(doses.map { it.toEntity() })
+        dao.insertAll(doses.map { it.toEntity(localPatientProfileProvider.patientProfileId) })
 
     override suspend fun updateStatus(doseId: Long, status: DoseStatus, takenAt: LocalDateTime?) =
         dao.updateStatus(doseId, status.name, takenAt?.toString())

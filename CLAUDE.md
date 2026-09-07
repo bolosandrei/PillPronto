@@ -49,14 +49,24 @@ Config: `minSdk = 26`, `targetSdk = 35`, JDK 17, Gradle KTS + version catalog (`
 - Toate datele de sănătate rămân **on-device** (fără cloud pentru loguri) — cerință GDPR.
 - **La orice modificare de schemă Room** (câmp nou în `TreatmentEntity`/`DoseLogEntity` etc.) **trebuie incrementat `version` din `@Database`** (`PillProntoDatabase.kt`). `fallbackToDestructiveMigration()` gestionează diferența dintre versiuni (șterge și recreează local — acceptabil în stadiul curent, pre-release), dar Room aruncă `IllegalStateException` la pornire dacă schema s-a schimbat și versiunea a rămas aceeași.
 - Teste: JUnit + `kotlinx-coroutines-test` (+ Turbine pentru Flow). Domeniul e testabil pur (java.time).
+  Instrumentate (`app/src/androidTest/`): Room DAO pe bază in-memory + un test Compose de fum
+  (navigare bottom bar) via `@HiltAndroidTest`; rulează pe emulator/dispozitiv, nu din CLI fără device.
+  `testInstrumentationRunner` = `com.pillpronto.HiltTestRunner` (instanțiază `HiltTestApplication`).
+- **Stringuri:** toate textele afișate utilizatorului sunt în `res/values/strings.xml` (RO, fără
+  calificator de limbă) — nu se hardcodează text în Compose. Erorile de validare din ViewModels
+  (ex. `AddTreatmentError`) sunt enum-uri tipizate, nu String — Composable-ul mapează la
+  `stringResource(...)`, ca ViewModel-ul să rămână fără dependență de Context Android.
+  `AndroidManifest.xml` are `android:localeConfig="@xml/locales_config"` (scaffolding pt. switch
+  RO/EN viitor — vezi secțiunea 8).
 
 ## 5. Comenzi build & test
 
 ```bash
-./gradlew assembleDebug          # build APK debug
-./gradlew testDebugUnitTest      # teste unitare (PDC/MPR + mappers)
-./gradlew installDebug           # instalare pe dispozitiv/emulator conectat
-./gradlew lint                   # lint
+./gradlew assembleDebug              # build APK debug
+./gradlew testDebugUnitTest          # teste unitare (PDC/MPR + mappers)
+./gradlew connectedDebugAndroidTest  # teste instrumentate (Room DAO + smoke test Compose) — necesită device/emulator
+./gradlew installDebug               # instalare pe dispozitiv/emulator conectat
+./gradlew lint                       # lint
 ```
 
 Wrapper-ul Gradle: dacă lipsește `gradlew`, deschide în Android Studio (îl generează) sau rulează `gradle wrapper`.
@@ -76,36 +86,60 @@ Wrapper-ul Gradle: dacă lipsește `gradlew`, deschide în Android Studio (îl g
 ### Faza 0 — Setup (complet)
 Gradle KTS + version catalog, Compose, Hilt, Navigation, temă cu culori de status, structura de pachete.
 
-### Faza 1 — MVP aderență (complet, cu rafinări)
-- **Introducere tratament** (manual): nume, dozaj, ore (chips), dată start/end — cu **TimePicker/DatePicker** și validare.
-- **Editare & ștergere** tratament (tap pe card → editare; ștergere cu confirmare). Istoricul dozelor luate/ratate se păstrează la editare.
-- **Persistență** Room (offline-first): `treatments`, `dose_logs` (FK cascade).
+### Faza 1 — MVP aderență (complet, inclusiv toate rafinările)
+- **Introducere tratament** (manual): nume, dozaj, ore (chips), dată start/end — cu **TimePicker/DatePicker** și validare; tratamente **„la nevoie" (PRN)**, fără orar fix.
+- **Editare & ștergere** tratament (tap pe card → editare; ștergere cu confirmare, **swipe-to-delete** în listă). Istoricul dozelor luate/ratate se păstrează la editare.
+- **Ecran de detaliu tratament** (`TreatmentDetailScreen`) cu istoric de administrare per medicament.
+- **Persistență** Room (offline-first): `treatments`, `dose_logs` (FK cascade), schema v2 (PRN).
 - **Generarea dozelor** din orar (sare peste orele deja trecute).
+- **Ecranul „Azi"**: strip de zile scopat pe **luna afișată** (derivată din `selectedDate`, nu stare separată) + rând **lună/an** cu săgeți (`onPreviousMonth`/`onNextMonth`, clamping automat via `LocalDate.plusMonths/minusMonths`) și eticheta lunii deschide picker-ul nativ M3 (`DatePickerDialogBox`, extras în `core/ui/components/` și reutilizat și la formularul de tratament) pentru salt direct pe orice an.
 - **Remindere** ca alarme **exacte** per-doză (`AlarmManager`).
-- **Notificări** cu: **tap → deschide app**; butoane **„Confirmă" / „Omite"** (marchează doza direct, via `DoseActionReceiver`, fără a deschide app-ul).
+- **Notificări** cu: **tap → deschide app și navighează direct pe tab-ul „Azi"** (deep-link prin `MainActivity.onNewIntent` + `EXTRA_OPEN_TODAY`, funcționează și cu app-ul deja deschis pe alt tab); butoane **„Confirmă" / „Omite"** (marchează doza direct, via `DoseActionReceiver`, fără a deschide app-ul).
 - **WorkManager periodic (6h):** marchează dozele depășite ca `MISSED`, **extinde orizontul** de doze (fereastră rulantă), resincronizează alarmele.
 - **Metrici de aderență:** `ComputeAdherenceUseCase` calculează **PDC** (zile acoperite / total) și **MPR** (doze luate / programate); ecran „Aderență" cu prag 0.80.
 - **Permisiuni** runtime (notificări) + banner alarme exacte.
+- **Icon launcher propriu** (adaptive icon vectorial, capsulă în culorile temei) + `dataExtractionRules` (Android 12+, exclude `pillpronto.db` de la backup cloud/transfer, consecvent cu `backup_rules.xml`).
+- **Localizare:** toate stringurile în `res/values/strings.xml` (RO); `AddTreatmentError` enum tipizat în loc de text brut în ViewModel; `locales_config.xml` + `android:localeConfig` — scaffolding pentru switch RO/EN (vezi backlog, secțiunea 8).
 - **Teste unitare:** `ComputeAdherenceUseCaseTest` (3 scenarii PDC/MPR), `MappersTest` (round-trip), `FakeDoseRepository`.
+- **Teste instrumentate:** `TreatmentDaoTest`, `DoseDaoTest` (Room in-memory, inclusiv cascade delete), `NavigationSmokeTest` (Compose, navigare bottom bar) — `HiltTestRunner` configurat.
 
-Use-cases existente: `AddTreatmentUseCase`, `EditTreatmentUseCase`, `DeleteTreatmentUseCase`, `GetTreatmentUseCase`, `GenerateDosesUseCase`, `ObserveTreatmentsUseCase`, `ObserveTodayDosesUseCase`, `LogDoseUseCase`, `ComputeAdherenceUseCase`, `MarkOverdueDosesUseCase`, `ExtendDoseHorizonUseCase`.
+Use-cases existente: `AddTreatmentUseCase`, `EditTreatmentUseCase`, `DeleteTreatmentUseCase`, `GetTreatmentUseCase`, `GenerateDosesUseCase`, `ObserveTreatmentsUseCase`, `ObserveTodayDosesUseCase`, `ObserveTreatmentHistoryUseCase`, `ObserveActiveAsNeededTreatmentsUseCase`, `LogDoseUseCase`, `LogAsNeededDoseUseCase`, `ComputeAdherenceUseCase`, `MarkOverdueDosesUseCase`, `ExtendDoseHorizonUseCase`.
+
+### Faza 1.5a — Fundație conturi & roluri (parțial — vezi `docs/user-management-plan.md`)
+- `TreatmentEntity`/`DoseLogEntity` au acum `patientProfileId: String` — identitate locală
+  generată o singură dată (`LocalPatientProfileProvider`, UUID persistat în `SharedPreferences`),
+  va deveni `patient_profiles.id` în Supabase la 1.5b (client-generated UUID, fără reconciliere).
+  `PillProntoDatabase` la `version = 3`.
+- Schema Postgres + Row-Level-Security **scrise, neexecutate**: `supabase/migrations/0001_init_schema.sql`,
+  `0002_rls_policies.sql` (`profiles`, `patient_profiles`, `links`, `treatments`, `dose_logs`, `audit_log`).
+- **Acțiune manuală în așteptare (utilizator, nu Claude Code):** creare cont + proiect Supabase
+  (regiune UE), rulare celor 2 fișiere SQL via Dashboard → SQL Editor, notare `Project URL` +
+  `anon public key` — necesare la 1.5b.
+- **NU e încă implementat:** SDK Supabase în Android, ecrane Auth, sync Room↔Supabase, fluxurile
+  Aparținător/Medic/Farmacist (1.5b-1.5g).
 
 ---
 
 ## 8. CE URMEAZĂ — TODO
 
-### 8a. Verificare imediată (primul lucru în Claude Code CLI)
-> Codul a fost scris în Cowork FĂRĂ a putea rula Gradle (fără Android SDK acolo).
-> **Prima acțiune în CLI:** `./gradlew assembleDebug` și `./gradlew testDebugUnitTest` și rezolvă orice eroare de compilare (versiuni, importuri). Logica PDC/MPR a fost validată algoritmic separat, dar build-ul complet nu a fost rulat.
+### 8a. Backlog (mic, neplanificat pe fază)
+- **Switch limbă RO/EN** — cerut de utilizator (2026-09-07). Scaffolding deja pregătit
+  (`locales_config.xml`, `android:localeConfig`, toate stringurile în `strings.xml`). Rămâne de
+  făcut: `values-en/strings.xml` cu traduceri + `<locale android:name="en"/>` în
+  `locales_config.xml` + un mecanism de selecție (ecran de setări nou, sau întrerupător simplu care
+  apelează `AppCompatDelegate.setApplicationLocales(...)` / API-ul per-app language din Android 13+).
 
-### 8b. Rafinări rămase la Faza 1 (opționale, mici)
-- Deep-link din notificare direct în ecranul „Azi" (acum doar deschide app-ul).
-- Ecran de detaliu tratament + istoric per medicament; swipe-to-delete în listă.
-- Icon launcher propriu (acum folosește iconul implicit); `dataExtractionRules` (Android 12+).
-- Localizare completă (extragere stringuri în `strings.xml`).
-- Teste instrumentate (Room DAO, Compose UI).
-
-### 8c. Roadmap faze următoare
+### 8b. Roadmap faze următoare
+- **Faza 1.5 — Conturi & Roluri (Pacient/Aparținător/Medic/Farmacist):** **1.5a implementată**
+  (vezi secțiunea 7 mai sus) — schema + RLS + migrare Room. **Următorul pas: 1.5b** — SDK Supabase
+  Kotlin în Android (deps Gradle: postgrest-kt, auth-kt, ktor client, kotlinx-serialization —
+  versiuni de verificat la implementare, nu hardcodate din memorie), ecrane login/signup
+  (email+parolă, Google Sign-In) + onboarding „Sunt pacient" vs. „Sunt aparținător/profesionist".
+  **Blocat până atunci de acțiunea manuală** notată în secțiunea 7 (proiect Supabase + rulare SQL).
+  Restul etapelor (1.5c sync, 1.5d Aparținător, 1.5e Medic/Farmacist, 1.5f audit, 1.5g teste) — vezi
+  `docs/user-management-plan.md` secțiunea 8, neatinse încă. Poziționată **înaintea** Fazei 2
+  pentru că schema (`patient_profile_id`) trebuia stabilă înainte ca Nomenclatorul/scanarea să
+  construiască peste ea — acum e stabilă.
 - **Faza 2 — Identificare:** import Nomenclator ANMDMR (bază locală), scanare **DataMatrix/barcode** (ML Kit) + OCR, legare scanare → tratament. Investigare mapare **GTIN→cod CIM**.
 - **Faza 3 — Viziune:** feed CameraX, **YOLO-seg** (LiteRT/ONNX), detecție multi-obiect pe cadru de ansamblu, **contururi gri** (detectat/neidentificat).
 - **Faza 4 — Recunoaștere & enrollment:** model de **embeddings** (metric learning), galerie nearest-neighbor, enrollment multi-view + top-k candidați, **colorare contur** după statusul dozei.

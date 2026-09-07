@@ -19,6 +19,9 @@ import androidx.room.PrimaryKey
 )
 data class DoseLogEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0L,
+    // Profilul de pacient caruia ii apartine (LocalPatientProfileProvider) — pregatire pt.
+    // partajare Aparutinator/Medic/Farmacist (Faza 1.5+); vezi docs/user-management-plan.md.
+    val patientProfileId: String,
     val treatmentId: Long,
     val scheduledAt: String,       // ISO LocalDateTime
     val status: String,            // DoseStatus name

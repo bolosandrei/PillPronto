@@ -22,7 +22,7 @@ class MappersTest {
             endDate = LocalDate.of(2026, 8, 31),
             active = true
         )
-        val restored = original.toEntity().toDomain()
+        val restored = original.toEntity("test-patient").toDomain()
         assertEquals(original.medicationName, restored.medicationName)
         assertEquals(original.dosage, restored.dosage)
         assertEquals(listOf(LocalTime.of(8, 0), LocalTime.of(20, 0)), restored.times) // sortate
@@ -39,7 +39,7 @@ class MappersTest {
             status = DoseStatus.TAKEN,
             takenAt = LocalDateTime.of(2026, 8, 20, 8, 15)
         )
-        val restored = original.toEntity().toDomain()
+        val restored = original.toEntity("test-patient").toDomain()
         assertEquals(original.scheduledAt, restored.scheduledAt)
         assertEquals(original.status, restored.status)
         assertEquals(original.takenAt, restored.takenAt)

@@ -9,7 +9,10 @@ import com.pillpronto.data.local.entity.TreatmentEntity
 
 @Database(
     entities = [TreatmentEntity::class, DoseLogEntity::class],
-    version = 2, // v2: Treatment.asNeeded + DoseLog.isAsNeeded (PRN). fallbackToDestructiveMigration.
+    // v2: Treatment.asNeeded + DoseLog.isAsNeeded (PRN).
+    // v3: patientProfileId pe ambele entitati (Faza 1.5 — conturi & roluri, vezi docs/user-management-plan.md).
+    // fallbackToDestructiveMigration.
+    version = 3,
     exportSchema = false
 )
 abstract class PillProntoDatabase : RoomDatabase() {
