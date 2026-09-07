@@ -5,6 +5,7 @@
     <string name="nav_today">Azi</string>
     <string name="nav_treatments">Tratamente</string>
     <string name="nav_adherence">Aderență</string>
+    <string name="nav_account">Cont</string>
 
     <!-- Comun — reutilizate pe mai multe ecrane -->
     <string name="common_as_needed">la nevoie</string>
@@ -85,6 +86,45 @@
     <string name="adherence_covered_days">Zile acoperite: %1$d / %2$d</string>
     <string name="adherence_status_ok">Status: aderent (PDC ≥ 0.80)</string>
     <string name="adherence_status_low">Status: sub prag (PDC &lt; 0.80)</string>
+
+    <!-- Roluri de cont — reutilizate in ecranul Cont si Onboarding -->
+    <string name="account_role_patient">Pacient</string>
+    <string name="account_role_caregiver">Aparținător</string>
+    <string name="account_role_doctor">Medic</string>
+    <string name="account_role_pharmacist">Farmacist</string>
+
+    <!-- Ecranul "Cont" -->
+    <string name="account_title_sign_in">Autentificare</string>
+    <string name="account_title_sign_up">Creează cont</string>
+    <string name="account_email_label">Email</string>
+    <string name="account_password_label">Parolă</string>
+    <string name="account_confirm_password_label">Confirmă parola</string>
+    <string name="account_submit_sign_in">Autentifică-te</string>
+    <string name="account_submit_sign_up">Creează cont</string>
+    <string name="account_toggle_to_sign_up">Nu ai cont? Creează unul</string>
+    <string name="account_toggle_to_sign_in">Ai deja cont? Autentifică-te</string>
+    <string name="account_logged_out_hint">Poți folosi aplicația fără cont. Creează unul doar dacă vrei să distribui datele cu un aparținător sau un profesionist medical.</string>
+    <string name="account_confirmation_pending_title">Verifică email-ul</string>
+    <string name="account_confirmation_pending_body">Am trimis un link de confirmare la %1$s. Deschide-l, apoi revino aici și autentifică-te.</string>
+    <string name="account_logged_in_as">Autentificat ca %1$s</string>
+    <string name="account_role_label">Rol: %1$s</string>
+    <string name="account_sign_out">Deconectează-te</string>
+    <string name="account_error_empty_email">Introdu adresa de email</string>
+    <string name="account_error_invalid_email">Adresa de email nu e validă</string>
+    <string name="account_error_password_too_short">Parola trebuie să aibă cel puțin 6 caractere</string>
+    <string name="account_error_passwords_mismatch">Parolele nu coincid</string>
+    <string name="account_error_auth_failed">Autentificare eșuată. Verifică datele introduse.</string>
+    <string name="account_error_rate_limited">Prea multe încercări într-un timp scurt. Așteaptă câteva minute și încearcă din nou.</string>
+
+    <!-- Ecranul de onboarding (alegere rol, dupa primul cont creat) -->
+    <string name="onboarding_title">Ce fel de cont ai?</string>
+    <string name="onboarding_subtitle">Alege rolul potrivit — poți schimba asta mai târziu.</string>
+    <string name="onboarding_display_name_label">Numele tău</string>
+    <string name="onboarding_submit">Continuă</string>
+    <string name="onboarding_error_no_role">Alege un rol</string>
+    <string name="onboarding_error_empty_name">Introdu un nume</string>
+    <string name="onboarding_error_not_authenticated">Sesiunea a expirat — autentifică-te din nou</string>
+    <string name="onboarding_error_save_failed">Eroare la salvare. Încearcă din nou.</string>
 
     <!-- Notificari de reminder -->
     <string name="reminder_channel_name">Remindere medicație</string>

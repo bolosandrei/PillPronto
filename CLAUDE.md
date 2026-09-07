@@ -105,18 +105,30 @@ Gradle KTS + version catalog, Compose, Hilt, Navigation, temă cu culori de stat
 
 Use-cases existente: `AddTreatmentUseCase`, `EditTreatmentUseCase`, `DeleteTreatmentUseCase`, `GetTreatmentUseCase`, `GenerateDosesUseCase`, `ObserveTreatmentsUseCase`, `ObserveTodayDosesUseCase`, `ObserveTreatmentHistoryUseCase`, `ObserveActiveAsNeededTreatmentsUseCase`, `LogDoseUseCase`, `LogAsNeededDoseUseCase`, `ComputeAdherenceUseCase`, `MarkOverdueDosesUseCase`, `ExtendDoseHorizonUseCase`.
 
-### Faza 1.5a — Fundație conturi & roluri (parțial — vezi `docs/user-management-plan.md`)
-- `TreatmentEntity`/`DoseLogEntity` au acum `patientProfileId: String` — identitate locală
-  generată o singură dată (`LocalPatientProfileProvider`, UUID persistat în `SharedPreferences`),
-  va deveni `patient_profiles.id` în Supabase la 1.5b (client-generated UUID, fără reconciliere).
+### Faza 1.5a+1.5b — Conturi & autentificare (parțial — vezi `docs/user-management-plan.md`)
+- `TreatmentEntity`/`DoseLogEntity` au `patientProfileId: String` — identitate locală generată o
+  singură dată (`LocalPatientProfileProvider`, UUID persistat în `SharedPreferences`), devine
+  `patient_profiles.id` în Supabase la onboarding (client-generated UUID, fără reconciliere).
   `PillProntoDatabase` la `version = 3`.
-- Schema Postgres + Row-Level-Security **scrise, neexecutate**: `supabase/migrations/0001_init_schema.sql`,
+- Schema Postgres + RLS **scrise și executate** de utilizator: `supabase/migrations/0001_init_schema.sql`,
   `0002_rls_policies.sql` (`profiles`, `patient_profiles`, `links`, `treatments`, `dose_logs`, `audit_log`).
-- **Acțiune manuală în așteptare (utilizator, nu Claude Code):** creare cont + proiect Supabase
-  (regiune UE), rulare celor 2 fișiere SQL via Dashboard → SQL Editor, notare `Project URL` +
-  `anon public key` — necesare la 1.5b.
-- **NU e încă implementat:** SDK Supabase în Android, ecrane Auth, sync Room↔Supabase, fluxurile
-  Aparținător/Medic/Farmacist (1.5b-1.5g).
+- SDK Supabase Kotlin conectat (`core/di/SupabaseModule.kt`, BOM `3.5.0`, module `auth-kt` +
+  `postgrest-kt`) — credențiale din `local.properties` → `BuildConfig` (`SUPABASE_URL`,
+  `SUPABASE_PUBLISHABLE_KEY`), niciodată în cod. `compileSdk` ridicat la **36** (`targetSdk`
+  rămâne 35) — `androidx.browser`, adus tranzitiv de `auth-kt`, cere minim compileSdk 36.
+- Autentificare email/parolă completă: `AuthRepository`/`ProfileRepository` + use-cases
+  (`SignUpUseCase`, `SignInUseCase`, `SignOutUseCase`, `ObserveAuthSessionUseCase`,
+  `GetProfileUseCase`, `CompleteOnboardingUseCase`). `AuthSessionState` traduce `SessionStatus`
+  din SDK — domeniul nu depinde de vendor.
+- Tab nou **„Cont"** (al 4-lea, bottom bar) — `ui/account/AccountScreen.kt` (toggle
+  autentificare/înregistrare) + `ui/onboarding/OnboardingScreen.kt` (alegere rol, o singură dată
+  după primul cont). **Cont opțional** — aplicația rămâne 100% funcțională fără login.
+- **Verificat pe device cu cont real** (2026-09-07) — 3 bug-uri găsite și rezolvate, cel mai
+  notabil: `AccountViewModel` nu refăcea profilul după onboarding reușit (doar la schimbarea
+  sesiunii), retrimițând userul la nesfârșit pe onboarding gol deși contul chiar fusese creat.
+  Fix + detalii complete: `docs/user-management-plan.md` secțiunea 8, sub-punctul 1.5b.
+- **NU e încă implementat:** Google Sign-In (necesită 2 OAuth Client ID Google Cloud + SHA-1,
+  blocaj extern separat), sync Room↔Supabase, fluxurile Aparținător/Medic/Farmacist (1.5c-1.5g).
 
 ---
 
@@ -130,16 +142,20 @@ Use-cases existente: `AddTreatmentUseCase`, `EditTreatmentUseCase`, `DeleteTreat
   apelează `AppCompatDelegate.setApplicationLocales(...)` / API-ul per-app language din Android 13+).
 
 ### 8b. Roadmap faze următoare
-- **Faza 1.5 — Conturi & Roluri (Pacient/Aparținător/Medic/Farmacist):** **1.5a implementată**
-  (vezi secțiunea 7 mai sus) — schema + RLS + migrare Room. **Următorul pas: 1.5b** — SDK Supabase
-  Kotlin în Android (deps Gradle: postgrest-kt, auth-kt, ktor client, kotlinx-serialization —
-  versiuni de verificat la implementare, nu hardcodate din memorie), ecrane login/signup
-  (email+parolă, Google Sign-In) + onboarding „Sunt pacient" vs. „Sunt aparținător/profesionist".
-  **Blocat până atunci de acțiunea manuală** notată în secțiunea 7 (proiect Supabase + rulare SQL).
-  Restul etapelor (1.5c sync, 1.5d Aparținător, 1.5e Medic/Farmacist, 1.5f audit, 1.5g teste) — vezi
-  `docs/user-management-plan.md` secțiunea 8, neatinse încă. Poziționată **înaintea** Fazei 2
-  pentru că schema (`patient_profile_id`) trebuia stabilă înainte ca Nomenclatorul/scanarea să
-  construiască peste ea — acum e stabilă.
+- **Faza 1.5 — Conturi & Roluri (Pacient/Aparținător/Medic/Farmacist):** **1.5a + 1.5b
+  implementate** (vezi secțiunea 7 mai sus) — schema + RLS + migrare Room, apoi SDK Supabase +
+  autentificare email/parolă + onboarding rol. **Următorul pas, la alegere:**
+  - **Google Sign-In** (completare 1.5b) — necesită acțiune manuală a utilizatorului mai întâi:
+    2 OAuth Client ID-uri în Google Cloud Console (Web + Android, acesta din urmă cu amprenta
+    SHA-1 a certificatului de semnare) + înregistrarea lor în Supabase Dashboard → Auth →
+    providers → Google. Fără asta, nu se poate implementa.
+  - **1.5c — Sync layer** (`SyncWorker`, outbox Room↔Supabase) — nu are blocaj extern, se poate
+    începe oricând.
+  - Restul etapelor (1.5d Aparținător, 1.5e Medic/Farmacist, 1.5f audit, 1.5g teste RLS) — vezi
+    `docs/user-management-plan.md` secțiunea 8, neatinse încă; depind de 1.5c pentru a avea sens
+    practic (fără sync, „Pacienții mei" n-are ce sincroniza).
+  Poziționată **înaintea** Fazei 2 pentru că schema (`patient_profile_id`) trebuia stabilă înainte
+  ca Nomenclatorul/scanarea să construiască peste ea — acum e stabilă.
 - **Faza 2 — Identificare:** import Nomenclator ANMDMR (bază locală), scanare **DataMatrix/barcode** (ML Kit) + OCR, legare scanare → tratament. Investigare mapare **GTIN→cod CIM**.
 - **Faza 3 — Viziune:** feed CameraX, **YOLO-seg** (LiteRT/ONNX), detecție multi-obiect pe cadru de ansamblu, **contururi gri** (detectat/neidentificat).
 - **Faza 4 — Recunoaștere & enrollment:** model de **embeddings** (metric learning), galerie nearest-neighbor, enrollment multi-view + top-k candidați, **colorare contur** după statusul dozei.
