@@ -126,7 +126,13 @@ fun PillProntoNavHost(
             composable(Route.Account.path) {
                 AccountScreen(
                     padding,
-                    onNeedsOnboarding = { navController.navigate(Route.Onboarding.path) },
+                    // launchSingleTop: plasa de siguranta — daca AccountScreen ar mai declansa
+                    // aceasta navigare de mai multe ori la rand (ex. o viitoare regresie a
+                    // fix-ului din AccountScreen.kt), nu se mai stivuiesc mai multe instante de
+                    // Onboarding, care ar cere userului sa apese Back de mai multe ori.
+                    onNeedsOnboarding = {
+                        navController.navigate(Route.Onboarding.path) { launchSingleTop = true }
+                    },
                     onManageAccess = { navController.navigate(Route.ManageAccess.path) },
                     onManageProfessionalAccess = { navController.navigate(Route.ManageProfessionalAccess.path) },
                     onMyPatients = { navController.navigate(Route.MyPatients.create()) }

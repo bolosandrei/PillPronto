@@ -44,8 +44,19 @@ fun AccountScreen(
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
 
-    // Reface profilul la fiecare revenire pe ecran (ex. dupa onboarding reusit) — sesiunea nu se
-    // schimba in acel moment, deci fetch-ul reactiv din ViewModel nu s-ar re-declansa singur.
+    // Reface profilul de fiecare data cand AccountScreen intra in compozitie (ex. dupa onboarding
+    // reusit, cand popBackStack() aduce inapoi acest ecran) — DECLARAT INAINTEA efectului de mai
+    // jos, cu intentie: LaunchedEffect(Unit) ruleaza sincron in aceeasi trecere de aplicare a
+    // efectelor compozitiei curente, deci `vm.refresh()` (care marcheaza profileChecked=false
+    // imediat, vezi AccountViewModel) apuca sa "curete" starea veche INAINTE ca efectul de
+    // verificare de mai jos sa apuce sa o citeasca. `LifecycleEventEffect(ON_RESUME)` nu oferea
+    // aceasta garantie de ordine — evenimentul de lifecycle se declanseaza separat, uneori DUPA
+    // ce efectul de verificare deja a citit starea veche (bug real, gasit la testarea 1.5e: dupa
+    // onboarding reusit, userul era retrimis pe onboarding, uneori de mai multe ori la rand).
+    LaunchedEffect(Unit) { vm.refresh() }
+    // Pastrat si acesta — acopera revenirea din fundal (Android real resume), unde compozitia NU
+    // se reface (deci LaunchedEffect(Unit) de mai sus nu ruleaza din nou), doar Lifecycle-ul
+    // trece prin ON_RESUME.
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { vm.refresh() }
 
     // Autentificat dar fara rand in `profiles` (cont nou sau onboarding neterminat) -> onboarding.
