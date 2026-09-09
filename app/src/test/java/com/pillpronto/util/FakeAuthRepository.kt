@@ -13,8 +13,11 @@ class FakeAuthRepository : AuthRepository {
 
     var signUpError: Throwable? = null
     var signInError: Throwable? = null
+    var googleSignInError: Throwable? = null
     var lastSignUpEmail: String? = null
     var lastSignInEmail: String? = null
+    var lastGoogleIdToken: String? = null
+    var lastGoogleRawNonce: String? = null
 
     fun emit(state: AuthSessionState) { _sessionStatus.value = state }
 
@@ -26,6 +29,12 @@ class FakeAuthRepository : AuthRepository {
     override suspend fun signInWithEmail(email: String, password: String) {
         lastSignInEmail = email
         signInError?.let { throw it }
+    }
+
+    override suspend fun signInWithGoogleIdToken(idToken: String, rawNonce: String) {
+        lastGoogleIdToken = idToken
+        lastGoogleRawNonce = rawNonce
+        googleSignInError?.let { throw it }
     }
 
     override suspend fun signOut() {

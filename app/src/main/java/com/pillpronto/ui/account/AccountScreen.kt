@@ -19,8 +19,10 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -29,9 +31,11 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.pillpronto.BuildConfig
 import com.pillpronto.R
 import com.pillpronto.domain.model.AccountRole
 import com.pillpronto.domain.model.AuthSessionState
+import kotlinx.coroutines.launch
 
 @Composable
 fun AccountScreen(
@@ -45,14 +49,8 @@ fun AccountScreen(
     val state by vm.state.collectAsStateWithLifecycle()
 
     // Reface profilul de fiecare data cand AccountScreen intra in compozitie (ex. dupa onboarding
-    // reusit, cand popBackStack() aduce inapoi acest ecran) — DECLARAT INAINTEA efectului de mai
-    // jos, cu intentie: LaunchedEffect(Unit) ruleaza sincron in aceeasi trecere de aplicare a
-    // efectelor compozitiei curente, deci `vm.refresh()` (care marcheaza profileChecked=false
-    // imediat, vezi AccountViewModel) apuca sa "curete" starea veche INAINTE ca efectul de
-    // verificare de mai jos sa apuce sa o citeasca. `LifecycleEventEffect(ON_RESUME)` nu oferea
-    // aceasta garantie de ordine — evenimentul de lifecycle se declanseaza separat, uneori DUPA
-    // ce efectul de verificare deja a citit starea veche (bug real, gasit la testarea 1.5e: dupa
-    // onboarding reusit, userul era retrimis pe onboarding, uneori de mai multe ori la rand).
+    // reusit, cand popBackStack() aduce inapoi acest ecran) — necesar, altfel un onboarding reusit
+    // cat timp sesiunea era deja Authenticated ramane "invizibil" pentru cache-ul local.
     LaunchedEffect(Unit) { vm.refresh() }
     // Pastrat si acesta — acopera revenirea din fundal (Android real resume), unde compozitia NU
     // se reface (deci LaunchedEffect(Unit) de mai sus nu ruleaza din nou), doar Lifecycle-ul
@@ -60,10 +58,17 @@ fun AccountScreen(
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { vm.refresh() }
 
     // Autentificat dar fara rand in `profiles` (cont nou sau onboarding neterminat) -> onboarding.
-    LaunchedEffect(state.sessionState, state.profileChecked, state.profile) {
-        if (state.sessionState is AuthSessionState.Authenticated && state.profileChecked && state.profile == null) {
-            onNeedsOnboarding()
-        }
+    // Evenimentul vine direct din ViewModel (vezi AccountViewModel.needsOnboardingEvents), NU mai
+    // e derivat aici dintr-un LaunchedEffect care compara (sessionState, profileChecked, profile)
+    // separate — acela citea `state` (Compose State derivat din collectAsStateWithLifecycle) care
+    // se putea actualiza cu un hop de coroutine in urma lui `vm.state.value` (actualizat sincron
+    // de vm.refresh()), ducand la o cursa reala: efectul citea profileChecked=true STALE exact in
+    // fereastra in care ViewModel-ul deja il setase pe false. Bug confirmat cu logcat la
+    // onboarding dupa Google Sign-In (userul retrimis pe onboarding desi datele erau deja
+    // salvate). Emitand evenimentul direct din ViewModel, in aceeasi coroutina care actualizeaza
+    // starea, eliminam cursa complet.
+    LaunchedEffect(Unit) {
+        vm.needsOnboardingEvents.collect { onNeedsOnboarding() }
     }
 
     Column(
@@ -146,6 +151,26 @@ private fun LoggedOutForm(state: AccountUiState, vm: AccountViewModel) {
     TextButton(onClick = vm::onToggleMode) {
         Text(stringResource(if (isSignUp) R.string.account_toggle_to_sign_in else R.string.account_toggle_to_sign_up))
     }
+
+    // Acopera si autentificare si inregistrare — nu are sens separat pe mod, Google gestioneaza
+    // ambele cazuri (cont nou vs. existent) intern.
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    OutlinedButton(
+        onClick = {
+            scope.launch {
+                when (val outcome = requestGoogleSignIn(context, BuildConfig.GOOGLE_WEB_CLIENT_ID)) {
+                    is GoogleSignInOutcome.Success -> vm.onGoogleIdToken(outcome.idToken, outcome.rawNonce)
+                    is GoogleSignInOutcome.Failed -> vm.onGoogleSignInFailed()
+                    GoogleSignInOutcome.Cancelled -> {} // userul a inchis dialogul — fara eroare vizibila
+                }
+            }
+        },
+        enabled = !state.isSubmitting,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Text(stringResource(R.string.account_google_sign_in))
+    }
 }
 
 /** Stare dedicata dupa signup reusit, dar cu sesiunea inca inactiva (confirmare prin email
@@ -224,4 +249,5 @@ private fun accountErrorMessage(error: AccountError): String = when (error) {
     AccountError.PASSWORDS_DO_NOT_MATCH -> stringResource(R.string.account_error_passwords_mismatch)
     AccountError.AUTH_FAILED -> stringResource(R.string.account_error_auth_failed)
     AccountError.RATE_LIMITED -> stringResource(R.string.account_error_rate_limited)
+    AccountError.GOOGLE_SIGN_IN_FAILED -> stringResource(R.string.account_error_google_sign_in_failed)
 }

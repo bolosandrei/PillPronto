@@ -33,7 +33,11 @@ fun OnboardingScreen(
     vm: OnboardingViewModel = hiltViewModel()
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
-    LaunchedEffect(state.done) { if (state.done) onDone() }
+    LaunchedEffect(state.done) {
+        if (state.done) {
+            onDone()
+        }
+    }
 
     Scaffold(topBar = { BackTopAppBar(stringResource(R.string.onboarding_title), onBack) }) { innerPadding ->
         Column(

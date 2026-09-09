@@ -4,7 +4,9 @@ import com.pillpronto.domain.model.AuthSessionState
 import com.pillpronto.domain.repository.AuthRepository
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.auth
+import io.github.jan.supabase.auth.providers.Google
 import io.github.jan.supabase.auth.providers.builtin.Email
+import io.github.jan.supabase.auth.providers.builtin.IDToken
 import io.github.jan.supabase.auth.status.SessionStatus
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -38,6 +40,14 @@ class AuthRepositoryImpl @Inject constructor(
         supabase.auth.signInWith(Email) {
             this.email = email
             this.password = password
+        }
+    }
+
+    override suspend fun signInWithGoogleIdToken(idToken: String, rawNonce: String) {
+        supabase.auth.signInWith(IDToken) {
+            this.idToken = idToken
+            this.provider = Google
+            this.nonce = rawNonce
         }
     }
 

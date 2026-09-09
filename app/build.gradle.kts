@@ -40,6 +40,11 @@ android {
 
         buildConfigField("String", "SUPABASE_URL", "\"${requiredLocalProperty("SUPABASE_URL")}\"")
         buildConfigField("String", "SUPABASE_PUBLISHABLE_KEY", "\"${requiredLocalProperty("SUPABASE_PUBLISHABLE_KEY")}\"")
+        // Client ID Web din Google Cloud Console — folosit ca serverClientId la Credential Manager
+        // (Google verifica app-ul separat, pe baza applicationId+SHA-1, printr-un Client ID Android
+        // distinct care nu intra in cod). Acelasi Client ID Web e inregistrat si in Supabase
+        // Dashboard -> Auth -> Providers -> Google.
+        buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"${requiredLocalProperty("GOOGLE_WEB_CLIENT_ID")}\"")
     }
 
     buildTypes {
@@ -110,6 +115,10 @@ dependencies {
     // - NU e inceputul CameraX/ML Kit din Faza 2 (acela ramane pt. detectie multi-obiect pe cutii
     // de medicamente); aici doar citim textul unui singur cod QR pt. fluxul de invitatie 1.5d.
     implementation(libs.play.services.code.scanner)
+    // Google Sign-In nativ (Faza 1.5b, completare) - Credential Manager, nu WebView/Custom Tabs OAuth.
+    implementation(libs.androidx.credentials)
+    implementation(libs.androidx.credentials.play.services.auth)
+    implementation(libs.googleid)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)

@@ -2,12 +2,12 @@
 
 > Document de arhitectură + plan de implementare. Scris la brainstorming-ul din 2026-09-07.
 > Completează `CLAUDE.md` (nu-l duplică) — citit împreună cu acesta la sesiunile viitoare.
-> Status: **1.5a + 1.5b + 1.5c + 1.5d + 1.5e implementate** (1.5a+1.5b: 2026-09-07; 1.5c-1.5e:
-> 2026-09-09) — schema + RLS + migrare Room, SDK Supabase Android + autentificare email/parolă +
+> Status: **1.5a + 1.5b (inclusiv Google Sign-In) + 1.5c + 1.5d + 1.5e implementate**
+> (1.5a+1.5b email/parolă: 2026-09-07; 1.5c-1.5e: 2026-09-09; Google Sign-In: 2026-09-09) — schema
+> + RLS + migrare Room, SDK Supabase Android + autentificare email/parolă + Google Sign-In +
 > onboarding rol, sync layer Room↔Supabase, legătură Pacient↔Aparținător/Medic/Farmacist read-only
-> + notificare doză ratată (doar Aparținător). **Google Sign-In, profil dependent (amânat din
-> 1.5d) și 1.5f-1.5g rămân neimplementate.** Vezi secțiunea 8 pentru etapele propuse și starea
-> fiecăreia.
+> + notificare doză ratată (doar Aparținător). **Profil dependent (amânat din 1.5d) și 1.5f-1.5g
+> rămân neimplementate.** Vezi secțiunea 8 pentru etapele propuse și starea fiecăreia.
 
 ---
 
@@ -84,7 +84,8 @@ Note:
 
 ## 5. Autentificare
 
-- Supabase Auth: email/parolă (✅ 1.5b) + Google Sign-In (deferred — vezi 1.5b în secțiunea 8).
+- Supabase Auth: email/parolă (✅ 1.5b) + Google Sign-In (✅ 1.5b, Credential Manager nativ —
+  vezi 1.5b în secțiunea 8).
 - **Profil dependent** (pacient vârstnic fără cont propriu): NU necesită `auth.users` separat —
   doar un rând `patient_profiles` cu `owner_caregiver_id` populat. Telefonul pacientului rămâne
   logat pe contul aparținătorului (sau pe un mod "device pacient" fără ecran de login vizibil).
@@ -131,9 +132,11 @@ construiască peste ea (toate vor referi `patient_profile_id`).
     `patient_profiles` doar pt. Pacient — vezi decizia despre cei doi UUID diferiți, secțiunea 2).
   - **Cont opțional, nu obligatoriu** — aplicația rămâne 100% funcțională fără login (decizie
     explicită, consecventă cu minimizarea GDPR deja stabilită).
-  - **Exclus deliberat, urmează separat:** Google Sign-In (necesită 2 OAuth Client ID-uri distincte
-    în Google Cloud Console — Web + Android cu SHA-1 — plus înregistrarea lor în Supabase
-    Dashboard; blocaj extern separat de cel de la 1.5a).
+  - **Google Sign-In implementat separat, 2026-09-09** (după deblocarea prerechizitelor externe:
+    2 OAuth Client ID-uri Google Cloud Console — Web + Android cu SHA-1 — + provider activat în
+    Supabase Dashboard) — Credential Manager nativ + `supabase.auth.signInWith(IDToken)`, vezi
+    `CLAUDE.md` secțiunea 7, blocul „Faza 1.5b — Google Sign-In, completare" pentru detalii
+    complete (inclusiv bug-ul de cursă găsit și fix-ul definitiv la onboarding).
   - Teste: `AccountViewModelTest` (9), `OnboardingViewModelTest` (5) — `FakeAuthRepository`,
     `FakeProfileRepository`, `MainDispatcherRule` noi în `util/` (primul ViewModel testat cu
     `viewModelScope` din proiect).

@@ -361,6 +361,54 @@ Use-cases existente: `AddTreatmentUseCase`, `EditTreatmentUseCase`, `DeleteTreat
   ViewModel nou la fiecare intrare, deci un scurt loading la intrare e comportamentul așteptat, nu
   un flash repetat). Compilare + teste unitare + build APK + instalare pe device confirmate.
 
+### Faza 1.5b — Google Sign-In, completare (implementat — 2026-09-09)
+- Credential Manager nativ (NU WebView/Custom Tabs OAuth) + `supabase.auth.signInWith(IDToken)` —
+  `ui/account/GoogleSignInHelper.kt` (funcție simplă, Android-specifică, nu trece prin Hilt/domain,
+  la fel ca `scanInviteQrCode` — cere `Context` de Activity) generează nonce + hash SHA-256,
+  cere token-ul prin `GetGoogleIdOption`, întoarce `GoogleSignInOutcome` tipizat
+  (`Success`/`Cancelled` tăcut/`Failed`). `SignInWithGoogleUseCase` + `AuthRepository.
+  signInWithGoogleIdToken` — wrapper subțire, simetric cu `SignInUseCase`. Buton nou „Continuă cu
+  Google" pe `AccountScreen` (`LoggedOutForm`, ambele moduri). Dependențe noi:
+  `androidx.credentials`(-play-services-auth), `com.google.android.libraries.identity.googleid`.
+  `GOOGLE_WEB_CLIENT_ID` (Client ID **Web**, nu Android) în `local.properties` → `BuildConfig`,
+  același pattern ca restul credențialelor Supabase.
+- **Prerechizite externe, făcute de utilizator**: 2 OAuth Client ID-uri în Google Cloud Console
+  (Web — folosit ca `serverClientId`; Android — package `com.pillpronto` + SHA-1, verificat automat
+  de Google, nu intră în cod), plus **activarea explicită a providerului Google în Supabase
+  Dashboard → Auth → Providers** (Client ID + Secret Web + toggle "Enable" + Save — pas separat de
+  completarea câmpurilor, ratat prima dată; eroare `provider_disabled` clară în logcat a confirmat
+  cauza).
+- **Bug real găsit la testarea pe device** (2026-09-09, cont Google nou): după onboarding reușit
+  (nume + rol + Continuă), ecranul de onboarding **reapărea** — deși datele chiar se salvaseră
+  (vizibil după Back). Diagnosticat cu logcat (log-uri temporare adăugate și scoase după găsirea
+  cauzei): fix-ul anterior „definitiv" din 1.5e (`LaunchedEffect(Unit) { vm.refresh() }` declarat
+  înaintea efectului de verificare) **era insuficient** — cauza reală nu era ordinea de declarare a
+  efectelor, ci un decalaj structural: `state` din `AccountScreen` (`by
+  vm.state.collectAsStateWithLifecycle()`) e un `State` Compose **derivat** printr-un colector
+  intern al StateFlow-ului, care are nevoie de un hop de coroutine suplimentar față de
+  `vm.state.value` (actualizat sincron de `vm.refresh()`). Logcat-ul a confirmat exact fereastra:
+  efectul de verificare citea `state.profileChecked=true` STALE exact în momentul în care
+  `vm.state.value.profileChecked` era deja `false`. **Fix robust, nu încă o reordonare**:
+  `AccountViewModel` expune acum `needsOnboardingEvents: Flow<Unit>` (`Channel(CONFLATED)`),
+  emis direct din `refreshProfile` în aceeași coroutină care actualizează starea, când fetch-ul
+  găsește `profile == null` — elimină complet derivarea intenției din stare Compose asincronă.
+  `AccountScreen` doar colectează evenimentul (`LaunchedEffect(Unit) {
+  vm.needsOnboardingEvents.collect { onNeedsOnboarding() } }`), fără nicio comparație de stare.
+  Teste noi (Turbine, prima folosire în proiect): `AccountViewModelTest` — profil negăsit emite
+  evenimentul, profil găsit nu emite nimic.
+- **Notă de debugging device**: pe acest telefon (MIUI/HyperOS), `Log.d` NU ajunge în logcat by
+  default (doar `Log.e`/`Log.w`) — relevant pentru diagnosticare viitoare pe același device.
+- **Bug marginal găsit la testare, NU reparat, notat în backlog** (8a): `LocalPatientProfileProvider`
+  generează **un singur UUID per instalare** de app (SharedPreferences), indiferent de contul
+  Supabase autentificat. Testarea cu mai multe conturi Google noi pe același telefon a lovit
+  coliziunea: al doilea cont nou încerca să scrie (`upsert`) în `patient_profiles` cu același UUID
+  local deja deținut de primul cont → RLS a blocat corect actualizarea cross-user
+  (`42501 new row violates row-level security policy`). Nu afectează un pacient real (un singur
+  cont pe propriul telefon), dar ar lovi și la un scenariu legitim: delogare + autentificare cu
+  **alt cont Pacient existent** pe același telefon.
+- **Confirmat funcțional end-to-end pe device** (2026-09-09, după fix-ul de mai sus): Google
+  Sign-In (cont nou → onboarding → salvare → `AccountScreen`) funcționează complet.
+
 ---
 
 ## 8. CE URMEAZĂ — TODO
@@ -371,16 +419,23 @@ Use-cases existente: `AddTreatmentUseCase`, `EditTreatmentUseCase`, `DeleteTreat
   făcut: `values-en/strings.xml` cu traduceri + `<locale android:name="en"/>` în
   `locales_config.xml` + un mecanism de selecție (ecran de setări nou, sau întrerupător simplu care
   apelează `AppCompatDelegate.setApplicationLocales(...)` / API-ul per-app language din Android 13+).
+- **`LocalPatientProfileProvider` — un singur UUID local per instalare, nu per cont Supabase**
+  (găsit la testarea Google Sign-In, 2026-09-09; detalii în secțiunea 7, blocul Faza 1.5b). Rar în
+  producție (un pacient = propriul telefon), dar reapare la delogare + autentificare cu alt cont
+  Pacient existent pe același device — RLS blochează corect (`42501`), dar userul vede o eroare
+  brută de salvare la onboarding, nu un mesaj clar. Fix posibil: la conflict de tip owner mismatch
+  pe upsert, regenerează UUID-ul local și reîncearcă automat.
 
 ### 8b. Roadmap faze următoare
-- **Faza 1.5 — Conturi & Roluri (Pacient/Aparținător/Medic/Farmacist):** **1.5a + 1.5b + 1.5c +
-  1.5d (+ rafinare UX) + 1.5e implementate și merge-uite pe `main`** (PR #1-#6, toate branch-urile
-  de feature șterse) — schema + RLS + migrare Room, SDK Supabase + autentificare email/parolă +
-  onboarding rol, sync layer Room↔Supabase, legătură Pacient↔Aparținător/Medic/Farmacist read-only
-  (cod + QR + scanare + deep link + nume/rol vizibil + revocare/reinvitare + selecție rol la
-  generare) + notificare doză ratată (doar CAREGIVER) + navigare cu buton de back pe toate ecranele
-  secundare + fix flash de reîncărcare la tab-uri (Cont/Gestionează accesul ×2/Pacienții mei), toate
-  **testate live pe device de utilizator** (2026-09-09).
+- **Faza 1.5 — Conturi & Roluri (Pacient/Aparținător/Medic/Farmacist):** **1.5a + 1.5b (inclusiv
+  Google Sign-In) + 1.5c + 1.5d (+ rafinare UX) + 1.5e implementate și merge-uite pe `main`**
+  (PR #1-#7+, toate branch-urile de feature șterse) — schema + RLS + migrare Room, SDK Supabase +
+  autentificare email/parolă + Google Sign-In + onboarding rol, sync layer Room↔Supabase, legătură
+  Pacient↔Aparținător/Medic/Farmacist read-only (cod + QR + scanare + deep link + nume/rol vizibil
+  + revocare/reinvitare + selecție rol la generare) + notificare doză ratată (doar CAREGIVER) +
+  navigare cu buton de back pe toate ecranele secundare + fix flash de reîncărcare la tab-uri
+  (Cont/Gestionează accesul ×2/Pacienții mei), toate **testate live pe device de utilizator**
+  (2026-09-09).
   **Următorul pas, la alegere:**
   - **Confirmare finală de la utilizator** că toate migrările `supabase/migrations/0003-0007*.sql`
     sunt rulate (Supabase Dashboard, în ordine, după 0001-0002) — testarea live a acoperit fluxul
@@ -388,10 +443,6 @@ Use-cases existente: `AddTreatmentUseCase`, `EditTreatmentUseCase`, `DeleteTreat
     rulaseră deja la momentul testării sau doar un subset suficient pentru ce s-a testat.
   - **1.5c (sync propriu-zis al Pacientului)** rămâne neverificat separat pe device — posibil
     exercitat implicit prin testarea 1.5d/1.5e, dar nu confirmat explicit.
-  - **Google Sign-In** (completare 1.5b) — necesită acțiune manuală a utilizatorului mai întâi:
-    2 OAuth Client ID-uri în Google Cloud Console (Web + Android, acesta din urmă cu amprenta
-    SHA-1 a certificatului de semnare) + înregistrarea lor în Supabase Dashboard → Auth →
-    providers → Google. Fără asta, nu se poate implementa.
   - **Profil dependent** (pacient vârstnic fără cont propriu) — amânat explicit din 1.5d, cere
     suport multi-profil local în Room (schimbare majoră de arhitectură).
   - Restul etapelor (1.5f audit, 1.5g teste RLS) — vezi

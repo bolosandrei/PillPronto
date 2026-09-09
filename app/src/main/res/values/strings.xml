@@ -116,6 +116,8 @@
     <string name="account_error_passwords_mismatch">Parolele nu coincid</string>
     <string name="account_error_auth_failed">Autentificare eșuată. Verifică datele introduse.</string>
     <string name="account_error_rate_limited">Prea multe încercări într-un timp scurt. Așteaptă câteva minute și încearcă din nou.</string>
+    <string name="account_google_sign_in">Continuă cu Google</string>
+    <string name="account_error_google_sign_in_failed">Autentificarea cu Google a eșuat. Încearcă din nou.</string>
     <string name="account_manage_access_button">Gestionează accesul Aparținătorilor</string>
     <string name="account_manage_professional_access_button">Gestionează accesul Medic/Farmacist</string>
     <string name="account_my_patients_button">Pacienții mei</string>
