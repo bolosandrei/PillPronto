@@ -6,8 +6,10 @@ import com.pillpronto.domain.model.Profile
 import com.pillpronto.domain.usecase.GetProfileUseCase
 import com.pillpronto.domain.usecase.ObserveAuthSessionUseCase
 import com.pillpronto.domain.usecase.SignInUseCase
+import com.pillpronto.domain.usecase.SignInWithGoogleUseCase
 import com.pillpronto.domain.usecase.SignOutUseCase
 import com.pillpronto.domain.usecase.SignUpUseCase
+import app.cash.turbine.test
 import com.pillpronto.util.FakeAuthRepository
 import com.pillpronto.util.FakeProfileRepository
 import com.pillpronto.util.MainDispatcherRule
@@ -29,6 +31,7 @@ class AccountViewModelTest {
         ObserveAuthSessionUseCase(authRepository),
         SignUpUseCase(authRepository),
         SignInUseCase(authRepository),
+        SignInWithGoogleUseCase(authRepository),
         SignOutUseCase(authRepository),
         GetProfileUseCase(profileRepository)
     )
@@ -156,5 +159,56 @@ class AccountViewModelTest {
 
         assertEquals(true, vm.state.value.profileChecked)
         assertEquals("Maria", vm.state.value.profile?.displayName)
+    }
+
+    @Test
+    fun `onGoogleIdToken succes apeleaza signInWithGoogleIdToken cu parametrii corecti`() = runTest {
+        val vm = createViewModel()
+
+        vm.onGoogleIdToken("id-token-123", "raw-nonce-456")
+
+        assertEquals("id-token-123", authRepository.lastGoogleIdToken)
+        assertEquals("raw-nonce-456", authRepository.lastGoogleRawNonce)
+        assertNull(vm.state.value.error)
+    }
+
+    @Test
+    fun `onGoogleIdToken esec seteaza GOOGLE_SIGN_IN_FAILED`() = runTest {
+        authRepository.googleSignInError = RuntimeException("boom")
+        val vm = createViewModel()
+
+        vm.onGoogleIdToken("id-token-123", "raw-nonce-456")
+
+        assertEquals(AccountError.GOOGLE_SIGN_IN_FAILED, vm.state.value.error)
+    }
+
+    @Test
+    fun `profil negasit dupa autentificare emite eveniment de onboarding`() = runTest {
+        val vm = createViewModel()
+
+        vm.needsOnboardingEvents.test {
+            authRepository.emit(AuthSessionState.Authenticated("u1")) // profil inca inexistent
+            assertEquals(Unit, awaitItem())
+        }
+    }
+
+    @Test
+    fun `profil gasit dupa autentificare NU emite eveniment de onboarding`() = runTest {
+        profileRepository.profiles["u1"] = Profile("u1", AccountRole.PATIENT, "Ana")
+        val vm = createViewModel()
+
+        vm.needsOnboardingEvents.test {
+            authRepository.emit(AuthSessionState.Authenticated("u1"))
+            expectNoEvents()
+        }
+    }
+
+    @Test
+    fun `onGoogleSignInFailed seteaza GOOGLE_SIGN_IN_FAILED`() {
+        val vm = createViewModel()
+
+        vm.onGoogleSignInFailed()
+
+        assertEquals(AccountError.GOOGLE_SIGN_IN_FAILED, vm.state.value.error)
     }
 }

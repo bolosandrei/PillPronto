@@ -8,20 +8,24 @@ import com.pillpronto.domain.model.Profile
 import com.pillpronto.domain.usecase.GetProfileUseCase
 import com.pillpronto.domain.usecase.ObserveAuthSessionUseCase
 import com.pillpronto.domain.usecase.SignInUseCase
+import com.pillpronto.domain.usecase.SignInWithGoogleUseCase
 import com.pillpronto.domain.usecase.SignOutUseCase
 import com.pillpronto.domain.usecase.SignUpUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 enum class AccountMode { SIGN_IN, SIGN_UP }
 
-enum class AccountError { EMPTY_EMAIL, INVALID_EMAIL, PASSWORD_TOO_SHORT, PASSWORDS_DO_NOT_MATCH, AUTH_FAILED, RATE_LIMITED }
+enum class AccountError { EMPTY_EMAIL, INVALID_EMAIL, PASSWORD_TOO_SHORT, PASSWORDS_DO_NOT_MATCH, AUTH_FAILED, RATE_LIMITED, GOOGLE_SIGN_IN_FAILED }
 
 data class AccountUiState(
     val sessionState: AuthSessionState = AuthSessionState.Loading,
@@ -45,12 +49,27 @@ class AccountViewModel @Inject constructor(
     observeAuthSession: ObserveAuthSessionUseCase,
     private val signUp: SignUpUseCase,
     private val signIn: SignInUseCase,
+    private val signInWithGoogle: SignInWithGoogleUseCase,
     private val signOut: SignOutUseCase,
     private val getProfile: GetProfileUseCase
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(AccountUiState())
     val state = _state.asStateFlow()
+
+    // Eveniment "one-shot" emis de ViewModel exact cand un fetch de profil se termina cu profil
+    // null — NU derivat de UI din (sessionState, profileChecked, profile) separate, ca inainte.
+    // Motiv: `by vm.state.collectAsStateWithLifecycle()` in AccountScreen e un State Compose
+    // DERIVAT dintr-un colector intern al StateFlow-ului — actualizarea lui necesita un hop de
+    // coroutine suplimentar fata de `_state.value` (care se schimba sincron). Un LaunchedEffect
+    // separat care verifica `state.profileChecked` dupa un `vm.refresh()` sincron poate citi in
+    // continuare valoarea VECHE a lui `state` (Compose State-ul inca nu s-a actualizat), desi
+    // `vm.state.value` e deja corect — bug real, confirmat cu logcat, la onboarding dupa Google
+    // Sign-In (userul retrimis pe onboarding desi datele erau deja salvate). Emitand evenimentul
+    // direct din ViewModel, in aceeasi coroutina care actualizeaza `_state`, eliminam complet
+    // aceasta cursa — nu se mai deriveaza intentia din stare Compose asincrona.
+    private val _needsOnboardingEvents = Channel<Unit>(Channel.CONFLATED)
+    val needsOnboardingEvents: Flow<Unit> = _needsOnboardingEvents.receiveAsFlow()
 
     init {
         observeAuthSession().onEach { session ->
@@ -88,6 +107,11 @@ class AccountViewModel @Inject constructor(
                 .onFailure { Log.e("AccountViewModel", "Nu am putut prelua profilul", it) }
                 .getOrNull()
             _state.update { it.copy(profile = profile, profileChecked = true) }
+            // Verificam sesiunea curenta (nu userId-ul capturat la inceputul fetch-ului) — daca
+            // userul s-a delogat intre timp, nu are sens sa mai trimitem catre onboarding.
+            if (profile == null && _state.value.sessionState is AuthSessionState.Authenticated) {
+                _needsOnboardingEvents.trySend(Unit)
+            }
         }
     }
 
@@ -140,6 +164,27 @@ class AccountViewModel @Inject constructor(
             }
         }
     }
+
+    /** idToken/rawNonce vin din Credential Manager (vezi ui/account/GoogleSignInHelper.kt, apelat
+     * direct din AccountScreen — cere Context de Activity, nu poate trece prin ViewModel). La
+     * succes nu setam nimic manual: observeAuthSession() de mai sus reactioneaza automat la
+     * sesiunea noua, exact ca la signIn() cu email/parola. */
+    fun onGoogleIdToken(idToken: String, rawNonce: String) {
+        viewModelScope.launch {
+            _state.update { it.copy(isSubmitting = true, error = null) }
+            try {
+                signInWithGoogle(idToken, rawNonce)
+                _state.update { it.copy(isSubmitting = false) }
+            } catch (e: Exception) {
+                Log.e("AccountViewModel", "Autentificare Google esuata", e)
+                _state.update { it.copy(isSubmitting = false, error = AccountError.GOOGLE_SIGN_IN_FAILED) }
+            }
+        }
+    }
+
+    /** GoogleSignInOutcome.Failed (dialogul Credential Manager a esuat, nu a fost doar inchis de
+     * user) — Cancelled nu apeleaza nimic, la fel ca esecul tacut de la scanarea QR. */
+    fun onGoogleSignInFailed() = _state.update { it.copy(error = AccountError.GOOGLE_SIGN_IN_FAILED) }
 
     fun onSignOut() = viewModelScope.launch { signOut() }
 
