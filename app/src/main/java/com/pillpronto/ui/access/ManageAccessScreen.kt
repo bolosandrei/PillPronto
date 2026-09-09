@@ -166,7 +166,7 @@ private fun InviteQrCode(code: String, modifier: Modifier = Modifier) {
 private fun shareInviteCode(context: android.content.Context, code: String) {
     val intent = Intent(Intent.ACTION_SEND).apply {
         type = "text/plain"
-        putExtra(Intent.EXTRA_TEXT, context.getString(R.string.manage_access_share_text, code, buildInviteUri(code)))
+        putExtra(Intent.EXTRA_TEXT, context.getString(R.string.manage_access_share_text, code))
     }
     context.startActivity(Intent.createChooser(intent, context.getString(R.string.manage_access_share_button)))
 }
