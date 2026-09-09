@@ -1,6 +1,7 @@
 package com.pillpronto.ui.access
 
 import com.pillpronto.domain.model.CaregiverSummary
+import com.pillpronto.domain.model.LinkRole
 import com.pillpronto.domain.model.LinkStatus
 import com.pillpronto.domain.usecase.CreateInviteUseCase
 import com.pillpronto.domain.usecase.GetLocalPatientProfileIdUseCase
@@ -88,6 +89,18 @@ class ManageAccessViewModelTest {
 
         assertEquals("Maria", vm.state.value.caregiverNames["caregiver-1"])
         assertEquals(LinkStatus.ACCEPTED, vm.state.value.links.first { it.id == linkId }.status)
+    }
+
+    @Test
+    fun `legaturile DOCTOR sau PHARMACIST nu apar in lista Apartinatorilor`() = runTest {
+        linkRepository.createInvite("patient-1", LinkRole.CAREGIVER_VIEWER)
+        linkRepository.createInvite("patient-1", LinkRole.DOCTOR)
+        linkRepository.createInvite("patient-1", LinkRole.PHARMACIST)
+
+        val vm = createViewModel()
+
+        assertEquals(1, vm.state.value.links.size)
+        assertEquals(LinkRole.CAREGIVER_VIEWER, vm.state.value.links.first().role)
     }
 
     @Test

@@ -20,13 +20,13 @@ class FakeLinkRepository : LinkRepository {
     var revokedLinkIds = mutableListOf<String>()
     private var nextId = 1
 
-    override suspend fun createInvite(patientProfileId: String): PatientLink {
+    override suspend fun createInvite(patientProfileId: String, role: LinkRole): PatientLink {
         createInviteError?.let { throw it }
         val link = PatientLink(
             id = "link-${nextId++}",
             patientProfileId = patientProfileId,
             granteeUserId = null,
-            role = LinkRole.CAREGIVER_VIEWER,
+            role = role,
             status = LinkStatus.PENDING,
             inviteCode = "CODE${nextId}"
         )

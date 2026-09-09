@@ -25,6 +25,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.pillpronto.R
 import com.pillpronto.ui.access.ManageAccessScreen
+import com.pillpronto.ui.access.ManageProfessionalAccessScreen
 import com.pillpronto.ui.account.AccountScreen
 import com.pillpronto.ui.adherence.AdherenceScreen
 import com.pillpronto.ui.onboarding.OnboardingScreen
@@ -127,6 +128,7 @@ fun PillProntoNavHost(
                     padding,
                     onNeedsOnboarding = { navController.navigate(Route.Onboarding.path) },
                     onManageAccess = { navController.navigate(Route.ManageAccess.path) },
+                    onManageProfessionalAccess = { navController.navigate(Route.ManageProfessionalAccess.path) },
                     onMyPatients = { navController.navigate(Route.MyPatients.create()) }
                 )
             }
@@ -138,6 +140,9 @@ fun PillProntoNavHost(
             }
             composable(Route.ManageAccess.path) {
                 ManageAccessScreen(padding)
+            }
+            composable(Route.ManageProfessionalAccess.path) {
+                ManageProfessionalAccessScreen(padding)
             }
             composable(
                 route = Route.MyPatients.path,

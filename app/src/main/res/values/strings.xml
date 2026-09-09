@@ -116,7 +116,9 @@
     <string name="account_error_auth_failed">Autentificare eșuată. Verifică datele introduse.</string>
     <string name="account_error_rate_limited">Prea multe încercări într-un timp scurt. Așteaptă câteva minute și încearcă din nou.</string>
     <string name="account_manage_access_button">Gestionează accesul Aparținătorilor</string>
+    <string name="account_manage_professional_access_button">Gestionează accesul Medic/Farmacist</string>
     <string name="account_my_patients_button">Pacienții mei</string>
+    <string name="account_unverified_badge">Cont neverificat — date auto-declarate</string>
 
     <!-- Ecranul de onboarding (alegere rol, dupa primul cont creat) -->
     <string name="onboarding_title">Ce fel de cont ai?</string>
@@ -146,6 +148,12 @@
     <string name="manage_access_share_text">Cod de acces PillPronto: %1$s\nIntrodu-l în aplicație, la „Pacienții mei”, ca să-mi vezi tratamentele și aderența — sau scanează codul QR de mai jos.</string>
     <string name="manage_access_revoke_button">Revocă</string>
     <string name="manage_access_cancel_button">Anulează</string>
+    <string name="manage_access_unverified_suffix">(neverificat)</string>
+
+    <!-- Faza 1.5e: Pacient — gestionare acces Medic/Farmacist (aceeasi structura ca mai sus,
+         doar filtrata pe rol; string-urile manage_access_* de mai sus sunt reutilizate) -->
+    <string name="manage_professional_access_title">Gestionează accesul Medic/Farmacist</string>
+    <string name="manage_professional_access_subtitle">Generează un cod pentru medicul sau farmacistul tău, ca să-ți vadă tratamentul activ — fără să poată edita nimic. Contul e auto-declarat, fără verificare a numărului de ordin.</string>
 
     <!-- Faza 1.5d: Apartinator — revendicare cod + lista pacientilor legati -->
     <string name="my_patients_title">Pacienții mei</string>

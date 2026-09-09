@@ -38,6 +38,7 @@ fun AccountScreen(
     padding: PaddingValues,
     onNeedsOnboarding: () -> Unit,
     onManageAccess: () -> Unit,
+    onManageProfessionalAccess: () -> Unit,
     onMyPatients: () -> Unit,
     vm: AccountViewModel = hiltViewModel()
 ) {
@@ -73,6 +74,7 @@ fun AccountScreen(
                         role = state.profile!!.role,
                         onSignOut = vm::onSignOut,
                         onManageAccess = onManageAccess,
+                        onManageProfessionalAccess = onManageProfessionalAccess,
                         onMyPatients = onMyPatients
                     )
                 } else {
@@ -147,6 +149,7 @@ private fun LoggedInView(
     role: AccountRole,
     onSignOut: () -> Unit,
     onManageAccess: () -> Unit,
+    onManageProfessionalAccess: () -> Unit,
     onMyPatients: () -> Unit
 ) {
     Text(
@@ -154,17 +157,34 @@ private fun LoggedInView(
         style = MaterialTheme.typography.headlineSmall
     )
     Text(stringResource(R.string.account_role_label, roleLabel(role)), style = MaterialTheme.typography.bodyMedium)
+    if (role == AccountRole.DOCTOR || role == AccountRole.PHARMACIST) {
+        // Faza 1.5e: auto-declarare, fara validare reala a numarului de ordin/CUIM — vezi
+        // docs/user-management-plan.md sectiunea 9. Vizibil si aici (propriul cont), nu doar la
+        // Pacient (ManageProfessionalAccessScreen).
+        Text(
+            stringResource(R.string.account_unverified_badge),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.error
+        )
+    }
 
-    // Faza 1.5d: legatura Pacient<->Apartinator — fiecare rol isi vede doar butonul relevant.
-    // DOCTOR/PHARMACIST raman fara buton dedicat pana la 1.5e.
+    // Faza 1.5d/1.5e: legatura Pacient<->Apartinator/Medic/Farmacist — fiecare rol isi vede
+    // butonul relevant. Pacientul are doua ecrane separate (decizie explicita), restul rolurilor
+    // (care REVENDICA acces, nu genereaza) reutilizeaza acelasi ecran "Pacientii mei", agnostic
+    // la rol.
     when (role) {
-        AccountRole.PATIENT -> OutlinedButton(onClick = onManageAccess, modifier = Modifier.fillMaxWidth()) {
-            Text(stringResource(R.string.account_manage_access_button))
+        AccountRole.PATIENT -> {
+            OutlinedButton(onClick = onManageAccess, modifier = Modifier.fillMaxWidth()) {
+                Text(stringResource(R.string.account_manage_access_button))
+            }
+            OutlinedButton(onClick = onManageProfessionalAccess, modifier = Modifier.fillMaxWidth()) {
+                Text(stringResource(R.string.account_manage_professional_access_button))
+            }
         }
-        AccountRole.CAREGIVER -> OutlinedButton(onClick = onMyPatients, modifier = Modifier.fillMaxWidth()) {
-            Text(stringResource(R.string.account_my_patients_button))
-        }
-        else -> {}
+        AccountRole.CAREGIVER, AccountRole.DOCTOR, AccountRole.PHARMACIST ->
+            OutlinedButton(onClick = onMyPatients, modifier = Modifier.fillMaxWidth()) {
+                Text(stringResource(R.string.account_my_patients_button))
+            }
     }
 
     OutlinedButton(onClick = onSignOut, modifier = Modifier.fillMaxWidth()) {
