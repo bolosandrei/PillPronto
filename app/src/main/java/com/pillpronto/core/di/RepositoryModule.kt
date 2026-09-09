@@ -7,6 +7,7 @@ import com.pillpronto.data.repository.AuthRepositoryImpl
 import com.pillpronto.data.repository.DoseRepositoryImpl
 import com.pillpronto.data.repository.LinkRepositoryImpl
 import com.pillpronto.data.repository.LinkedPatientDataRepositoryImpl
+import com.pillpronto.data.repository.NomenclatureRepositoryImpl
 import com.pillpronto.data.repository.ProfileRepositoryImpl
 import com.pillpronto.data.repository.TreatmentRepositoryImpl
 import com.pillpronto.data.sync.SupabaseSyncDataSource
@@ -15,6 +16,7 @@ import com.pillpronto.domain.repository.AuthRepository
 import com.pillpronto.domain.repository.DoseRepository
 import com.pillpronto.domain.repository.LinkRepository
 import com.pillpronto.domain.repository.LinkedPatientDataRepository
+import com.pillpronto.domain.repository.NomenclatureRepository
 import com.pillpronto.domain.repository.PatientProfileIdProvider
 import com.pillpronto.domain.repository.ProfileRepository
 import com.pillpronto.domain.repository.TreatmentRepository
@@ -63,4 +65,8 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindLinkedPatientDataRepository(impl: LinkedPatientDataRepositoryImpl): LinkedPatientDataRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindNomenclatureRepository(impl: NomenclatureRepositoryImpl): NomenclatureRepository
 }

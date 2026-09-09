@@ -59,6 +59,7 @@ import com.pillpronto.core.ui.theme.DoseTaken
 import com.pillpronto.domain.model.DoseItem
 import com.pillpronto.domain.model.DoseStatus
 import com.pillpronto.domain.model.Treatment
+import com.pillpronto.domain.usecase.isDoseActionable
 import java.time.LocalDate
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
@@ -84,11 +85,19 @@ fun TodayScreen(padding: PaddingValues, vm: TodayViewModel = hiltViewModel()) {
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) canExact = Permissions.canScheduleExactAlarms(context)
+            if (event == Lifecycle.Event.ON_RESUME) {
+                canExact = Permissions.canScheduleExactAlarms(context)
+                // O doza depasita de fereastra de actiune (isDoseActionable) trece in MISSED
+                // prompt la revenirea din fundal, nu doar la cele 6h ale workerului periodic.
+                vm.refreshOverdue()
+            }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
+    // Prima intrare pe ecran (compozitie noua, ex. dupa navigare intre tab-uri) — DisposableEffect
+    // de mai sus nu se declanseaza la asta, doar la un ON_RESUME real ulterior.
+    LaunchedEffect(Unit) { vm.refreshOverdue() }
 
     Column(Modifier.fillMaxSize().padding(padding).padding(16.dp)) {
         Row(
@@ -332,17 +341,28 @@ private fun DoseRow(item: DoseItem, onTake: () -> Unit, onSkip: () -> Unit) {
                 )
             }
             Text(item.dosage, style = MaterialTheme.typography.bodySmall)
+            // Cantitatea specifica a acestei doze (Faza 2a) — poate diferi de la o ora la alta
+            // pentru acelasi tratament (ex. "Nolpaza dimineata 1 compr., seara 2 compr.").
+            if (item.dose.cantitate.isNotBlank()) {
+                Text(item.dose.cantitate, style = MaterialTheme.typography.bodySmall)
+            }
             when (item.dose.status) {
                 DoseStatus.TAKEN -> Text(stringResource(R.string.dose_status_taken), color = DoseTaken)
                 DoseStatus.MISSED -> Text(stringResource(R.string.dose_status_missed), color = DoseMissed)
                 DoseStatus.SKIPPED -> Text(stringResource(R.string.dose_status_skipped), textDecoration = TextDecoration.LineThrough)
-                DoseStatus.PENDING -> Row(
-                    Modifier.fillMaxWidth().padding(top = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Button(onClick = onTake) { Text(stringResource(R.string.common_confirm_take)) }
-                    OutlinedButton(onClick = onSkip) { Text(stringResource(R.string.common_skip)) }
+                // Butoanele apar doar in fereastra de +-60 min din jurul orei programate — o doza
+                // programata peste cateva ore (normal, inca nu e cazul ei) sau depasita (va trece
+                // in MISSED la refreshOverdue()) nu mai arata butoane. Doze "la nevoie" (isAsNeeded)
+                // nu ajung niciodata aici cu status PENDING (logate direct din AsNeededSection).
+                DoseStatus.PENDING -> if (isDoseActionable(item.dose.scheduledAt)) {
+                    Row(
+                        Modifier.fillMaxWidth().padding(top = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Button(onClick = onTake) { Text(stringResource(R.string.common_confirm_take)) }
+                        OutlinedButton(onClick = onSkip) { Text(stringResource(R.string.common_skip)) }
+                    }
                 }
             }
         }

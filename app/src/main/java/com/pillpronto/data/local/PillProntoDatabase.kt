@@ -15,8 +15,11 @@ import com.pillpronto.data.local.entity.TreatmentEntity
     // v3: patientProfileId pe ambele entitati (Faza 1.5 — conturi & roluri, vezi docs/user-management-plan.md).
     // v4: remoteId/updatedAt/dirty pe ambele entitati + pending_remote_deletes (Faza 1.5c —
     //     sync layer Room<->Supabase, vezi data/sync/SyncManager.kt).
+    // v5: formaFarmaceutica/cantitate/indicatie/instructiuni pe TreatmentEntity (Faza 2a).
+    // v6: slotCantitateCsv pe TreatmentEntity + cantitate pe DoseLogEntity — cantitate diferita
+    //     per ora de administrare (ex. "Nolpaza dimineata 1 compr., seara 2 compr.").
     // fallbackToDestructiveMigration.
-    version = 4,
+    version = 6,
     exportSchema = false
 )
 abstract class PillProntoDatabase : RoomDatabase() {

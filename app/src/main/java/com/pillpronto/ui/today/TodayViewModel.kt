@@ -7,6 +7,7 @@ import com.pillpronto.domain.model.DoseStatus
 import com.pillpronto.domain.model.Treatment
 import com.pillpronto.domain.usecase.LogAsNeededDoseUseCase
 import com.pillpronto.domain.usecase.LogDoseUseCase
+import com.pillpronto.domain.usecase.MarkOverdueDosesUseCase
 import com.pillpronto.domain.usecase.ObserveActiveAsNeededTreatmentsUseCase
 import com.pillpronto.domain.usecase.ObserveTodayDosesUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -28,7 +29,8 @@ class TodayViewModel @Inject constructor(
     observeTodayDoses: ObserveTodayDosesUseCase,
     observeActiveAsNeededTreatments: ObserveActiveAsNeededTreatmentsUseCase,
     private val logDose: LogDoseUseCase,
-    private val logAsNeededDose: LogAsNeededDoseUseCase
+    private val logAsNeededDose: LogAsNeededDoseUseCase,
+    private val markOverdue: MarkOverdueDosesUseCase
 ) : ViewModel() {
 
     // Ziua afisata pe ecranul "Azi" — implicit ziua curenta, selectabila din fereastra glisanta de date.
@@ -56,4 +58,9 @@ class TodayViewModel @Inject constructor(
     fun onTake(doseId: Long) = viewModelScope.launch { logDose(doseId, DoseStatus.TAKEN) }
     fun onSkip(doseId: Long) = viewModelScope.launch { logDose(doseId, DoseStatus.SKIPPED) }
     fun onLogAsNeeded(treatmentId: Long) = viewModelScope.launch { logAsNeededDose(treatmentId) }
+
+    /** Declansat la fiecare intrare pe ecran (nu doar din workerul periodic de 6h) — o doza
+     * depasita de fereastra de actiune (vezi isDoseActionable) trece in MISSED prompt, nu cu
+     * intarziere de ore. */
+    fun refreshOverdue() = viewModelScope.launch { markOverdue() }
 }

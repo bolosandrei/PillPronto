@@ -33,6 +33,7 @@ import com.pillpronto.domain.model.Treatment
 import java.time.format.DateTimeFormatter
 
 private val DMY_HM = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm")
+private val HM = DateTimeFormatter.ofPattern("HH:mm")
 
 @Composable
 fun TreatmentDetailScreen(
@@ -55,6 +56,37 @@ fun TreatmentDetailScreen(
 
             Text(scheduleSummary(t), style = MaterialTheme.typography.bodyMedium)
             Text(dateRangeSummary(t), Modifier.padding(top = 4.dp), style = MaterialTheme.typography.bodySmall)
+            if (t.cantitate.isNotBlank()) {
+                Text(
+                    stringResource(R.string.treatment_detail_quantity, t.cantitate),
+                    Modifier.padding(top = 4.dp),
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+            if (t.formaFarmaceutica.isNotBlank()) {
+                Text(
+                    stringResource(R.string.treatment_detail_form, t.formaFarmaceutica),
+                    Modifier.padding(top = 4.dp),
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+            if (t.indicatie.isNotBlank()) {
+                Text(
+                    stringResource(R.string.treatment_detail_indication, t.indicatie),
+                    Modifier.padding(top = 4.dp),
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+            if (t.instructiuni.isNotBlank()) {
+                Text(
+                    stringResource(R.string.treatment_detail_instructions, t.instructiuni),
+                    Modifier.padding(top = 4.dp),
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+            slotBreakdown(t)?.let {
+                Text(it, Modifier.padding(top = 4.dp), style = MaterialTheme.typography.bodySmall)
+            }
 
             Button(onClick = { onEdit(t.id) }, modifier = Modifier.padding(top = 12.dp).fillMaxWidth()) {
                 Text(stringResource(R.string.treatment_detail_edit_button))
@@ -93,6 +125,17 @@ private fun scheduleSummary(t: Treatment): String = stringResource(
     else t.times.joinToString(", ") { it.format(DateTimeFormatter.ofPattern("HH:mm")) }
 )
 
+/** Doar cand cel putin un slot are cantitate proprie (ex. "Nolpaza dimineata 1 compr., seara 2
+ * compr.") — altfel cantitatea generala de mai sus (t.cantitate) e deja suficienta, fara sa mai
+ * repetam acelasi lucru sub alta forma. */
+@Composable
+private fun slotBreakdown(t: Treatment): String? {
+    val withCantitate = t.schedule.filter { it.cantitate.isNotBlank() }
+    if (withCantitate.isEmpty()) return null
+    val parts = withCantitate.joinToString(" · ") { "${it.time.format(HM)} → ${it.cantitate}" }
+    return stringResource(R.string.treatment_detail_schedule_breakdown, parts)
+}
+
 @Composable
 private fun dateRangeSummary(t: Treatment): String {
     val dmy = DateTimeFormatter.ofPattern("dd.MM.yyyy")
@@ -120,11 +163,7 @@ private fun HistoryRow(log: DoseLog) {
             Modifier.fillMaxWidth().padding(12.dp),
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Text(
-                if (log.isAsNeeded) stringResource(R.string.treatment_detail_history_as_needed_suffix, log.scheduledAt.format(DMY_HM))
-                else log.scheduledAt.format(DMY_HM),
-                style = MaterialTheme.typography.bodyMedium
-            )
+            Text(historyRowLabel(log), style = MaterialTheme.typography.bodyMedium)
             when (log.status) {
                 DoseStatus.TAKEN -> Text(stringResource(R.string.dose_status_taken), color = DoseTaken)
                 DoseStatus.MISSED -> Text(stringResource(R.string.dose_status_missed), color = DoseMissed)
@@ -132,5 +171,20 @@ private fun HistoryRow(log: DoseLog) {
                 DoseStatus.PENDING -> Text(stringResource(R.string.dose_status_pending))
             }
         }
+    }
+}
+
+/** TAKEN cu takenAt cunoscut: arata ora REALA la care a fost luata doza, nu doar ora programata
+ * (takenAt exista in model de la inceput, doar UI-ul nu-l folosea — bug real gasit la testarea
+ * pe device). Restul statusurilor (fara takenAt) raman ca inainte, doar ora programata. */
+@Composable
+private fun historyRowLabel(log: DoseLog): String {
+    val scheduled = log.scheduledAt.format(DMY_HM)
+    val base = if (log.isAsNeeded) stringResource(R.string.treatment_detail_history_as_needed_suffix, scheduled) else scheduled
+    val takenAt = log.takenAt
+    return if (log.status == DoseStatus.TAKEN && takenAt != null) {
+        stringResource(R.string.treatment_detail_history_taken_detail, base, takenAt.format(HM))
+    } else {
+        base
     }
 }

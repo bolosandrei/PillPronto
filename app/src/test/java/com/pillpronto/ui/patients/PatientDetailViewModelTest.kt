@@ -44,7 +44,7 @@ class PatientDetailViewModelTest {
     fun `incarca numele, tratamentele si aderenta pacientului`() = runTest {
         linkRepository.patients["user-1"] = listOf(PatientSummary("patient-1", "Ana"))
         val treatment = Treatment(
-            medicationName = "Metformin", dosage = "500 mg", times = emptyList(),
+            medicationName = "Metformin", dosage = "500 mg",
             startDate = LocalDate.of(2026, 8, 1)
         )
         linkedPatientDataRepository.dataByPatient["patient-1"] = LinkedPatientData(
