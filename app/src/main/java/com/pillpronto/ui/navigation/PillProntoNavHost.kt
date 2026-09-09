@@ -111,7 +111,8 @@ fun PillProntoNavHost(
                         } else {
                             navController.popBackStack()
                         }
-                    }
+                    },
+                    onBack = { navController.popBackStack() }
                 )
             }
             composable(
@@ -120,7 +121,8 @@ fun PillProntoNavHost(
             ) {
                 TreatmentDetailScreen(
                     padding,
-                    onEdit = { id -> navController.navigate(Route.AddEditTreatment.create(id)) }
+                    onEdit = { id -> navController.navigate(Route.AddEditTreatment.create(id)) },
+                    onBack = { navController.popBackStack() }
                 )
             }
             composable(Route.Account.path) {
@@ -141,14 +143,15 @@ fun PillProntoNavHost(
             composable(Route.Onboarding.path) {
                 OnboardingScreen(
                     padding,
-                    onDone = { navController.popBackStack() }
+                    onDone = { navController.popBackStack() },
+                    onBack = { navController.popBackStack() }
                 )
             }
             composable(Route.ManageAccess.path) {
-                ManageAccessScreen(padding)
+                ManageAccessScreen(padding, onBack = { navController.popBackStack() })
             }
             composable(Route.ManageProfessionalAccess.path) {
-                ManageProfessionalAccessScreen(padding)
+                ManageProfessionalAccessScreen(padding, onBack = { navController.popBackStack() })
             }
             composable(
                 route = Route.MyPatients.path,
@@ -158,6 +161,7 @@ fun PillProntoNavHost(
             ) {
                 MyPatientsScreen(
                     padding,
+                    onBack = { navController.popBackStack() },
                     onOpenPatient = { id -> navController.navigate(Route.PatientDetail.create(id)) }
                 )
             }
@@ -165,7 +169,7 @@ fun PillProntoNavHost(
                 route = Route.PatientDetail.path,
                 arguments = listOf(navArgument(Route.PatientDetail.ARG) { type = NavType.StringType })
             ) {
-                PatientDetailScreen(padding)
+                PatientDetailScreen(padding, onBack = { navController.popBackStack() })
             }
         }
     }

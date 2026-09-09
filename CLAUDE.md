@@ -318,6 +318,28 @@ Use-cases existente: `AddTreatmentUseCase`, `EditTreatmentUseCase`, `DeleteTreat
 - Teste noi: `ManageProfessionalAccessViewModelTest` (7 cazuri) + caz nou în
   `ManageAccessViewModelTest` (filtrare rol), toate trec.
 - **Neverificat încă pe device** — migrarea 0007 trebuie rulată de utilizator (după 0001-0006).
+- **Bug recurent găsit la testarea pe device a unui cont Medic nou** (2026-09-09): fix-ul de
+  cursă din 1.5d (mai sus) era incomplet — userul tot era retrimis pe onboarding după succes
+  (uneori de mai multe ori la rând, cerea mai multe Back-uri). Cauză reală: `LifecycleEventEffect(
+  ON_RESUME)` din `AccountScreen` declanșează `vm.refresh()` printr-un callback de Lifecycle cu
+  **timing incert** față de `LaunchedEffect`-ul de verificare din aceeași compoziție — uneori
+  verificarea rula înaintea refresh-ului, citind starea veche. Fix definitiv: adăugat
+  `LaunchedEffect(Unit) { vm.refresh() }` în `AccountScreen.kt`, declarat **înaintea**
+  efectului de verificare (garantează ordine sincronă în aceeași trecere de compoziție);
+  `LifecycleEventEffect(ON_RESUME)` păstrat separat pentru revenirea reală din fundal (unde
+  compoziția nu se reface). Plasă de siguranță suplimentară: `launchSingleTop = true` pe
+  `navController.navigate(Route.Onboarding.path)` în `PillProntoNavHost.kt`, ca eventuale
+  regresii viitoare să nu mai stivuiască mai multe instanțe de Onboarding.
+- **Navigare — buton de back pe toate ecranele secundare** (2026-09-09, cerut de utilizator după
+  ce a semnalat bug-ul de mai sus): `BackTopAppBar` nou (`core/ui/components/BackTopAppBar.kt`,
+  `TopAppBar` + `IconButton` cu `Icons.AutoMirrored.Filled.ArrowBack`), adăugat pe toate cele 7
+  ecrane secundare (nu sunt în bara de jos): Onboarding, Gestionează accesul (Aparținători +
+  Medic/Farmacist), Pacienții mei, Detaliu pacient, Adăugare/editare tratament, Detaliu tratament.
+  Fiecare ecran capătă parametru nou `onBack: () -> Unit`, legat în `PillProntoNavHost.kt` la
+  `navController.popBackStack()`. Gestul/butonul de sistem de back funcționau deja, dar o săgeată
+  vizibilă e recomandarea Material Design curentă pentru discoverability — relevant mai ales aici,
+  unde publicul țintă include pacienți vârstnici. Compilare + teste unitare + build APK debug +
+  instalare pe device confirmate; testare manuală pe device încă neconfirmată de utilizator.
 
 ---
 

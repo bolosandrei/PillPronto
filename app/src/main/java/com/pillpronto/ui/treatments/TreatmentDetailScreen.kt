@@ -13,6 +13,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -23,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.pillpronto.R
+import com.pillpronto.core.ui.components.BackTopAppBar
 import com.pillpronto.core.ui.theme.DoseMissed
 import com.pillpronto.core.ui.theme.DoseTaken
 import com.pillpronto.domain.model.DoseLog
@@ -36,45 +38,48 @@ private val DMY_HM = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm")
 fun TreatmentDetailScreen(
     padding: PaddingValues,
     onEdit: (Long) -> Unit,
+    onBack: () -> Unit,
     vm: TreatmentDetailViewModel = hiltViewModel()
 ) {
     val treatment by vm.treatment.collectAsStateWithLifecycle()
     val history by vm.history.collectAsStateWithLifecycle()
+    val title = treatment?.medicationName ?: stringResource(R.string.treatment_detail_loading)
 
-    Column(Modifier.fillMaxSize().padding(padding).padding(16.dp)) {
-        val t = treatment
-        if (t == null) {
-            Text(stringResource(R.string.treatment_detail_loading), style = MaterialTheme.typography.bodyMedium)
-            return@Column
-        }
+    Scaffold(topBar = { BackTopAppBar(title, onBack) }) { innerPadding ->
+        Column(Modifier.fillMaxSize().padding(padding).padding(innerPadding).padding(16.dp)) {
+            val t = treatment
+            if (t == null) {
+                Text(stringResource(R.string.treatment_detail_loading), style = MaterialTheme.typography.bodyMedium)
+                return@Column
+            }
 
-        Text(t.medicationName, style = MaterialTheme.typography.headlineSmall)
-        Text(scheduleSummary(t), Modifier.padding(top = 4.dp), style = MaterialTheme.typography.bodyMedium)
-        Text(dateRangeSummary(t), Modifier.padding(top = 4.dp), style = MaterialTheme.typography.bodySmall)
+            Text(scheduleSummary(t), style = MaterialTheme.typography.bodyMedium)
+            Text(dateRangeSummary(t), Modifier.padding(top = 4.dp), style = MaterialTheme.typography.bodySmall)
 
-        Button(onClick = { onEdit(t.id) }, modifier = Modifier.padding(top = 12.dp).fillMaxWidth()) {
-            Text(stringResource(R.string.treatment_detail_edit_button))
-        }
+            Button(onClick = { onEdit(t.id) }, modifier = Modifier.padding(top = 12.dp).fillMaxWidth()) {
+                Text(stringResource(R.string.treatment_detail_edit_button))
+            }
 
-        HorizontalDivider(Modifier.padding(vertical = 16.dp))
+            HorizontalDivider(Modifier.padding(vertical = 16.dp))
 
-        Text(stringResource(R.string.treatment_detail_history_title), style = MaterialTheme.typography.titleMedium)
-        if (history.isNotEmpty()) {
-            HistorySummary(history, Modifier.padding(top = 8.dp))
-        }
+            Text(stringResource(R.string.treatment_detail_history_title), style = MaterialTheme.typography.titleMedium)
+            if (history.isNotEmpty()) {
+                HistorySummary(history, Modifier.padding(top = 8.dp))
+            }
 
-        if (history.isEmpty()) {
-            Text(
-                stringResource(R.string.treatment_detail_history_empty),
-                Modifier.padding(top = 12.dp),
-                style = MaterialTheme.typography.bodyMedium
-            )
-        } else {
-            LazyColumn(
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.padding(top = 12.dp)
-            ) {
-                items(history, key = { it.id }) { log -> HistoryRow(log) }
+            if (history.isEmpty()) {
+                Text(
+                    stringResource(R.string.treatment_detail_history_empty),
+                    Modifier.padding(top = 12.dp),
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            } else {
+                LazyColumn(
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.padding(top = 12.dp)
+                ) {
+                    items(history, key = { it.id }) { log -> HistoryRow(log) }
+                }
             }
         }
     }
