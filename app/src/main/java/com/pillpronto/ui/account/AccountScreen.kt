@@ -79,7 +79,12 @@ fun AccountScreen(
                     LoggedOutForm(state = state, vm = vm)
                 }
             is AuthSessionState.Authenticated ->
-                if (state.profileChecked && state.profile != null) {
+                // Afisam profilul de indata ce-l avem, chiar daca un refresh() e in curs pe fundal
+                // (profileChecked=false temporar la fiecare revenire pe tab, vezi LaunchedEffect
+                // de mai sus) — altfel ecranul clipeste la spinner de fiecare data cand userul
+                // reintra pe tab-ul "Cont", desi datele vechi erau oricum corecte in >99% din
+                // cazuri. Spinner-ul ramane doar pentru primul fetch real (profile == null).
+                if (state.profile != null) {
                     LoggedInView(
                         displayName = state.profile!!.displayName,
                         role = state.profile!!.role,

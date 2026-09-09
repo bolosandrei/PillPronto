@@ -340,6 +340,17 @@ Use-cases existente: `AddTreatmentUseCase`, `EditTreatmentUseCase`, `DeleteTreat
   vizibilă e recomandarea Material Design curentă pentru discoverability — relevant mai ales aici,
   unde publicul țintă include pacienți vârstnici. Compilare + teste unitare + build APK debug +
   instalare pe device confirmate; testare manuală pe device încă neconfirmată de utilizator.
+- **Testat pe device de utilizator** (2026-09-09) — navigarea cu butoane de back funcționează.
+  A semnalat un efect secundar: tab-ul „Cont" arăta un „flash" de reîncărcare (spinner) de fiecare
+  dată când revenea pe el, chiar dacă profilul era deja cunoscut — cauzat de `refresh()` (apelat
+  la fiecare intrare în compoziție, vezi mai sus) care resetează sincron `profileChecked=false`,
+  iar `AccountScreen` cerea `profileChecked && profile != null` ca să arate `LoggedInView`, deci
+  orice refresh (chiar reușit din prima) trecea vizibil prin `LoadingIndicator`. Fix: condiția de
+  randare devine doar `profile != null` — profilul cunoscut (chiar "stale" cât timp refresh-ul
+  rulează tăcut pe fundal) rămâne afișat neîntrerupt; spinner-ul apare doar la primul fetch real
+  (`profile == null`), nu la fiecare revenire pe tab. Logica de `profileChecked` pentru declanșarea
+  onboarding-ului (`LaunchedEffect(state.sessionState, state.profileChecked, state.profile)`)
+  rămâne neschimbată. Compilare + teste unitare + build APK + instalare pe device confirmate.
 
 ---
 
