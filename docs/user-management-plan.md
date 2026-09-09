@@ -113,145 +113,24 @@ SQL nativ și de analiza directă (SQL/pandas) a datelor din studiul pilot pentr
 Motivul poziționării înaintea Fazei 2: schema trebuie stabilă înainte ca Nomenclatorul/scanarea să
 construiască peste ea (toate vor referi `patient_profile_id`).
 
-- **1.5a — Fundație ✅ IMPLEMENTAT (2026-09-07):**
-  - `patientProfileId: String` adăugat în `TreatmentEntity`/`DoseLogEntity`, generat local
-    (UUID, `LocalPatientProfileProvider` — devine `patient_profiles.id` la 1.5b, fără reconciliere).
-    `PillProntoDatabase` la `version = 3`.
-  - Schema SQL + RLS scrise în `supabase/migrations/0001_init_schema.sql` +
-    `0002_rls_policies.sql` — **executate** de utilizator pe proiectul Supabase real (regiune UE).
-- **1.5b — Auth Android email/parolă + onboarding ✅ IMPLEMENTAT (2026-09-07):**
-  - SDK Supabase Kotlin conectat (`SupabaseModule`, BOM 3.5.0, Auth + Postgrest), credențiale din
-    `local.properties` → `BuildConfig` (niciodată în cod). `compileSdk` ridicat la 36
-    (`androidx.browser`, adus tranzitiv de `auth-kt`, o cere).
-  - Strat domeniu: `AuthRepository`/`ProfileRepository` + use-cases (`SignUpUseCase`,
-    `SignInUseCase`, `SignOutUseCase`, `ObserveAuthSessionUseCase`, `GetProfileUseCase`,
-    `CompleteOnboardingUseCase`); `AuthSessionState` traduce `SessionStatus` din SDK — vendor-ul
-    nu se scurge în domeniu.
-  - Tab nou „Cont" (al 4-lea, bottom bar) — `AccountScreen` (toggle autentificare/înregistrare,
-    validare tipizată `AccountError`) + `OnboardingScreen` (alegere rol, scrie `profiles` +
-    `patient_profiles` doar pt. Pacient — vezi decizia despre cei doi UUID diferiți, secțiunea 2).
-  - **Cont opțional, nu obligatoriu** — aplicația rămâne 100% funcțională fără login (decizie
-    explicită, consecventă cu minimizarea GDPR deja stabilită).
-  - **Google Sign-In implementat separat, 2026-09-09** (după deblocarea prerechizitelor externe:
-    2 OAuth Client ID-uri Google Cloud Console — Web + Android cu SHA-1 — + provider activat în
-    Supabase Dashboard) — Credential Manager nativ + `supabase.auth.signInWith(IDToken)`, vezi
-    `CLAUDE.md` secțiunea 7, blocul „Faza 1.5b — Google Sign-In, completare" pentru detalii
-    complete (inclusiv bug-ul de cursă găsit și fix-ul definitiv la onboarding).
-  - Teste: `AccountViewModelTest` (9), `OnboardingViewModelTest` (5) — `FakeAuthRepository`,
-    `FakeProfileRepository`, `MainDispatcherRule` noi în `util/` (primul ViewModel testat cu
-    `viewModelScope` din proiect).
-  - **Bug-uri găsite și rezolvate în testarea pe device reală** (2026-09-07, cont real creat):
-    1. `Log.e(...)` arunca "not mocked" în testele JVM (fără Robolectric) și mânca silențios
-       rezultatul unui test — fix: `testOptions.unitTests.isReturnDefaultValues = true`.
-    2. Limita implicită Supabase de 2-4 emailuri/oră (SMTP shared, gratuit) apărea ca eroare
-       generică `AUTH_FAILED` — fix: `AccountError.RATE_LIMITED` distinct, detectat din mesajul
-       excepției (`AuthRestException` cu `over_email_send_rate_limit`).
-    3. **Bug real, nu artefact de testare**: `AccountViewModel` reface profilul doar la *schimbarea*
-       sesiunii, nu și după un onboarding reușit cât timp sesiunea era deja `Authenticated` —
-       userul era retrimis la nesfârșit pe un ecran de onboarding gol după ce contul chiar fusese
-       creat cu succes, iar o reîncercare lovea coliziune de cheie primară. Fix: `AccountViewModel.refresh()`
-       public, apelat din `AccountScreen` via `LifecycleEventEffect(ON_RESUME)` + `completeOnboarding`
-       schimbat din `insert` în `upsert` (idempotent, tolerează reîncercări).
-- **1.5c — Sync layer ✅ IMPLEMENTAT (2026-09-09):**
-  - Sincronizare bidirecțională a **propriilor** date ale Pacientului (`treatments`+`dose_logs`
-    cu status final) — Room rămâne sursa de adevăr locală, Supabase e strat opțional. Pull de la
-    profiluri legate (Aparținător/Medic) rămâne pentru 1.5d/e, nu e parte din 1.5c.
-  - **Decizie de scop:** dozele PENDING nu se sincronizează (stare de programare locală, nu
-    istoric de aderență — doar TAKEN/MISSED/SKIPPED merg la Supabase). Elimină nevoia de
-    tombstone-uri pentru `deleteFuturePending` (șterge doar PENDING viitoare, niciodată push-uite).
-  - Outbox pattern: `TreatmentEntity`/`DoseLogEntity` +`remoteId`/`updatedAt`/`dirty`
-    (`PillProntoDatabase` v4), tabel nou `pending_remote_deletes` pentru ștergeri de propagat.
-    Conflict resolution: last-write-wins pe `updatedAt`, un rând local `dirty` nu e niciodată
-    suprascris de un pull.
-  - `data/sync/SyncManager.kt` (coordonator, precedent `ReminderCoordinator`) — ordine strictă:
-    delete-uri → push treatments → push dose_logs → pull treatments → pull dose_logs →
-    regenerare doze PENDING pentru tratamentele nou-scrise din pull → resincronizare alarme.
-    `data/sync/SyncRemoteDataSource.kt`/`SupabaseSyncDataSource.kt` abstractizează Postgrest.
-  - `data/work/SyncWorker.kt` — periodic 30 min + o dată la pornirea aplicației (`PillProntoApp`),
-    no-op sigur dacă userul nu e autentificat ca Pacient.
-  - Seam-uri de testabilitate: `ReminderSync` (peste `ReminderCoordinator`) și
-    `PatientProfileIdProvider` (peste `LocalPatientProfileProvider`) — ambele clase concrete
-    originale ating Android framework (`AlarmManager`/`SharedPreferences` via `Context`) în
-    constructor, netestabile direct în JVM.
-  - Bug găsit în plan review, fixat înainte de implementare: `markOverdueMissed` (DAO) nu seta
-    `dirty`/`updatedAt` la tranziția PENDING→MISSED — fără fix, dozele ratate nu s-ar fi
-    sincronizat niciodată.
-  - Teste: `SyncManagerTest` (11 cazuri), fake-uri noi `FakeTreatmentDao`/`FakeDoseDao`/
-    `FakePendingRemoteDeleteDao`/`FakeSyncRemoteDataSource`/`FakeReminderSync`/
-    `FakePatientProfileIdProvider` în `util/`.
-  - **Neverificat încă pe device fizic** (Supabase Dashboard) — rămâne de făcut manual.
-- **1.5d — Flux Aparținător (viewer) ✅ IMPLEMENTAT (2026-09-09):**
-  - Scop v1, decis explicit cu utilizatorul: **doar** Aparținător ↔ Pacient cu cont propriu,
-    read-only. „Profil dependent" (pacient vârstnic fără cont propriu) **amânat** — ar cere suport
-    multi-profil local în Room, schimbare majoră separată.
-  - **Migrare `supabase/migrations/0003_links_open_invite.sql`** — `grantee_user_id` pe `links`
-    devine nullable; funcție `claim_link(p_invite_code) SECURITY DEFINER` pentru revendicarea
-    invitației (nu o politică RLS de UPDATE — verificat împotriva documentației PostgreSQL că
-    UPDATE cu WHERE cere vizibilitate SELECT separată pe rândul țintă, iar o politică de SELECT
-    „toate rândurile pending nerevendicate" ar permite enumerarea tuturor codurilor active,
-    oricui autentificat); trigger `links_guard_update` — hardening suplimentar, închide o gaură
-    preexistentă din `links_grantee_respond` (1.5a) care nu împiedica un grantee să-și schimbe
-    propriul rând `links` către alt `patient_profile_id`/`role`. Găsit în plan review, nu în
-    cererea inițială — vezi CLAUDE.md secțiunea 7 pentru detalii complete.
-  - Cod de invitație: text simplu, 8 caractere (fără 0/O/1/I), `SecureRandom`, distribuit prin
-    Android share sheet — fără QR vizual în v1 (fără dependență nouă).
-  - `LinkRepository`/`LinkedPatientDataRepository` (citire remote directă, niciodată din Room
-    local) + `AdherenceCalculator` extras din `ComputeAdherenceUseCase` (formulă PDC/MPR pură,
-    reutilizată și pentru loguri remote).
-  - `CaregiverAlertWorker` (periodic 30 min, no-op dacă rolul != CAREGIVER) + `MissedDoseChecker`
-    (deduplicare pe mulțime de `remoteId`, nu pe timestamp — status MISSED e terminal).
-  - UI fără tab nou în bottom bar — buton condiționat de rol în `AccountScreen`:
-    `ui/access/ManageAccessScreen` (Pacient), `ui/patients/MyPatientsScreen` +
-    `PatientDetailScreen` (Apartinător, read-only).
-  - Teste: 21 cazuri noi (`AdherenceCalculatorTest`, `MissedDoseCheckerTest`,
-    `GetLinkedPatientAdherenceUseCaseTest`, `ManageAccessViewModelTest`, `MyPatientsViewModelTest`,
-    `PatientDetailViewModelTest`), toate trec.
-  - **Migrare `supabase/migrations/0004_fix_links_rls_recursion.sql`** — bug real găsit la primul
-    test manual pe device (2026-09-09): „Generează cod nou" întorcea eroare Postgres `infinite
-    recursion detected in policy for relation "links"` (cod `42P17`). Cauză, prezentă din 1.5a
-    (`0002_rls_policies.sql`), nedescoperită pentru că nimic nu interogase direct
-    `links`/`treatments`/`dose_logs` până la 1.5d: `links_owner_manage` subqueria
-    `patient_profiles`, iar `patient_profiles_linked_read` subqueria invers `links` — RLS se
-    reevaluează tranzitiv la fiecare acces la tabel, deci evaluarea uneia declanșa evaluarea
-    celeilalte, la nesfârșit. Același tipar exista între `treatments`/`links` și
-    `dose_logs`/`treatments`/`patient_profiles`/`links` — ar fi blocat probabil și sync-ul din
-    1.5c. Fix: funcții `SECURITY DEFINER` care ocolesc RLS intern, înlocuind subquery-urile
-    corelate din politici.
-  - **Testat parțial pe device fizic** — primul test manual (generare cod) a găsit bug-ul de mai
-    sus. Migrările 0003+0004 trebuie rulate de utilizator (în această ordine) înainte ca fluxul
-    complet (invitație → claim → vizibilitate → notificare) să funcționeze end-to-end.
-  - **Al doilea bug găsit la testare** (cont Apartinător nou, onboarding): condiție de cursă
-    rămasă în fix-ul din 1.5b (`AccountViewModel.refreshProfile` nu marca sincron „verificare în
-    curs" înainte de fetch-ul async) — userul era retrimis direct pe onboarding după ce-l termina
-    cu succes. Fix + detalii complete: `CLAUDE.md` secțiunea 7 (blocul 1.5d), test nou
-    `AccountViewModelTest`.
-  - **Confirmat funcțional end-to-end pe device** după fix-uri; utilizatorul a cerut apoi
-    reducerea fricțiunii la legare (cod de introdus manual = "tedios") + vizibilitate identitate.
-  - **Rafinare UX**: deep link `pillpronto://invite?code=...` (schemă proprie, `ui/access/InviteLink.kt`)
-    + cod QR (`com.google.zxing:core`, doar generare) ca mecanism principal „fără tastare" — link-ul
-    text NU e garantat clicabil în WhatsApp/SMS (auto-linkify doar pe `http(s)://`), QR-ul ocolește
-    problema complet. Nume Aparținător vizibil Pacientului — migrare nouă
-    `0005_profiles_visible_to_linked_grantee.sql`. Detalii complete: `CLAUDE.md` secțiunea 7.
-- **1.5e — Flux Medic/Farmacist ✅ IMPLEMENTAT (2026-09-09):**
-  - Infrastructura de citire (`MyPatientsScreen`/`PatientDetailScreen`, RLS) era deja agnostică la
-    rol din 1.5d — reutilizată integral, zero schimbări. `CaregiverAlertWorker` rămâne strict
-    pentru Aparținător (Medic/Farmacist nu primesc notificări, conform tabelului din secțiunea 6).
-  - Pacientul alege explicit rolul (Aparținător/Medic/Farmacist) la generarea codului —
-    `createInvite`/`claim_link` (migrare nouă `0007_professional_invite_role_check.sql`) validează
-    că rolul contului care revendică se potrivește cu cel declarat.
-  - Ecran separat `ManageProfessionalAccessScreen` (decizie explicită a utilizatorului, nu unificat
-    cu ecranul Aparținătorilor) — selector Medic/Farmacist, altfel aceeași structură.
-    `AccessLinkComponents.kt` extrage piesele reutilizabile (rând legătură, QR, distribuire) între
-    cele două ecrane.
-  - Flag „neverificat" (auto-declarat, fără validare CUIM — vezi limitarea din secțiunea 9) vizibil
-    atât pe lista Pacientului cât și pe propriul cont al Medicului/Farmacistului.
-  - Teste: `ManageProfessionalAccessViewModelTest` (7 cazuri noi) + extindere
-    `ManageAccessViewModelTest`, toate trec.
-  - **Neverificat încă pe device** — migrarea 0007 trebuie rulată de utilizator (după 0001-0006).
-- **1.5f — Audit & consimțământ:** `audit_log` populat automat, ecran „Cine îmi vede datele"
-  (revocare acces) — obligatoriu GDPR, nu opțional.
-- **1.5g — Teste:** RLS policy tests (pgTAP sau echivalent), teste de integrare sync, teste unitare
-  pentru logica de conflict/outbox.
+**Status: 1.5a-1.5e complet implementate, merge-uite pe `main`, testate live pe device fizic.**
+Detaliile tehnice complete (ce s-a construit, fiecare bug real găsit prin testare + fix-ul lui,
+migrările Supabase în ordine) sunt în `CLAUDE.md` secțiunea 7 — document „sursă de adevăr" pentru
+starea curentă, actualizat la fiecare bucată de lucru. Nu le duplicăm aici; rezumat scurt:
+
+| Sub-fază | Ce livrează | Status |
+|---|---|---|
+| 1.5a | Schema Postgres + RLS, `patientProfileId` local → remote | ✅ |
+| 1.5b | Autentificare email/parolă + Google Sign-In + onboarding rol | ✅ |
+| 1.5c | Sync bidirecțional Room↔Supabase (outbox, LWW) | ✅ (neverificat separat pe device) |
+| 1.5d | Flux Aparținător — legătură, notificare doză ratată | ✅ |
+| 1.5e | Flux Medic/Farmacist — read-only, flag „neverificat" | ✅ |
+| 1.5f | Audit & consimțământ (GDPR) — `audit_log`, ecran „Cine îmi vede datele" | neînceput |
+| 1.5g | Teste RLS adversariale (pgTAP sau echivalent), teste integrare sync | neînceput |
+
+Decizii de scop confirmate cu utilizatorul, stabile: „profil dependent" (pacient vârstnic fără cont
+propriu) amânat explicit din 1.5d — cere suport multi-profil local în Room, schimbare majoră de
+arhitectură, de tratat separat dacă devine prioritate.
 
 ## 9. Ce NU rezolvăm acum (limitări cunoscute, de discutat explicit în teză)
 

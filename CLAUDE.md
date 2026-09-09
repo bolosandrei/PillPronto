@@ -17,53 +17,64 @@ Nicio funcționalitate nu se implementează fără o nevoie justificată (sursă
 ## 2. Stack & arhitectură
 
 - **Kotlin + Jetpack Compose**, Material 3, Navigation-Compose.
-- **Clean Architecture + MVVM**: `ui/` (Compose + ViewModels) ← `domain/` (modele, use-cases, interfețe repo) ← `data/` (Room, remindere, WorkManager).
+- **Clean Architecture + MVVM**: `ui/` (Compose + ViewModels) ← `domain/` (modele, use-cases, interfețe repo) ← `data/` (Room, remindere, WorkManager, Supabase).
 - **Hilt** (DI), **Coroutines + Flow**, **Room** (persistență locală, offline-first pentru GDPR).
-- **AlarmManager** (alarme exacte) + **WorkManager** (întreținere periodică).
+- **AlarmManager** (alarme exacte) + **WorkManager** (întreținere periodică, sincronizare, notificări Aparținător).
+- **Supabase** (Postgres + Auth + RLS) — strat opțional de conturi/partajare peste Room, vezi Faza 1.5.
 - Viitor: CameraX, ML Kit (barcode+OCR), LiteRT/ONNX Runtime Mobile (viziune), ARCore.
 
-Config: `minSdk = 26`, `targetSdk = 35`, JDK 17, Gradle KTS + version catalog (`gradle/libs.versions.toml`).
+Config: `minSdk = 26`, `targetSdk = 35`, `compileSdk = 36` (cerut de `androidx.browser`, tranzitiv
+din `auth-kt`), JDK 17, Gradle KTS + version catalog (`gradle/libs.versions.toml`).
 `namespace`/`applicationId` = `com.pillpronto`.
 
 ## 3. Structura de pachete (`app/src/main/java/com/pillpronto/`)
 
-- `core/di/` — module Hilt (`DatabaseModule`, `RepositoryModule`).
+- `core/di/` — module Hilt (`DatabaseModule`, `RepositoryModule`, `SupabaseModule`).
 - `core/ui/theme/` — temă + **culori status doză** (`DoseTaken` verde, `DoseDueNow` portocaliu, `DoseMissed` roșu, `DoseUnknown` gri) — reutilizabile la conturul AR (Faza 3–4).
+- `core/ui/components/` — `DatePickerDialogBox`, `BackTopAppBar` (reutilizate pe mai multe ecrane).
 - `core/permissions/` — `Permissions` (verificare/navigare setări alarme exacte).
-- `domain/model/` — `Treatment`, `DoseLog`, `DoseStatus`, `DoseItem`, `AdherenceStats`.
-- `domain/repository/` — `TreatmentRepository`, `DoseRepository` (interfețe).
-- `domain/usecase/` — use-cases (vezi mai jos).
-- `data/local/` — Room: `entity/`, `dao/`, `PillProntoDatabase`.
+- `domain/model/` — `Treatment`, `DoseLog`, `DoseStatus`, `DoseItem`, `AdherenceStats`, `AccountRole`, `AuthSessionState`, `Profile`, `PatientLink`, `LinkRole`, `LinkedTreatment`, `LinkedDoseLog`.
+- `domain/repository/` — interfețe (`TreatmentRepository`, `DoseRepository`, `AuthRepository`, `ProfileRepository`, `LinkRepository`, `LinkedPatientDataRepository`, `PatientProfileIdProvider`, `ReminderSync`).
+- `domain/usecase/` — use-cases (vezi listele pe fază mai jos).
+- `data/local/` — Room: `entity/`, `dao/`, `PillProntoDatabase`, `LocalPatientProfileProvider`.
 - `data/mapper/` — `Mappers.kt` (entity ↔ domain).
-- `data/repository/` — implementări repo.
+- `data/repository/` — implementări repo (Room + Supabase).
 - `data/reminder/` — `ReminderScheduler`, `ReminderReceiver`, `DoseActionReceiver`, `ReminderCoordinator`, `BootReceiver`.
-- `data/work/` — `AdherenceMaintenanceWorker`, `MaintenanceScheduler`.
-- `ui/navigation/`, `ui/today/`, `ui/treatments/`, `ui/adherence/`.
+- `data/sync/` — `SyncManager`, `SyncRemoteDataSource`/`SupabaseSyncDataSource` (Faza 1.5c).
+- `data/notification/` — `CaregiverAlertNotifier`, `MissedDoseChecker` (Faza 1.5d).
+- `data/work/` — `AdherenceMaintenanceWorker`, `SyncWorker`, `CaregiverAlertWorker`, `MaintenanceScheduler`.
+- `ui/navigation/` — `PillProntoNavHost`, `Routes`.
+- `ui/today/`, `ui/treatments/`, `ui/adherence/` — Faza 1.
+- `ui/account/`, `ui/onboarding/` — Faza 1.5a/b.
+- `ui/access/`, `ui/patients/` — Faza 1.5d/e.
 
 ## 4. Convenții de cod
 
-- Straturi stricte: `ui` depinde de `domain`; `data` implementează interfețele din `domain`. `domain` NU are dependențe Android.
+- Straturi stricte: `ui` depinde de `domain`; `data` implementează interfețele din `domain`. `domain` NU are dependențe Android. **Excepție documentată, intenționată**: câteva funcții Android-specifice (Credential Manager, scaner QR Play Services) stau direct în `ui/` ca funcții simple, nu trec prin Hilt/domain — cer `Context` de Activity, nu pot fi abstractizate curat fără cost real (vezi `GoogleSignInHelper.kt`, `scanInviteQrCode` în `MyPatientsScreen.kt`).
 - Un use-case = o clasă cu `operator fun invoke(...)`, `@Inject constructor`.
-- ViewModels `@HiltViewModel`, expun `StateFlow`; UI colectează cu `collectAsStateWithLifecycle`.
-- Reminderele sunt legate de **`doseId`** (nu de oră generică). Sursa de adevăr pentru aderență = `DoseLog` din Room.
-- Toate datele de sănătate rămân **on-device** (fără cloud pentru loguri) — cerință GDPR.
-- **La orice modificare de schemă Room** (câmp nou în `TreatmentEntity`/`DoseLogEntity` etc.) **trebuie incrementat `version` din `@Database`** (`PillProntoDatabase.kt`). `fallbackToDestructiveMigration()` gestionează diferența dintre versiuni (șterge și recreează local — acceptabil în stadiul curent, pre-release), dar Room aruncă `IllegalStateException` la pornire dacă schema s-a schimbat și versiunea a rămas aceeași.
-- Teste: JUnit + `kotlinx-coroutines-test` (+ Turbine pentru Flow). Domeniul e testabil pur (java.time).
+- ViewModels `@HiltViewModel`, expun `StateFlow`; UI colectează cu `collectAsStateWithLifecycle`. Pentru evenimente „one-shot" (navigare declanșată de ViewModel, nu derivată din stare comparată în UI) — `Flow` dintr-un `Channel(CONFLATED)`, expus separat de `state`; vezi lecția din secțiunea 7 despre cursa onboarding→bounce-back.
+- Reminderele sunt legate de **`doseId`** (nu de oră generică). Sursa de adevăr pentru aderență = `DoseLog` din Room (local) / `dose_logs` (remote, doar status final, vezi Faza 1.5c).
+- Toate datele de sănătate rămân **on-device by default** (fără cloud pentru loguri) — cerință GDPR. Sincronizarea cu Supabase (Faza 1.5c+) e strict **opțională**, condiționată de autentificare, și trimite doar date proprii ale Pacientului cu statusuri finale de doză.
+- **La orice modificare de schemă Room** (câmp nou într-o entitate etc.) **trebuie incrementat `version` din `@Database`** (`PillProntoDatabase.kt`, actual `version = 4`). `fallbackToDestructiveMigration()` gestionează diferența dintre versiuni (șterge și recreează local — acceptabil pre-release), dar Room aruncă `IllegalStateException` la pornire dacă schema s-a schimbat și versiunea a rămas aceeași.
+- **La orice modificare de schemă Postgres**: fișier nou `supabase/migrations/000N_*.sql`, numerotat secvențial, **rulat manual de utilizator** în Supabase Dashboard (SQL Editor), în ordine — Claude Code CLI scrie migrarea, nu o execută.
+- Teste: JUnit + `kotlinx-coroutines-test` + **Turbine** (testare `Flow`/evenimente). Domeniul e testabil pur (java.time). Fake-uri de repo/dao în `app/src/test/java/com/pillpronto/util/`.
   Instrumentate (`app/src/androidTest/`): Room DAO pe bază in-memory + un test Compose de fum
   (navigare bottom bar) via `@HiltAndroidTest`; rulează pe emulator/dispozitiv, nu din CLI fără device.
   `testInstrumentationRunner` = `com.pillpronto.HiltTestRunner` (instanțiază `HiltTestApplication`).
 - **Stringuri:** toate textele afișate utilizatorului sunt în `res/values/strings.xml` (RO, fără
   calificator de limbă) — nu se hardcodează text în Compose. Erorile de validare din ViewModels
-  (ex. `AddTreatmentError`) sunt enum-uri tipizate, nu String — Composable-ul mapează la
-  `stringResource(...)`, ca ViewModel-ul să rămână fără dependență de Context Android.
+  sunt enum-uri tipizate, nu String — Composable-ul mapează la `stringResource(...)`, ca
+  ViewModel-ul să rămână fără dependență de Context Android.
   `AndroidManifest.xml` are `android:localeConfig="@xml/locales_config"` (scaffolding pt. switch
-  RO/EN viitor — vezi secțiunea 8).
+  RO/EN viitor — vezi secțiunea 8a).
+- **Credențiale/secrete**: niciodată în cod. `local.properties` (gitignored) → `BuildConfig`, prin
+  `requiredLocalProperty(...)` în `app/build.gradle.kts` (aruncă la build dacă lipsește o cheie).
 
 ## 5. Comenzi build & test
 
 ```bash
 ./gradlew assembleDebug              # build APK debug
-./gradlew testDebugUnitTest          # teste unitare (PDC/MPR + mappers)
+./gradlew testDebugUnitTest          # teste unitare
 ./gradlew connectedDebugAndroidTest  # teste instrumentate (Room DAO + smoke test Compose) — necesită device/emulator
 ./gradlew installDebug               # instalare pe dispozitiv/emulator conectat
 ./gradlew lint                       # lint
@@ -71,12 +82,21 @@ Config: `minSdk = 26`, `targetSdk = 35`, JDK 17, Gradle KTS + version catalog (`
 
 Wrapper-ul Gradle: dacă lipsește `gradlew`, deschide în Android Studio (îl generează) sau rulează `gradle wrapper`.
 
+Instalare rapidă pe device conectat (fără Android Studio), din Claude Code CLI:
+```bash
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+```
+Diagnosticare erori pe device: `adb logcat -d | grep -i <Tag>`. **Notă**: pe telefonul de test al
+utilizatorului (MIUI/HyperOS), `Log.d` nu ajunge în logcat by default — pentru logging temporar de
+diagnostic pe acest device, folosește `Log.e`/`Log.w`.
+
 ## 6. Permisiuni & particularități Android
 
 - `POST_NOTIFICATIONS` — cerută la runtime la pornire (Android 13+). Vezi `MainActivity`.
 - `SCHEDULE_EXACT_ALARM` / `USE_EXACT_ALARM` — pe Android 12+ se acordă din setări; ecranul „Azi" arată un **banner** cu buton către setări dacă nu e activă (`Permissions.openExactAlarmSettings`).
 - `RECEIVE_BOOT_COMPLETED` — reprogramarea reminderelor după reboot (`BootReceiver`).
 - Hilt + WorkManager: `PillProntoApp` implementează `Configuration.Provider`; inițializatorul WorkManager implicit e dezactivat în manifest.
+- Credential Manager (Google Sign-In) nu cere permisiune de manifest; scanerul QR (Play Services Code Scanner) nici el nu cere `CAMERA` — gestionează propriul UI + permisiune intern.
 - **De tratat în Faza 7:** battery optimization agresiv pe Xiaomi/Huawei/Samsung (poate întârzia alarmele).
 
 ---
@@ -90,324 +110,172 @@ Gradle KTS + version catalog, Compose, Hilt, Navigation, temă cu culori de stat
 - **Introducere tratament** (manual): nume, dozaj, ore (chips), dată start/end — cu **TimePicker/DatePicker** și validare; tratamente **„la nevoie" (PRN)**, fără orar fix.
 - **Editare & ștergere** tratament (tap pe card → editare; ștergere cu confirmare, **swipe-to-delete** în listă). Istoricul dozelor luate/ratate se păstrează la editare.
 - **Ecran de detaliu tratament** (`TreatmentDetailScreen`) cu istoric de administrare per medicament.
-- **Persistență** Room (offline-first): `treatments`, `dose_logs` (FK cascade), schema v2 (PRN).
+- **Persistență** Room (offline-first): `treatments`, `dose_logs` (FK cascade).
 - **Generarea dozelor** din orar (sare peste orele deja trecute).
-- **Ecranul „Azi"**: strip de zile scopat pe **luna afișată** (derivată din `selectedDate`, nu stare separată) + rând **lună/an** cu săgeți (`onPreviousMonth`/`onNextMonth`, clamping automat via `LocalDate.plusMonths/minusMonths`) și eticheta lunii deschide picker-ul nativ M3 (`DatePickerDialogBox`, extras în `core/ui/components/` și reutilizat și la formularul de tratament) pentru salt direct pe orice an.
+- **Ecranul „Azi"**: strip de zile scopat pe **luna afișată** (derivată din `selectedDate`) + rând **lună/an** cu săgeți, eticheta lunii deschide picker-ul nativ M3 (`DatePickerDialogBox`) pentru salt direct pe orice an.
 - **Remindere** ca alarme **exacte** per-doză (`AlarmManager`).
-- **Notificări** cu: **tap → deschide app și navighează direct pe tab-ul „Azi"** (deep-link prin `MainActivity.onNewIntent` + `EXTRA_OPEN_TODAY`, funcționează și cu app-ul deja deschis pe alt tab); butoane **„Confirmă" / „Omite"** (marchează doza direct, via `DoseActionReceiver`, fără a deschide app-ul).
+- **Notificări** cu: **tap → deschide app și navighează direct pe tab-ul „Azi"** (deep-link prin `MainActivity.onNewIntent` + `EXTRA_OPEN_TODAY`); butoane **„Confirmă" / „Omite"** (marchează doza direct, via `DoseActionReceiver`, fără a deschide app-ul).
 - **WorkManager periodic (6h):** marchează dozele depășite ca `MISSED`, **extinde orizontul** de doze (fereastră rulantă), resincronizează alarmele.
 - **Metrici de aderență:** `ComputeAdherenceUseCase` calculează **PDC** (zile acoperite / total) și **MPR** (doze luate / programate); ecran „Aderență" cu prag 0.80.
 - **Permisiuni** runtime (notificări) + banner alarme exacte.
-- **Icon launcher propriu** (adaptive icon vectorial, capsulă în culorile temei) + `dataExtractionRules` (Android 12+, exclude `pillpronto.db` de la backup cloud/transfer, consecvent cu `backup_rules.xml`).
-- **Localizare:** toate stringurile în `res/values/strings.xml` (RO); `AddTreatmentError` enum tipizat în loc de text brut în ViewModel; `locales_config.xml` + `android:localeConfig` — scaffolding pentru switch RO/EN (vezi backlog, secțiunea 8).
-- **Teste unitare:** `ComputeAdherenceUseCaseTest` (3 scenarii PDC/MPR), `MappersTest` (round-trip), `FakeDoseRepository`.
-- **Teste instrumentate:** `TreatmentDaoTest`, `DoseDaoTest` (Room in-memory, inclusiv cascade delete), `NavigationSmokeTest` (Compose, navigare bottom bar) — `HiltTestRunner` configurat.
+- **Icon launcher propriu** + `dataExtractionRules` (Android 12+, exclude `pillpronto.db` de la backup cloud).
+- **Localizare:** toate stringurile în `strings.xml` (RO); `AddTreatmentError` enum tipizat; `locales_config.xml` — scaffolding pentru switch RO/EN (vezi backlog, secțiunea 8a).
+- **Teste unitare:** `ComputeAdherenceUseCaseTest`, `MappersTest`, `FakeDoseRepository`.
+- **Teste instrumentate:** `TreatmentDaoTest`, `DoseDaoTest` (Room in-memory, cascade delete), `NavigationSmokeTest` (Compose, navigare bottom bar).
 
-Use-cases existente: `AddTreatmentUseCase`, `EditTreatmentUseCase`, `DeleteTreatmentUseCase`, `GetTreatmentUseCase`, `GenerateDosesUseCase`, `ObserveTreatmentsUseCase`, `ObserveTodayDosesUseCase`, `ObserveTreatmentHistoryUseCase`, `ObserveActiveAsNeededTreatmentsUseCase`, `LogDoseUseCase`, `LogAsNeededDoseUseCase`, `ComputeAdherenceUseCase`, `MarkOverdueDosesUseCase`, `ExtendDoseHorizonUseCase`.
+Use-cases: `AddTreatmentUseCase`, `EditTreatmentUseCase`, `DeleteTreatmentUseCase`, `GetTreatmentUseCase`, `GenerateDosesUseCase`, `ObserveTreatmentsUseCase`, `ObserveTodayDosesUseCase`, `ObserveTreatmentHistoryUseCase`, `ObserveActiveAsNeededTreatmentsUseCase`, `LogDoseUseCase`, `LogAsNeededDoseUseCase`, `ComputeAdherenceUseCase`, `MarkOverdueDosesUseCase`, `ExtendDoseHorizonUseCase`.
 
-### Faza 1.5a+1.5b — Conturi & autentificare (parțial — vezi `docs/user-management-plan.md`)
-- `TreatmentEntity`/`DoseLogEntity` au `patientProfileId: String` — identitate locală generată o
-  singură dată (`LocalPatientProfileProvider`, UUID persistat în `SharedPreferences`), devine
-  `patient_profiles.id` în Supabase la onboarding (client-generated UUID, fără reconciliere).
-  `PillProntoDatabase` la `version = 3`.
-- Schema Postgres + RLS **scrise și executate** de utilizator: `supabase/migrations/0001_init_schema.sql`,
-  `0002_rls_policies.sql` (`profiles`, `patient_profiles`, `links`, `treatments`, `dose_logs`, `audit_log`).
-- SDK Supabase Kotlin conectat (`core/di/SupabaseModule.kt`, BOM `3.5.0`, module `auth-kt` +
-  `postgrest-kt`) — credențiale din `local.properties` → `BuildConfig` (`SUPABASE_URL`,
-  `SUPABASE_PUBLISHABLE_KEY`), niciodată în cod. `compileSdk` ridicat la **36** (`targetSdk`
-  rămâne 35) — `androidx.browser`, adus tranzitiv de `auth-kt`, cere minim compileSdk 36.
-- Autentificare email/parolă completă: `AuthRepository`/`ProfileRepository` + use-cases
-  (`SignUpUseCase`, `SignInUseCase`, `SignOutUseCase`, `ObserveAuthSessionUseCase`,
-  `GetProfileUseCase`, `CompleteOnboardingUseCase`). `AuthSessionState` traduce `SessionStatus`
-  din SDK — domeniul nu depinde de vendor.
-- Tab nou **„Cont"** (al 4-lea, bottom bar) — `ui/account/AccountScreen.kt` (toggle
-  autentificare/înregistrare) + `ui/onboarding/OnboardingScreen.kt` (alegere rol, o singură dată
-  după primul cont). **Cont opțional** — aplicația rămâne 100% funcțională fără login.
-- **Verificat pe device cu cont real** (2026-09-07) — 3 bug-uri găsite și rezolvate, cel mai
-  notabil: `AccountViewModel` nu refăcea profilul după onboarding reușit (doar la schimbarea
-  sesiunii), retrimițând userul la nesfârșit pe onboarding gol deși contul chiar fusese creat.
-  Fix + detalii complete: `docs/user-management-plan.md` secțiunea 8, sub-punctul 1.5b.
-- **NU e încă implementat:** Google Sign-In (necesită 2 OAuth Client ID Google Cloud + SHA-1,
-  blocaj extern separat), fluxurile Aparținător/Medic/Farmacist (1.5d-1.5g).
+### Faza 1.5 — Conturi & Roluri (complet, merge-uit pe `main` — PR #1-#8)
 
-### Faza 1.5c — Sync layer Room↔Supabase (implementat — 2026-09-09)
-- Sincronizare bidirecțională a **propriilor** date ale Pacientului (treatments + dose_logs cu
-  status final) — Room rămâne sursa de adevăr locală, Supabase e strat opțional. Vezi
-  `docs/user-management-plan.md` secțiunea 4/8 pentru design complet.
-- **Dozele PENDING nu se sincronizează** (stare de programare locală, nu istoric de aderență) —
-  doar `TAKEN`/`MISSED`/`SKIPPED`. Elimină nevoia de tombstone-uri pentru `deleteFuturePending`.
-- **Outbox pattern:** `TreatmentEntity`/`DoseLogEntity` au acum `remoteId`/`updatedAt`/`dirty`
-  (`PillProntoDatabase` la `version = 4`); tabel nou `pending_remote_deletes` pentru ștergeri de
-  propagat. Conflict resolution: **last-write-wins pe `updatedAt`**, un rând local `dirty`
-  (modificare nepush-uită) nu e niciodată suprascris de un pull.
-- **`data/sync/SyncManager.kt`** (coordonator, precedent `ReminderCoordinator`) — ordine
-  obligatorie: delete-uri → push treatments → push dose_logs → pull treatments → pull dose_logs →
-  regenerare doze PENDING (`GenerateDosesUseCase`) pentru tratamentele nou-scrise din pull →
-  resincronizare alarme. `data/sync/SyncRemoteDataSource.kt`/`SupabaseSyncDataSource.kt` —
-  abstractizare peste Postgrest, doar pentru testabilitate.
-- **`data/work/SyncWorker.kt`** — programat periodic (30 min, `MaintenanceScheduler`) + o dată la
-  pornire (`PillProntoApp.onCreate()`, `scheduleSyncOnStartup`, implementează „pull la pornire"
-  cerut în plan). No-op sigur dacă userul nu e autentificat ca Pacient.
-- **Seam-uri de testabilitate introduse** (fiecare cu un motiv concret, nu abstractizare
-  gratuită): `ReminderSync` (peste `ReminderCoordinator` — constructorul `ReminderScheduler` atinge
-  `AlarmManager`/`Context` real, netestabil în JVM) și `PatientProfileIdProvider` (peste
-  `LocalPatientProfileProvider` — constructorul atinge `SharedPreferences`/`Context` real; mutată
-  în `domain/repository/` la 1.5d, vezi mai jos, ca ViewModels să o poată injecta prin use-case-uri
-  fără să încalce layering-ul domain/data). Restul consumatorilor existenți (ViewModels,
-  use-cases, `BootReceiver`, `AdherenceMaintenanceWorker`) continuă să injecteze clasele concrete,
-  neschimbate.
-- **Bug găsit în plan review, fixat înainte de implementare:** `markOverdueMissed` (DAO) nu seta
-  `dirty`/`updatedAt` la tranziția PENDING→MISSED — fără fix, dozele ratate (cel mai important
-  semnal de aderență) nu s-ar fi sincronizat niciodată.
-- **Teste unitare:** `SyncManagerTest` (11 cazuri — no-op neautentificat/rol greșit, push doar
-  dirty + clear după succes, push eșuat nu blochează ciclul, pull nu suprascrie dirty local, LWW
-  în ambele sensuri, insert din pull regenerează dozele + reprogramează alarme, tombstone consumat/
-  păstrat după succes/eșec) cu fake-uri noi în `util/`: `FakeTreatmentDao`, `FakeDoseDao`,
-  `FakePendingRemoteDeleteDao`, `FakeSyncRemoteDataSource`, `FakeReminderSync`,
-  `FakePatientProfileIdProvider`.
-- **NU verificat încă pe device fizic** (Supabase Dashboard) — sync-ul e feature de fundal fără UI
-  propriu; verificarea manuală descrisă în planul de implementare (creare/editare/ștergere
-  tratament + confirmare doză → apariția/dispariția rândurilor remote) rămâne de făcut.
+Toate sub-fazele (1.5a-1.5e) sunt implementate, merge-uite pe `main` și **testate live pe device
+fizic** de utilizator — nu doar unitar. Toate branch-urile de feature au fost șterse (local +
+`origin`); repo-ul are un singur branch, `main`. Vezi „Bug-uri semnificative" mai jos pentru
+problemele reale găsite prin testarea pe device (RLS, curse de UI) care nu ar fi fost prinse de
+code review singur.
 
-### Faza 1.5d — Flux Aparținător, viewer (implementat — 2026-09-09)
-- Un Aparținător se leagă de un Pacient **care are deja cont și telefon propriu** și îi vede
-  tratamentele + aderența, read-only, plus notificare la doză ratată. „Profil dependent" (pacient
-  vârstnic fără cont propriu) **amânat** — ar cere suport multi-profil local în Room, schimbare
-  majoră separată. Detalii complete: `docs/user-management-plan.md` secțiunea 8 (1.5d).
-- **Migrare `supabase/migrations/0003_links_open_invite.sql`** — de rulat manual de utilizator în
-  Supabase Dashboard, ca 0001/0002. Conține:
-  - `grantee_user_id` pe `links` devine nullable (invitația se creează înainte să se știe cine o
-    revendică).
-  - Funcție `claim_link(p_invite_code text) SECURITY DEFINER` — **decizie de securitate găsită în
-    plan review, nu în cererea inițială**: o politică RLS simplă de UPDATE pentru „claim" nu poate
-    funcționa corect (UPDATE cu WHERE cere vizibilitate SELECT separată pe rândul țintă; o
-    politică de SELECT „toate rândurile pending nerevendicate" ar scurge toate codurile de
-    invitație active, oricui autentificat — enumerare). Funcția ocolește RLS intern, acceptă doar
-    codul ca parametru, hardcodează exact ce coloane se modifică.
-  - Trigger `links_guard_update` — hardening suplimentar: închide o gaură preexistentă din
-    politica `links_grantee_respond` (1.5a), care nu împiedica un grantee să-și schimbe propriul
-    rând `links` către alt `patient_profile_id`/`role` în același UPDATE.
-- **Migrare `supabase/migrations/0004_fix_links_rls_recursion.sql`** — **bug real găsit la
-  testarea pe device** (2026-09-09, primul test manual al 1.5d): `ManageAccessScreen` → „Generează
-  cod nou" întorcea eroare Postgres `infinite recursion detected in policy for relation "links"`
-  (cod `42P17`). Cauză, prezentă încă din 1.5a (`0002_rls_policies.sql`), nedescoperită pentru că
-  nimic nu interogase direct `links`/`treatments`/`dose_logs` până la 1.5d: `links_owner_manage`
-  face subquery pe `patient_profiles`, iar `patient_profiles_linked_read` face subquery invers pe
-  `links` — RLS se reevaluează tranzitiv la fiecare acces la tabel, deci evaluarea uneia declanșează
-  evaluarea celeilalte, la nesfârșit. **Același tipar există și între `treatments`/`links` și
-  `dose_logs`/`treatments`/`patient_profiles`/`links`** — ar fi blocat probabil și sync-ul din
-  1.5c, nedescoperit din același motiv (1.5c nu e verificat încă pe device). Fix: funcții
-  `SECURITY DEFINER` (`is_patient_profile_owner`, `has_accepted_link`, `is_treatment_owner`,
-  `has_accepted_link_for_treatment`) care ocolesc RLS intern, înlocuind subquery-urile corelate
-  directe din politici — pattern-ul standard Postgres/Supabase pentru acest caz. **De rulat manual
-  de utilizator, după 0003.**
-- **Cod de invitație**: text simplu, 8 caractere alfanumerice (fără 0/O/1/I), generat client-side
-  (`SecureRandom`), distribuit prin Android share sheet (`Intent.ACTION_SEND`) — fără QR vizual în
-  v1 (fără dependență nouă).
-- **Notificare doză ratată**: worker periodic (`CaregiverAlertWorker`, 30 min, alături de
-  `SyncWorker`), no-op dacă rolul curent != CAREGIVER. Deduplicare pe mulțime de `remoteId`
-  (`MissedDoseChecker`, clasă pură testabilă — nu pe timestamp, un status MISSED e terminal).
-  Canal de notificare separat (`caregiver_alerts`) de `ReminderScheduler` (acela e specific
-  remindere proprii cu acțiuni Confirmă/Omite).
-- **Fetch date pacient legat**: direct din Supabase (`LinkedPatientDataRepository`), niciodată din
-  Room local. Filtrare server-side pe `treatment_id` (Postgrest `.isIn(...)`) — evită over-fetch-ul
-  dozelor altor pacienți legați ai aceluiași Apartinător.
-- **`AdherenceCalculator`** extras din `ComputeAdherenceUseCase` (formula PDC/MPR pură,
-  `compute(logs): AdherenceStats`) — reutilizat și de `GetLinkedPatientAdherenceUseCase` (loguri
-  remote). `ComputeAdherenceUseCase` rămâne wrapper subțire, semnătură publică neschimbată.
-- **UI**: fără tab nou în bottom bar — buton „Gestionează accesul"/„Pacienții mei" în
-  `AccountScreen`, condiționat de rol. Ecrane noi: `ui/access/ManageAccessScreen` (Pacient),
-  `ui/patients/MyPatientsScreen` + `PatientDetailScreen` (Apartinător, read-only, fără buton
-  editare — stil `TreatmentDetailScreen`).
-- **Teste unitare**: `AdherenceCalculatorTest`, `MissedDoseCheckerTest`,
-  `GetLinkedPatientAdherenceUseCaseTest`, `ManageAccessViewModelTest`, `MyPatientsViewModelTest`,
-  `PatientDetailViewModelTest` — 21 cazuri noi, toate trec. Fake-uri noi: `FakeLinkRepository`,
-  `FakeLinkedPatientDataRepository`.
-- **Testat parțial pe device fizic** (2026-09-09) — primul test manual (generare cod) a scos la
-  iveală bug-ul de recursivitate RLS de mai sus (`0004_fix_links_rls_recursion.sql`). Migrările
-  0003+0004 trebuie rulate de utilizator (în această ordine) înainte ca fluxul complet (invitație
-  → claim → vizibilitate → notificare) să funcționeze end-to-end; planul de verificare manuală
-  (inclusiv teste adversariale pe RLS) e în `docs/user-management-plan.md` secțiunea 8.
-- **Al doilea bug găsit la testare pe device** (2026-09-09, cont Apartinător nou): după onboarding
-  reușit (rol + nume + Continuă), userul era retrimis direct înapoi pe ecranul „Ce fel de cont
-  ai?" — nu un bug nou de 1.5d, ci o condiție de cursă rămasă în fix-ul din 1.5b
-  (`AccountViewModel.refreshProfile`). `refresh()` (apelat de `AccountScreen` la
-  `ON_RESUME`, după ce onboarding-ul face `popBackStack()`) pornea fetch-ul de profil async **fără**
-  să marcheze mai întâi "verificare în curs" — recompunerea imediată a `AccountScreen` vedea starea
-  veche (`profileChecked=true`, `profile=null`, rămasă de dinainte de onboarding) și sărea înapoi
-  pe onboarding prin `LaunchedEffect`, înainte ca fetch-ul proaspăt să apuce să răspundă. Fix:
-  `refreshProfile` setează sincron `profileChecked=false` chiar înainte de a porni fetch-ul, deci
-  fereastra de recompunere vede „se verifică", nu „lipsă profil" — `AccountScreen` arată scurt
-  `LoadingIndicator` în loc să navigheze greșit. Test nou: `AccountViewModelTest` (`refresh dupa
-  onboarding reface profilul...`).
-- **Confirmat funcțional end-to-end pe device** (2026-09-09, după cele două fix-uri de mai sus) —
-  cod generat de Pacient → introdus manual de Aparținător → apare în „Pacienții mei". Utilizatorul
-  a cerut apoi 3 îmbunătățiri UX pe baza testării reale (vezi rafinarea de mai jos).
-- **Rafinare UX — fricțiune redusă la legare + nume Aparținător vizibil** (2026-09-09, mai multe
-  iterații pe baza testării live a utilizatorului):
-  - **Deep link `pillpronto://invite?code=XXXX`** (schemă proprie, fără domeniu/App Links) —
-    pattern identic cu `openTodayRequests` (tap pe notificare reminder): `MainActivity` emite
-    printr-un `MutableSharedFlow`, `PillProntoNavHost` navighează la „Pacienții mei" cu codul
-    pre-completat (userul tot apasă „Adaugă pacient" — confirmare păstrată, nu claim automat
-    silențios). Parsare/construcție centralizate în `ui/access/InviteLink.kt`
-    (`buildInviteUri`/`extractInviteCode`) — pe `String`, nu pe `android.net.Uri` (stub în teste
-    JVM fără Robolectric), ca să rămână testabil.
-  - **Link-ul text s-a confirmat pe device necliclabil în WhatsApp** (auto-linkify doar pe
-    `http(s)://`, nu pe scheme proprii — semnalat înainte de implementare, confirmat de user după
-    3 încercări de reformatare). **Eliminat complet din textul distribuit** — rămâne doar codul +
-    mențiunea codului QR. Codul QR (`com.google.zxing:core`, doar generare) e mecanismul „fără
-    tastare" funcțional: **atașat ca imagine reală** în share sheet (nu doar codat în text) via
-    `FileProvider` (`res/xml/file_paths.xml`, PNG temporar în `cache/shared_images/`,
-    `Intent.ACTION_SEND` cu `type=image/png` + `EXTRA_STREAM`) — `file://` direct ar arunca
-    `FileUriExposedException` pe Android 7+.
-  - **Buton de scanare QR** pe „Pacienții mei" (Apartinător) — `com.google.android.gms:play-services-code-scanner`
-    (`GmsBarcodeScanning`), NU CameraX/ML Kit manual: modulul gestionează integral UI-ul de
-    cameră + permisiunea, fără `CAMERA` în manifest. **Nu e începutul Fazei 2** (aceea ramane
-    CameraX + ML Kit pentru detecție multi-obiect pe cutii de medicamente) — aici doar citește
-    textul unui singur cod QR, reutilizând `extractInviteCode` din același `InviteLink.kt`.
-  - **Numele Aparținătorului vizibil Pacientului** — migrare nouă
-    `supabase/migrations/0005_profiles_visible_to_linked_grantee.sql` (funcție `is_linked_grantee`
-    `SECURITY DEFINER`, aceeași tehnică ca 0004, deși aici niciun tabel nu subqueria `profiles`
-    azi — păstrat consecvent). `LinkRepository.getMyCaregivers` (pattern identic `getMyPatients`,
-    două query-uri) + `GetMyCaregiversUseCase`; `ManageAccessScreen` arată „Acces acordat lui
-    <nume>" în loc de textul generic pe legăturile `ACCEPTED`.
-  - Buton `AccountScreen`: „Gestionează accesul" → „Gestionează accesul Aparținătorilor". Buton
-    nou „Anulează" pe invitațiile `PENDING` (reutilizează `revokeLink` existent).
-  - Teste noi: `InviteLinkTest` (6), + cazuri noi în `ManageAccessViewModelTest`/
-    `MyPatientsViewModelTest` (potrivire nume Aparținător, prefill din `SavedStateHandle`).
-  - **Neverificat încă pe device**: doar migrarea 0005 (SQL, de rulat de utilizator după
-    0001-0004) — restul (deep link, QR ca imagine, scanare, nume Aparținător) verificat live pe
-    device fizic în timpul dezvoltării.
-  - **Bug real găsit la testarea scanării QR** (2026-09-09): revendicarea unui cod nou pentru un
-    Apartinator cu care Pacientul mai avusese o legătură (chiar revocată) eșua cu eroare brută
-    Postgres „duplicate key... links_patient_profile_id_grantee_user_id_key" (23505). Cauză:
-    `unique(patient_profile_id, grantee_user_id)` din 0001 e globală, se aplică și rândurilor
-    `revoked` — o reinvitare colidează cu istoricul revocat. Fix:
-    `supabase/migrations/0006_fix_links_reinvite_constraint.sql` — constrângerea devine index
-    unic parțial (`where status <> 'revoked'`), plus mesaj de eroare mai clar în `claim_link`
-    pentru cazul legitim rămas (a doua legătură activă simultan). **De rulat manual, după 0005.**
+**1.5a — Schema Postgres + RLS**
+- `patient_profiles.id` = UUID generat client-side (`LocalPatientProfileProvider`, persistat în
+  `SharedPreferences` — **un singur UUID per instalare de app**, vezi limitarea cunoscută din
+  backlog, secțiunea 8a), devine `patient_profiles.id` în Supabase la onboarding, fără reconciliere.
+  `TreatmentEntity`/`DoseLogEntity` au `patientProfileId: String`.
+- Schema: `profiles`, `patient_profiles`, `links`, `treatments`, `dose_logs`, `audit_log` — RLS
+  activat pe toate.
 
-### Faza 1.5e — Flux Medic/Farmacist, read-only (implementat — 2026-09-09)
-- Analog cu 1.5d (Aparținător) — infrastructura de bază (RLS, `MyPatientsScreen`/
-  `PatientDetailScreen`/use-case-urile de citire) era deja **agnostică la rol**, reutilizată
-  integral, zero schimbări. `CaregiverAlertWorker` rămâne strict pentru CAREGIVER (notificare doză
-  ratată) — Medic/Farmacist nu primesc notificări, conform `docs/user-management-plan.md`
-  secțiunea 6.
-- **Pacientul alege rolul la generarea codului** (decizie confirmată cu utilizatorul) —
-  `LinkRepository.createInvite`/`CreateInviteUseCase` capătă parametru `role: LinkRole =
-  CAREGIVER_VIEWER` (default păstrat, niciun call-site existent nu s-a schimbat).
-  `supabase/migrations/0007_professional_invite_role_check.sql` rescrie `claim_link` să valideze
-  că rolul contului care revendică (citit din `profiles.role`/`clinician_type`) se potrivește cu
-  rolul declarat al invitației — altfel eroare clară, nu confuzie tăcută. **De rulat manual, după
-  0006.**
-- **Ecran separat** pentru Pacient (decizie confirmată, nu unificat cu Aparținătorii):
-  `ManageProfessionalAccessScreen`/`ManageProfessionalAccessViewModel` — selector de rol (`FilterChip`
-  Medic/Farmacist, reutilizează `account_role_doctor`/`account_role_pharmacist`), altfel aceeași
-  structură ca `ManageAccessScreen`. Ambele ecrane filtrează acum `links` client-side pe rol (tabela
-  poate conține rânduri mixte) — `LinkRow`/`InviteQrCode`/`shareInviteCode`/`linkStatusLabel`/
-  `manageAccessErrorMessage` extrase în `ui/access/AccessLinkComponents.kt` ca să nu se dubleze
-  între cele două ecrane.
-- **Flag „neverificat"** (auto-declarare, fără validare CUIM — decizie deja luată în
-  `docs/user-management-plan.md` secțiunea 9) vizibil în **ambele** locuri cerute: pe lista
-  Pacientului (`LinkRow(unverified = true)` pe `ManageProfessionalAccessScreen`) și pe propriul
-  `AccountScreen` al Medicului/Farmacistului (`account_unverified_badge`).
-- `AccountScreen.LoggedInView`: Pacientul are acum **două** butoane („Gestionează accesul
-  Aparținătorilor" + „Gestionează accesul Medic/Farmacist"); CAREGIVER/DOCTOR/PHARMACIST rutează
-  toate spre același buton „Pacienții mei" (`onMyPatients`), fără ecran separat pt. partea de
-  citire.
-- Teste noi: `ManageProfessionalAccessViewModelTest` (7 cazuri) + caz nou în
-  `ManageAccessViewModelTest` (filtrare rol), toate trec.
-- **Neverificat încă pe device** — migrarea 0007 trebuie rulată de utilizator (după 0001-0006).
-- **Bug recurent găsit la testarea pe device a unui cont Medic nou** (2026-09-09): fix-ul de
-  cursă din 1.5d (mai sus) era incomplet — userul tot era retrimis pe onboarding după succes
-  (uneori de mai multe ori la rând, cerea mai multe Back-uri). Cauză reală: `LifecycleEventEffect(
-  ON_RESUME)` din `AccountScreen` declanșează `vm.refresh()` printr-un callback de Lifecycle cu
-  **timing incert** față de `LaunchedEffect`-ul de verificare din aceeași compoziție — uneori
-  verificarea rula înaintea refresh-ului, citind starea veche. Fix definitiv: adăugat
-  `LaunchedEffect(Unit) { vm.refresh() }` în `AccountScreen.kt`, declarat **înaintea**
-  efectului de verificare (garantează ordine sincronă în aceeași trecere de compoziție);
-  `LifecycleEventEffect(ON_RESUME)` păstrat separat pentru revenirea reală din fundal (unde
-  compoziția nu se reface). Plasă de siguranță suplimentară: `launchSingleTop = true` pe
-  `navController.navigate(Route.Onboarding.path)` în `PillProntoNavHost.kt`, ca eventuale
-  regresii viitoare să nu mai stivuiască mai multe instanțe de Onboarding.
-- **Navigare — buton de back pe toate ecranele secundare** (2026-09-09, cerut de utilizator după
-  ce a semnalat bug-ul de mai sus): `BackTopAppBar` nou (`core/ui/components/BackTopAppBar.kt`,
-  `TopAppBar` + `IconButton` cu `Icons.AutoMirrored.Filled.ArrowBack`), adăugat pe toate cele 7
-  ecrane secundare (nu sunt în bara de jos): Onboarding, Gestionează accesul (Aparținători +
-  Medic/Farmacist), Pacienții mei, Detaliu pacient, Adăugare/editare tratament, Detaliu tratament.
-  Fiecare ecran capătă parametru nou `onBack: () -> Unit`, legat în `PillProntoNavHost.kt` la
-  `navController.popBackStack()`. Gestul/butonul de sistem de back funcționau deja, dar o săgeată
-  vizibilă e recomandarea Material Design curentă pentru discoverability — relevant mai ales aici,
-  unde publicul țintă include pacienți vârstnici. Compilare + teste unitare + build APK debug +
-  instalare pe device confirmate; testare manuală pe device încă neconfirmată de utilizator.
-- **Testat pe device de utilizator** (2026-09-09) — navigarea cu butoane de back funcționează.
-  A semnalat un efect secundar: tab-ul „Cont" arăta un „flash" de reîncărcare (spinner) de fiecare
-  dată când revenea pe el, chiar dacă profilul era deja cunoscut — cauzat de `refresh()` (apelat
-  la fiecare intrare în compoziție, vezi mai sus) care resetează sincron `profileChecked=false`,
-  iar `AccountScreen` cerea `profileChecked && profile != null` ca să arate `LoggedInView`, deci
-  orice refresh (chiar reușit din prima) trecea vizibil prin `LoadingIndicator`. Fix: condiția de
-  randare devine doar `profile != null` — profilul cunoscut (chiar "stale" cât timp refresh-ul
-  rulează tăcut pe fundal) rămâne afișat neîntrerupt; spinner-ul apare doar la primul fetch real
-  (`profile == null`), nu la fiecare revenire pe tab. Logica de `profileChecked` pentru declanșarea
-  onboarding-ului (`LaunchedEffect(state.sessionState, state.profileChecked, state.profile)`)
-  rămâne neschimbată. Compilare + teste unitare + build APK + instalare pe device confirmate.
-- **Același flash semnalat pe cele două ecrane de acces** (`ManageAccessScreen`/
-  `ManageProfessionalAccessScreen`) și reparat proactiv și pe `MyPatientsScreen` (identic:
-  `LifecycleEventEffect(ON_RESUME)` → `refresh()` → `isLoading=true` sincron la fiecare revenire pe
-  ecran). Fix analog celui de la `AccountScreen`: condiția de spinner devine
-  `isLoading && list.isEmpty()` (doar la primul fetch real), nu doar `isLoading` — lista veche
-  rămâne afișată neîntrerupt cât timp refresh-ul rulează tăcut pe fundal. `PatientDetailScreen`
-  NU are aceeași problemă (ecran de navigare simplă, fără stare salvată de tab de jos — un
-  ViewModel nou la fiecare intrare, deci un scurt loading la intrare e comportamentul așteptat, nu
-  un flash repetat). Compilare + teste unitare + build APK + instalare pe device confirmate.
+**1.5b — Autentificare (email/parolă + Google Sign-In)**
+- SDK Supabase Kotlin (`core/di/SupabaseModule.kt`, BOM `3.5.0`, module `auth-kt`+`postgrest-kt`).
+- Email/parolă: `AuthRepository`/`ProfileRepository` + use-cases (`SignUpUseCase`, `SignInUseCase`,
+  `SignOutUseCase`, `ObserveAuthSessionUseCase`, `GetProfileUseCase`, `CompleteOnboardingUseCase`).
+  `AuthSessionState` traduce `SessionStatus` din SDK — domeniul nu depinde de vendor.
+- **Google Sign-In**: Credential Manager nativ (NU WebView/Custom Tabs OAuth) +
+  `supabase.auth.signInWith(IDToken)`. `ui/account/GoogleSignInHelper.kt` (funcție Android-specifică
+  în `ui/`, nu trece prin Hilt/domain) generează nonce + hash SHA-256, cere token-ul prin
+  `GetGoogleIdOption`, întoarce `GoogleSignInOutcome` tipizat (`Success`/`Cancelled` tăcut/`Failed`).
+  `SignInWithGoogleUseCase` + `AuthRepository.signInWithGoogleIdToken` — simetric cu `SignInUseCase`.
+  Prerechizite externe (făcute de utilizator, o singură dată): 2 OAuth Client ID Google Cloud
+  Console (Web = `serverClientId`, salvat în `GOOGLE_WEB_CLIENT_ID`; Android = package + SHA-1,
+  verificat automat de Google, nu intră în cod) + provider Google activat explicit în Supabase
+  Dashboard (Client ID+Secret Web, toggle „Enable" **și** „Save" — pas separat de completarea
+  câmpurilor). Dependențe: `androidx.credentials`(-play-services-auth),
+  `com.google.android.libraries.identity.googleid`.
+- Tab „Cont" (al 4-lea, bottom bar) — `AccountScreen` (autentificare/înregistrare + Google) +
+  `OnboardingScreen` (alegere rol, o singură dată după primul cont). **Cont opțional** — aplicația
+  rămâne 100% funcțională fără login.
 
-### Faza 1.5b — Google Sign-In, completare (implementat — 2026-09-09)
-- Credential Manager nativ (NU WebView/Custom Tabs OAuth) + `supabase.auth.signInWith(IDToken)` —
-  `ui/account/GoogleSignInHelper.kt` (funcție simplă, Android-specifică, nu trece prin Hilt/domain,
-  la fel ca `scanInviteQrCode` — cere `Context` de Activity) generează nonce + hash SHA-256,
-  cere token-ul prin `GetGoogleIdOption`, întoarce `GoogleSignInOutcome` tipizat
-  (`Success`/`Cancelled` tăcut/`Failed`). `SignInWithGoogleUseCase` + `AuthRepository.
-  signInWithGoogleIdToken` — wrapper subțire, simetric cu `SignInUseCase`. Buton nou „Continuă cu
-  Google" pe `AccountScreen` (`LoggedOutForm`, ambele moduri). Dependențe noi:
-  `androidx.credentials`(-play-services-auth), `com.google.android.libraries.identity.googleid`.
-  `GOOGLE_WEB_CLIENT_ID` (Client ID **Web**, nu Android) în `local.properties` → `BuildConfig`,
-  același pattern ca restul credențialelor Supabase.
-- **Prerechizite externe, făcute de utilizator**: 2 OAuth Client ID-uri în Google Cloud Console
-  (Web — folosit ca `serverClientId`; Android — package `com.pillpronto` + SHA-1, verificat automat
-  de Google, nu intră în cod), plus **activarea explicită a providerului Google în Supabase
-  Dashboard → Auth → Providers** (Client ID + Secret Web + toggle "Enable" + Save — pas separat de
-  completarea câmpurilor, ratat prima dată; eroare `provider_disabled` clară în logcat a confirmat
-  cauza).
-- **Bug real găsit la testarea pe device** (2026-09-09, cont Google nou): după onboarding reușit
-  (nume + rol + Continuă), ecranul de onboarding **reapărea** — deși datele chiar se salvaseră
-  (vizibil după Back). Diagnosticat cu logcat (log-uri temporare adăugate și scoase după găsirea
-  cauzei): fix-ul anterior „definitiv" din 1.5e (`LaunchedEffect(Unit) { vm.refresh() }` declarat
-  înaintea efectului de verificare) **era insuficient** — cauza reală nu era ordinea de declarare a
-  efectelor, ci un decalaj structural: `state` din `AccountScreen` (`by
-  vm.state.collectAsStateWithLifecycle()`) e un `State` Compose **derivat** printr-un colector
-  intern al StateFlow-ului, care are nevoie de un hop de coroutine suplimentar față de
-  `vm.state.value` (actualizat sincron de `vm.refresh()`). Logcat-ul a confirmat exact fereastra:
-  efectul de verificare citea `state.profileChecked=true` STALE exact în momentul în care
-  `vm.state.value.profileChecked` era deja `false`. **Fix robust, nu încă o reordonare**:
-  `AccountViewModel` expune acum `needsOnboardingEvents: Flow<Unit>` (`Channel(CONFLATED)`),
-  emis direct din `refreshProfile` în aceeași coroutină care actualizează starea, când fetch-ul
-  găsește `profile == null` — elimină complet derivarea intenției din stare Compose asincronă.
-  `AccountScreen` doar colectează evenimentul (`LaunchedEffect(Unit) {
-  vm.needsOnboardingEvents.collect { onNeedsOnboarding() } }`), fără nicio comparație de stare.
-  Teste noi (Turbine, prima folosire în proiect): `AccountViewModelTest` — profil negăsit emite
-  evenimentul, profil găsit nu emite nimic.
-- **Notă de debugging device**: pe acest telefon (MIUI/HyperOS), `Log.d` NU ajunge în logcat by
-  default (doar `Log.e`/`Log.w`) — relevant pentru diagnosticare viitoare pe același device.
-- **Bug marginal găsit la testare, NU reparat, notat în backlog** (8a): `LocalPatientProfileProvider`
-  generează **un singur UUID per instalare** de app (SharedPreferences), indiferent de contul
-  Supabase autentificat. Testarea cu mai multe conturi Google noi pe același telefon a lovit
-  coliziunea: al doilea cont nou încerca să scrie (`upsert`) în `patient_profiles` cu același UUID
-  local deja deținut de primul cont → RLS a blocat corect actualizarea cross-user
-  (`42501 new row violates row-level security policy`). Nu afectează un pacient real (un singur
-  cont pe propriul telefon), dar ar lovi și la un scenariu legitim: delogare + autentificare cu
-  **alt cont Pacient existent** pe același telefon.
-- **Confirmat funcțional end-to-end pe device** (2026-09-09, după fix-ul de mai sus): Google
-  Sign-In (cont nou → onboarding → salvare → `AccountScreen`) funcționează complet.
+**1.5c — Sync layer Room↔Supabase**
+- Sincronizare bidirecțională a **propriilor** date ale Pacientului (`treatments`+`dose_logs` cu
+  status final) — Room rămâne sursa de adevăr locală, Supabase e strat opțional.
+- Dozele PENDING nu se sincronizează (stare de programare locală, nu istoric de aderență) — doar
+  `TAKEN`/`MISSED`/`SKIPPED`.
+- Outbox pattern: `TreatmentEntity`/`DoseLogEntity` au `remoteId`/`updatedAt`/`dirty`; tabel
+  `pending_remote_deletes` pentru ștergeri de propagat. Conflict resolution: last-write-wins pe
+  `updatedAt`, un rând local `dirty` nu e niciodată suprascris de un pull.
+- `data/sync/SyncManager.kt` — ordine obligatorie: delete-uri → push treatments → push dose_logs →
+  pull treatments → pull dose_logs → regenerare doze PENDING → resincronizare alarme.
+  `data/work/SyncWorker.kt` — periodic (30 min) + o dată la pornire. No-op dacă userul nu e
+  autentificat ca Pacient.
+- **Neverificat separat pe device fizic** (Supabase Dashboard) — feature de fundal fără UI propriu;
+  posibil exercitat implicit prin testarea 1.5d/1.5e, dar nu confirmat explicit.
+
+**1.5d — Flux Aparținător (viewer)**
+- Aparținătorul se leagă de un Pacient **care are deja cont și telefon propriu** (nu „profil
+  dependent" — pacient vârstnic fără cont propriu, amânat explicit, cere suport multi-profil local
+  în Room, schimbare majoră separată — vezi secțiunea 8b) și îi vede tratamentele + aderența
+  read-only, plus notificare la doză ratată (`CaregiverAlertWorker`, 30 min, no-op dacă rolul
+  curent != CAREGIVER, deduplicare pe `remoteId` via `MissedDoseChecker`).
+- Cod de invitație: 8 caractere alfanumerice (fără 0/O/1/I), generat client-side (`SecureRandom`).
+  Distribuire: text prin Android share sheet + **cod QR ca imagine reală atașată**
+  (`com.google.zxing:core`, doar generare, via `FileProvider`) — mecanismul „fără tastare"
+  funcțional (link-ul cu schemă proprie `pillpronto://invite?code=...` **nu e clickabil în
+  WhatsApp** — auto-linkify funcționează doar pe `http(s)://` — păstrat doar ca deep link intern,
+  eliminat din textul distribuit). Scanare: `com.google.android.gms:play-services-code-scanner`
+  (`GmsBarcodeScanning`) — NU CameraX/ML Kit (acela rămâne pt. Faza 2).
+- Fetch date pacient legat: direct din Supabase (`LinkedPatientDataRepository`), niciodată din Room
+  local. `AdherenceCalculator` extras din `ComputeAdherenceUseCase` (formulă PDC/MPR pură),
+  reutilizat de `GetLinkedPatientAdherenceUseCase`.
+- UI: fără tab nou — butoane „Gestionează accesul"/„Pacienții mei" în `AccountScreen`. Ecrane:
+  `ManageAccessScreen` (Pacient), `MyPatientsScreen`+`PatientDetailScreen` (Aparținător, read-only).
+
+**1.5e — Flux Medic/Farmacist (read-only)**
+- Analog 1.5d — infrastructura de bază (RLS, `MyPatientsScreen`/`PatientDetailScreen`) era deja
+  agnostică la rol, reutilizată integral. `CaregiverAlertWorker` rămâne strict pentru CAREGIVER.
+- Pacientul alege rolul (Aparținător/Medic/Farmacist) la generarea codului
+  (`CreateInviteUseCase(role: LinkRole = CAREGIVER_VIEWER)`); `claim_link` validează că rolul
+  contului care revendică se potrivește cu rolul declarat al invitației.
+- Ecran separat pentru Pacient (decizie explicită, nu unificat cu Aparținătorii):
+  `ManageProfessionalAccessScreen` — selector de rol. Componente comune extrase în
+  `ui/access/AccessLinkComponents.kt`.
+- Flag „neverificat" (auto-declarare, fără validare CUIM) vizibil pe lista Pacientului **și** pe
+  propriul cont al Medicului/Farmacistului.
+
+**Navigare & UX** (cerut de utilizator după testare live pe device)
+- Buton de back (`BackTopAppBar`, `core/ui/components/`) pe toate cele 7 ecrane secundare
+  (Onboarding, Gestionează accesul ×2, Pacienții mei, Detaliu pacient, Adăugare/editare tratament,
+  Detaliu tratament) — parametru `onBack: () -> Unit` legat la `popBackStack()`.
+- Fix flash de reîncărcare la revenirea pe tab-uri (Cont, Gestionează accesul ×2, Pacienții mei):
+  refresh-urile de fundal (`LifecycleEventEffect(ON_RESUME)`) resetau vizibil starea la spinner
+  chiar și cu date deja cunoscute — condiția de randare devine „date cunoscute → le arăt oricum,
+  chiar dacă refresh-ul rulează tăcut pe fundal", spinner doar la primul fetch real.
+
+**Migrări Supabase** (`supabase/migrations/`, rulate manual de utilizator în Supabase Dashboard SQL
+Editor, **strict în ordine**):
+
+| Migrare | Ce face |
+|---|---|
+| `0001_init_schema.sql` | Schema inițială (1.5a) |
+| `0002_rls_policies.sql` | Politici RLS inițiale (1.5a) |
+| `0003_links_open_invite.sql` | `claim_link` SECURITY DEFINER + trigger guard pe update |
+| `0004_fix_links_rls_recursion.sql` | Fix recursivitate RLS infinită (`links`↔`patient_profiles`) |
+| `0005_profiles_visible_to_linked_grantee.sql` | Pacientul vede numele Aparținătorului legat |
+| `0006_fix_links_reinvite_constraint.sql` | Permite reinvitarea unui Aparținător revocat anterior |
+| `0007_professional_invite_role_check.sql` | Validare rol la revendicarea codului (1.5e) |
+
+**Neconfirmat exhaustiv de utilizator** că toate cele 7 migrări sunt rulate — testarea funcțională
+live a acoperit implicit fluxurile testate, dar nu verificat explicit migrare-cu-migrare.
+
+**Teste unitare noi în Faza 1.5** (pe lângă cele din Faza 1): `AccountViewModelTest`,
+`OnboardingViewModelTest`, `SyncManagerTest`, `AdherenceCalculatorTest`, `MissedDoseCheckerTest`,
+`GetLinkedPatientAdherenceUseCaseTest`, `ManageAccessViewModelTest`, `MyPatientsViewModelTest`,
+`PatientDetailViewModelTest`, `InviteLinkTest`, `ManageProfessionalAccessViewModelTest`. Fake-uri
+noi în `util/`: `FakeAuthRepository`, `FakeProfileRepository`, `FakeTreatmentDao`, `FakeDoseDao`,
+`FakePendingRemoteDeleteDao`, `FakeSyncRemoteDataSource`, `FakeReminderSync`,
+`FakePatientProfileIdProvider`, `FakeLinkRepository`, `FakeLinkedPatientDataRepository`,
+`MainDispatcherRule`. **Turbine** (testare `Flow`/evenimente) folosit prima dată la
+`AccountViewModelTest`.
+
+### Bug-uri semnificative găsite prin testare pe device (lecții de reținut)
+
+Toate găsite prin **testare live pe device fizic**, nu prin code review — pattern de reținut pentru
+acest proiect: recursivitatea RLS și cursele de UI din Compose nu se prind static.
+
+1. **Recursivitate RLS infinită** (`links`↔`patient_profiles`, migrarea 0004): politici care se
+   interoghează reciproc prin subquery-uri corelate declanșează reevaluare RLS la nesfârșit. Fix
+   standard Postgres/Supabase: funcții `SECURITY DEFINER` care ocolesc RLS intern, în loc de
+   subquery-uri corelate directe în politici.
+2. **Constrângere unică prea largă** (migrarea 0006): `unique(patient_profile_id, grantee_user_id)`
+   se aplica și rândurilor `revoked`, blocând reinvitarea unui Aparținător revocat anterior. Fix:
+   index unic parțial (`where status <> 'revoked'`).
+3. **Cursa onboarding→bounce-back** — bug găsit de 3 ori (1.5b, 1.5d/1.5e, Google Sign-In), primele
+   două „fix-uri" fiind doar reordonări de efecte Compose, insuficiente. Cauza reală (găsită cu
+   logcat live pe device): `state` din `AccountScreen` (`collectAsStateWithLifecycle()`) e un
+   `State` Compose **derivat**, cu un hop de coroutine în urma lui `vm.state.value` (actualizat
+   sincron) — un `LaunchedEffect` care compară stare Compose derivată imediat după un refresh
+   sincron poate citi în continuare valoarea veche. **Fix definitiv**:
+   `AccountViewModel.needsOnboardingEvents: Flow<Unit>` (`Channel(CONFLATED)`), emis direct din
+   ViewModel, în aceeași coroutină care actualizează starea — UI doar colectează evenimentul, fără
+   nicio comparație de stare derivată. **Lecție generală**: când un `LaunchedEffect` reacționează la
+   stare Compose derivată dintr-un `StateFlow` al unui ViewModel actualizat sincron în altă parte,
+   există risc de decalaj — preferabil un eveniment explicit emis de ViewModel.
+4. **Link-uri cu schemă proprie (`pillpronto://...`) nu sunt clickabile în WhatsApp** —
+   auto-linkify funcționează doar pe `http(s)://`. Pivot la cod QR ca imagine atașată (nu doar
+   codat în text) ca mecanism principal „fără tastare".
+5. **`provider_disabled` la Google Sign-In**: activarea providerului Google în Supabase Dashboard
+   cere explicit toggle „Enable" **și** „Save" — separat de completarea câmpurilor Client
+   ID/Secret; ratat prima dată, eroare clară în logcat a confirmat cauza.
+6. **`LocalPatientProfileProvider` — un singur UUID local per instalare, nu per cont Supabase** —
+   coliziune RLS (`42501`) la testarea cu mai multe conturi Google noi pe același telefon.
+   Nereparat, notat în backlog (secțiunea 8a).
+7. **Notă de debugging device**: pe telefonul de test al utilizatorului (MIUI/HyperOS), `Log.d` nu
+   ajunge în logcat by default — doar `Log.e`/`Log.w`.
 
 ---
 
@@ -420,37 +288,26 @@ Use-cases existente: `AddTreatmentUseCase`, `EditTreatmentUseCase`, `DeleteTreat
   `locales_config.xml` + un mecanism de selecție (ecran de setări nou, sau întrerupător simplu care
   apelează `AppCompatDelegate.setApplicationLocales(...)` / API-ul per-app language din Android 13+).
 - **`LocalPatientProfileProvider` — un singur UUID local per instalare, nu per cont Supabase**
-  (găsit la testarea Google Sign-In, 2026-09-09; detalii în secțiunea 7, blocul Faza 1.5b). Rar în
-  producție (un pacient = propriul telefon), dar reapare la delogare + autentificare cu alt cont
-  Pacient existent pe același device — RLS blochează corect (`42501`), dar userul vede o eroare
-  brută de salvare la onboarding, nu un mesaj clar. Fix posibil: la conflict de tip owner mismatch
-  pe upsert, regenerează UUID-ul local și reîncearcă automat.
+  (vezi „Bug-uri semnificative", punctul 6, secțiunea 7). Rar în producție (un pacient = propriul
+  telefon), dar reapare la delogare + autentificare cu **alt cont Pacient existent** pe același
+  telefon — RLS blochează corect (`42501`), dar userul vede o eroare brută de salvare la
+  onboarding, nu un mesaj clar. Fix posibil: la conflict de tip owner mismatch pe upsert,
+  regenerează UUID-ul local și reîncearcă automat.
 
 ### 8b. Roadmap faze următoare
-- **Faza 1.5 — Conturi & Roluri (Pacient/Aparținător/Medic/Farmacist):** **1.5a + 1.5b (inclusiv
-  Google Sign-In) + 1.5c + 1.5d (+ rafinare UX) + 1.5e implementate și merge-uite pe `main`**
-  (PR #1-#7+, toate branch-urile de feature șterse) — schema + RLS + migrare Room, SDK Supabase +
-  autentificare email/parolă + Google Sign-In + onboarding rol, sync layer Room↔Supabase, legătură
-  Pacient↔Aparținător/Medic/Farmacist read-only (cod + QR + scanare + deep link + nume/rol vizibil
-  + revocare/reinvitare + selecție rol la generare) + notificare doză ratată (doar CAREGIVER) +
-  navigare cu buton de back pe toate ecranele secundare + fix flash de reîncărcare la tab-uri
-  (Cont/Gestionează accesul ×2/Pacienții mei), toate **testate live pe device de utilizator**
-  (2026-09-09).
+- **Faza 1.5 — Conturi & Roluri:** ✅ **complet implementată, merge-uită pe `main` (PR #1-#8),
+  testată live pe device fizic** — vezi secțiunea 7 pentru detalii complete pe sub-fază.
   **Următorul pas, la alegere:**
-  - **Confirmare finală de la utilizator** că toate migrările `supabase/migrations/0003-0007*.sql`
-    sunt rulate (Supabase Dashboard, în ordine, după 0001-0002) — testarea live a acoperit fluxul
-    funcțional (1.5d + 1.5e), dar nu a fost verificat explicit dacă exact toate cele 7 migrări
-    rulaseră deja la momentul testării sau doar un subset suficient pentru ce s-a testat.
-  - **1.5c (sync propriu-zis al Pacientului)** rămâne neverificat separat pe device — posibil
-    exercitat implicit prin testarea 1.5d/1.5e, dar nu confirmat explicit.
+  - **Confirmare finală** că toate migrările `supabase/migrations/0003-0007*.sql` sunt rulate
+    (Supabase Dashboard, în ordine, după 0001-0002) — testarea live a acoperit fluxul funcțional,
+    dar nu verificat explicit migrare-cu-migrare.
+  - **1.5c (sync propriu-zis al Pacientului)** rămâne neverificat separat pe device.
   - **Profil dependent** (pacient vârstnic fără cont propriu) — amânat explicit din 1.5d, cere
     suport multi-profil local în Room (schimbare majoră de arhitectură).
-  - Restul etapelor (1.5f audit, 1.5g teste RLS) — vezi
-    `docs/user-management-plan.md` secțiunea 8, neatinse încă.
-  - **Sau considerăm Faza 1.5 suficient de matură și trecem direct la Faza 2** (identificare —
-    Nomenclator ANMDMR + scanare) — 1.5f/1.5g sunt hardening, nu blocante funcțional.
-  Poziționată **înaintea** Fazei 2 pentru că schema (`patient_profile_id`) trebuia stabilă înainte
-  ca Nomenclatorul/scanarea să construiască peste ea — acum e stabilă.
+  - **1.5f — audit & consimțământ** (GDPR, ecran „Cine îmi vede datele") / **1.5g — teste RLS
+    adversariale** — vezi `docs/user-management-plan.md` secțiunea 8, neatinse încă.
+  - **Sau trecem direct la Faza 2** (identificare — Nomenclator ANMDMR + scanare) — Faza 1.5 e
+    considerată suficient de matură funcțional, 1.5f/1.5g sunt hardening, nu blocante.
 - **Faza 2 — Identificare:** import Nomenclator ANMDMR (bază locală), scanare **DataMatrix/barcode** (ML Kit) + OCR, legare scanare → tratament. Investigare mapare **GTIN→cod CIM**.
 - **Faza 3 — Viziune:** feed CameraX, **YOLO-seg** (LiteRT/ONNX), detecție multi-obiect pe cadru de ansamblu, **contururi gri** (detectat/neidentificat).
 - **Faza 4 — Recunoaștere & enrollment:** model de **embeddings** (metric learning), galerie nearest-neighbor, enrollment multi-view + top-k candidați, **colorare contur** după statusul dozei.
@@ -471,6 +328,7 @@ Use-cases existente: `AddTreatmentUseCase`, `EditTreatmentUseCase`, `DeleteTreat
 
 - **Plan mode** înainte de fiecare modul/feature nou.
 - **Hooks** recomandate: `ktlint`/`detekt` + `testDebugUnitTest` la commit.
-- **Git de pe mașina locală** (Windows): repo privat `github.com/bolosandrei/PillPronto`, branch `main`. Commit pe feature + push.
+- **Git de pe mașina locală** (Windows): repo privat `github.com/bolosandrei/PillPronto`, branch `main`. Commit pe feature + push, PR + merge, șterge branch-ul (local + `origin`) după merge.
   - Notă: NU rula git din medii care nu-și pot curăța fișierele `.lock` (ex. sandbox Cowork) — lasă `.git/index.lock` blocant.
+- **Testare pe device fizic**: workflow standard pentru orice feature UI/backend nou — `adb install -r` + testare manuală ghidată de utilizator, `adb logcat` pentru diagnosticare la eșec. Pattern confirmat repetat în acest proiect: testarea pe device găsește constant bug-uri reale (RLS, curse UI) pe care code review-ul singur nu le prinde — vezi secțiunea 7, „Bug-uri semnificative".
 - Subagenți utili: research (surse), verificare (citări/teste), code-review la PR.
