@@ -140,4 +140,21 @@ class AccountViewModelTest {
         assertEquals(true, vm.state.value.profileChecked)
         assertEquals("Ana", vm.state.value.profile?.displayName)
     }
+
+    @Test
+    fun `refresh dupa onboarding reface profilul chiar daca sesiunea nu s-a schimbat`() = runTest {
+        val vm = createViewModel()
+        authRepository.emit(AuthSessionState.Authenticated("u1")) // profil inca inexistent aici
+        assertEquals(true, vm.state.value.profileChecked)
+        assertEquals(null, vm.state.value.profile)
+
+        // Onboarding scrie profilul "in fundal" (alt ViewModel, ca in fluxul real) — sesiunea nu
+        // se schimba, deci doar refresh() explicit (AccountScreen, ON_RESUME) il poate prinde.
+        profileRepository.profiles["u1"] = Profile("u1", AccountRole.CAREGIVER, "Maria")
+
+        vm.refresh()
+
+        assertEquals(true, vm.state.value.profileChecked)
+        assertEquals("Maria", vm.state.value.profile?.displayName)
+    }
 }

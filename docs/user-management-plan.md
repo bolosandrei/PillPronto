@@ -216,6 +216,11 @@ construiască peste ea (toate vor referi `patient_profile_id`).
   - **Testat parțial pe device fizic** — primul test manual (generare cod) a găsit bug-ul de mai
     sus. Migrările 0003+0004 trebuie rulate de utilizator (în această ordine) înainte ca fluxul
     complet (invitație → claim → vizibilitate → notificare) să funcționeze end-to-end.
+  - **Al doilea bug găsit la testare** (cont Apartinător nou, onboarding): condiție de cursă
+    rămasă în fix-ul din 1.5b (`AccountViewModel.refreshProfile` nu marca sincron „verificare în
+    curs" înainte de fetch-ul async) — userul era retrimis direct pe onboarding după ce-l termina
+    cu succes. Fix + detalii complete: `CLAUDE.md` secțiunea 7 (blocul 1.5d), test nou
+    `AccountViewModelTest`.
 - **1.5e — Flux Medic/Farmacist:** onboarding profesionist (auto-declarat + flag „neverificat"
   vizibil — vezi limitarea din secțiunea 9), dashboard read-only pe pacienții legați.
 - **1.5f — Audit & consimțământ:** `audit_log` populat automat, ecran „Cine îmi vede datele"

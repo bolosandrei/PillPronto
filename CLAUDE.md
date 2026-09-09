@@ -228,6 +228,18 @@ Use-cases existente: `AddTreatmentUseCase`, `EditTreatmentUseCase`, `DeleteTreat
   0003+0004 trebuie rulate de utilizator (în această ordine) înainte ca fluxul complet (invitație
   → claim → vizibilitate → notificare) să funcționeze end-to-end; planul de verificare manuală
   (inclusiv teste adversariale pe RLS) e în `docs/user-management-plan.md` secțiunea 8.
+- **Al doilea bug găsit la testare pe device** (2026-09-09, cont Apartinător nou): după onboarding
+  reușit (rol + nume + Continuă), userul era retrimis direct înapoi pe ecranul „Ce fel de cont
+  ai?" — nu un bug nou de 1.5d, ci o condiție de cursă rămasă în fix-ul din 1.5b
+  (`AccountViewModel.refreshProfile`). `refresh()` (apelat de `AccountScreen` la
+  `ON_RESUME`, după ce onboarding-ul face `popBackStack()`) pornea fetch-ul de profil async **fără**
+  să marcheze mai întâi "verificare în curs" — recompunerea imediată a `AccountScreen` vedea starea
+  veche (`profileChecked=true`, `profile=null`, rămasă de dinainte de onboarding) și sărea înapoi
+  pe onboarding prin `LaunchedEffect`, înainte ca fetch-ul proaspăt să apuce să răspundă. Fix:
+  `refreshProfile` setează sincron `profileChecked=false` chiar înainte de a porni fetch-ul, deci
+  fereastra de recompunere vede „se verifică", nu „lipsă profil" — `AccountScreen` arată scurt
+  `LoadingIndicator` în loc să navigheze greșit. Test nou: `AccountViewModelTest` (`refresh dupa
+  onboarding reface profilul...`).
 
 ---
 
