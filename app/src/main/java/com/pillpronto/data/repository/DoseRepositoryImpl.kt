@@ -32,13 +32,13 @@ class DoseRepositoryImpl @Inject constructor(
         dao.insertAll(doses.map { it.toEntity(localPatientProfileProvider.patientProfileId) })
 
     override suspend fun updateStatus(doseId: Long, status: DoseStatus, takenAt: LocalDateTime?) =
-        dao.updateStatus(doseId, status.name, takenAt?.toString())
+        dao.updateStatus(doseId, status.name, takenAt?.toString(), System.currentTimeMillis())
 
     override suspend fun hasDosesForDate(date: LocalDate): Boolean =
         dao.countForDate(date.toString()) > 0
 
     override suspend fun markOverdueAsMissed(now: LocalDateTime, graceMinutes: Long) =
-        dao.markOverdueMissed(now.minusMinutes(graceMinutes).toString())
+        dao.markOverdueMissed(now.minusMinutes(graceMinutes).toString(), System.currentTimeMillis())
 
     override suspend fun getUpcomingPendingItems(now: LocalDateTime, until: LocalDateTime): List<DoseItem> =
         dao.getUpcomingPendingItems(now.toString(), until.toString()).map { it.toDomain() }

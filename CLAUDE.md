@@ -128,7 +128,44 @@ Use-cases existente: `AddTreatmentUseCase`, `EditTreatmentUseCase`, `DeleteTreat
   sesiunii), retrimițând userul la nesfârșit pe onboarding gol deși contul chiar fusese creat.
   Fix + detalii complete: `docs/user-management-plan.md` secțiunea 8, sub-punctul 1.5b.
 - **NU e încă implementat:** Google Sign-In (necesită 2 OAuth Client ID Google Cloud + SHA-1,
-  blocaj extern separat), sync Room↔Supabase, fluxurile Aparținător/Medic/Farmacist (1.5c-1.5g).
+  blocaj extern separat), fluxurile Aparținător/Medic/Farmacist (1.5d-1.5g).
+
+### Faza 1.5c — Sync layer Room↔Supabase (implementat — 2026-09-09)
+- Sincronizare bidirecțională a **propriilor** date ale Pacientului (treatments + dose_logs cu
+  status final) — Room rămâne sursa de adevăr locală, Supabase e strat opțional. Vezi
+  `docs/user-management-plan.md` secțiunea 4/8 pentru design complet.
+- **Dozele PENDING nu se sincronizează** (stare de programare locală, nu istoric de aderență) —
+  doar `TAKEN`/`MISSED`/`SKIPPED`. Elimină nevoia de tombstone-uri pentru `deleteFuturePending`.
+- **Outbox pattern:** `TreatmentEntity`/`DoseLogEntity` au acum `remoteId`/`updatedAt`/`dirty`
+  (`PillProntoDatabase` la `version = 4`); tabel nou `pending_remote_deletes` pentru ștergeri de
+  propagat. Conflict resolution: **last-write-wins pe `updatedAt`**, un rând local `dirty`
+  (modificare nepush-uită) nu e niciodată suprascris de un pull.
+- **`data/sync/SyncManager.kt`** (coordonator, precedent `ReminderCoordinator`) — ordine
+  obligatorie: delete-uri → push treatments → push dose_logs → pull treatments → pull dose_logs →
+  regenerare doze PENDING (`GenerateDosesUseCase`) pentru tratamentele nou-scrise din pull →
+  resincronizare alarme. `data/sync/SyncRemoteDataSource.kt`/`SupabaseSyncDataSource.kt` —
+  abstractizare peste Postgrest, doar pentru testabilitate.
+- **`data/work/SyncWorker.kt`** — programat periodic (30 min, `MaintenanceScheduler`) + o dată la
+  pornire (`PillProntoApp.onCreate()`, `scheduleSyncOnStartup`, implementează „pull la pornire"
+  cerut în plan). No-op sigur dacă userul nu e autentificat ca Pacient.
+- **Seam-uri de testabilitate introduse** (fiecare cu un motiv concret, nu abstractizare
+  gratuită): `ReminderSync` (peste `ReminderCoordinator` — constructorul `ReminderScheduler` atinge
+  `AlarmManager`/`Context` real, netestabil în JVM) și `PatientProfileIdProvider` (peste
+  `LocalPatientProfileProvider` — constructorul atinge `SharedPreferences`/`Context` real).
+  Restul consumatorilor existenți (ViewModels, use-cases, `BootReceiver`,
+  `AdherenceMaintenanceWorker`) continuă să injecteze clasele concrete, neschimbate.
+- **Bug găsit în plan review, fixat înainte de implementare:** `markOverdueMissed` (DAO) nu seta
+  `dirty`/`updatedAt` la tranziția PENDING→MISSED — fără fix, dozele ratate (cel mai important
+  semnal de aderență) nu s-ar fi sincronizat niciodată.
+- **Teste unitare:** `SyncManagerTest` (11 cazuri — no-op neautentificat/rol greșit, push doar
+  dirty + clear după succes, push eșuat nu blochează ciclul, pull nu suprascrie dirty local, LWW
+  în ambele sensuri, insert din pull regenerează dozele + reprogramează alarme, tombstone consumat/
+  păstrat după succes/eșec) cu fake-uri noi în `util/`: `FakeTreatmentDao`, `FakeDoseDao`,
+  `FakePendingRemoteDeleteDao`, `FakeSyncRemoteDataSource`, `FakeReminderSync`,
+  `FakePatientProfileIdProvider`.
+- **NU verificat încă pe device fizic** (Supabase Dashboard) — sync-ul e feature de fundal fără UI
+  propriu; verificarea manuală descrisă în planul de implementare (creare/editare/ștergere
+  tratament + confirmare doză → apariția/dispariția rândurilor remote) rămâne de făcut.
 
 ---
 
@@ -142,18 +179,20 @@ Use-cases existente: `AddTreatmentUseCase`, `EditTreatmentUseCase`, `DeleteTreat
   apelează `AppCompatDelegate.setApplicationLocales(...)` / API-ul per-app language din Android 13+).
 
 ### 8b. Roadmap faze următoare
-- **Faza 1.5 — Conturi & Roluri (Pacient/Aparținător/Medic/Farmacist):** **1.5a + 1.5b
-  implementate** (vezi secțiunea 7 mai sus) — schema + RLS + migrare Room, apoi SDK Supabase +
-  autentificare email/parolă + onboarding rol. **Următorul pas, la alegere:**
+- **Faza 1.5 — Conturi & Roluri (Pacient/Aparținător/Medic/Farmacist):** **1.5a + 1.5b + 1.5c
+  implementate** (vezi secțiunea 7 mai sus) — schema + RLS + migrare Room, SDK Supabase +
+  autentificare email/parolă + onboarding rol, sync layer Room↔Supabase. **Următorul pas, la
+  alegere:**
   - **Google Sign-In** (completare 1.5b) — necesită acțiune manuală a utilizatorului mai întâi:
     2 OAuth Client ID-uri în Google Cloud Console (Web + Android, acesta din urmă cu amprenta
     SHA-1 a certificatului de semnare) + înregistrarea lor în Supabase Dashboard → Auth →
     providers → Google. Fără asta, nu se poate implementa.
-  - **1.5c — Sync layer** (`SyncWorker`, outbox Room↔Supabase) — nu are blocaj extern, se poate
-    începe oricând.
-  - Restul etapelor (1.5d Aparținător, 1.5e Medic/Farmacist, 1.5f audit, 1.5g teste RLS) — vezi
-    `docs/user-management-plan.md` secțiunea 8, neatinse încă; depind de 1.5c pentru a avea sens
-    practic (fără sync, „Pacienții mei" n-are ce sincroniza).
+  - **Verificare manuală pe device a sync-ului 1.5c** (Supabase Dashboard) — nefăcută încă, vezi
+    secțiunea 7 mai sus.
+  - **1.5d — Flux Aparținător** (creare profil dependent, invitație, ecran „Pacienții mei") — nu
+    are blocaj extern, se poate începe oricând acum că sync-ul (1.5c) există.
+  - Restul etapelor (1.5e Medic/Farmacist, 1.5f audit, 1.5g teste RLS) — vezi
+    `docs/user-management-plan.md` secțiunea 8, neatinse încă.
   Poziționată **înaintea** Fazei 2 pentru că schema (`patient_profile_id`) trebuia stabilă înainte
   ca Nomenclatorul/scanarea să construiască peste ea — acum e stabilă.
 - **Faza 2 — Identificare:** import Nomenclator ANMDMR (bază locală), scanare **DataMatrix/barcode** (ML Kit) + OCR, legare scanare → tratament. Investigare mapare **GTIN→cod CIM**.

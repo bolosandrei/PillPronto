@@ -46,7 +46,9 @@ class DoseDaoTest {
                 timesCsv = "08:00,20:00",
                 startDate = "2026-01-01",
                 endDate = null,
-                active = true
+                active = true,
+                remoteId = java.util.UUID.randomUUID().toString(),
+                updatedAt = 0L
             )
         )
 
@@ -55,7 +57,9 @@ class DoseDaoTest {
         treatmentId = treatmentId,
         scheduledAt = scheduledAt,
         status = status,
-        takenAt = null
+        takenAt = null,
+        remoteId = java.util.UUID.randomUUID().toString(),
+        updatedAt = 0L
     )
 
     @Test
@@ -80,7 +84,7 @@ class DoseDaoTest {
         doseDao.insertAll(listOf(dose(treatmentId, "2026-01-05T08:00:00")))
         val doseId = doseDao.observeForDate("2026-01-05").first().first().dose.id
 
-        doseDao.updateStatus(doseId, "TAKEN", "2026-01-05T08:05:00")
+        doseDao.updateStatus(doseId, "TAKEN", "2026-01-05T08:05:00", 1L)
 
         val updated = doseDao.getItemById(doseId)
         assertEquals("TAKEN", updated?.dose?.status)

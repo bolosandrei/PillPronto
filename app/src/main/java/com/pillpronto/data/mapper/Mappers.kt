@@ -7,15 +7,27 @@ import com.pillpronto.domain.model.DoseItem
 import com.pillpronto.domain.model.DoseLog
 import com.pillpronto.domain.model.DoseStatus
 import com.pillpronto.domain.model.Treatment
+import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
+import java.util.UUID
 
 private val TIME_FMT: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
 
+// --- sync Room <-> Supabase (Faza 1.5c) — conversie updatedAt local (epoch millis) <-> remote
+// (timestamptz ISO-8601), vezi data/remote/dto/TreatmentDto.kt si DoseLogDto.kt.
+fun Long.toIsoInstant(): String = Instant.ofEpochMilli(this).toString()
+fun String.isoInstantToEpochMillis(): Long = Instant.parse(this).toEpochMilli()
+
 // --- Treatment ---
-fun Treatment.toEntity(patientProfileId: String): TreatmentEntity = TreatmentEntity(
+fun Treatment.toEntity(
+    patientProfileId: String,
+    remoteId: String = UUID.randomUUID().toString(),
+    dirty: Boolean = true,
+    updatedAt: Long = System.currentTimeMillis()
+): TreatmentEntity = TreatmentEntity(
     id = id,
     patientProfileId = patientProfileId,
     medicationName = medicationName,
@@ -24,7 +36,10 @@ fun Treatment.toEntity(patientProfileId: String): TreatmentEntity = TreatmentEnt
     startDate = startDate.toString(),
     endDate = endDate?.toString(),
     active = active,
-    asNeeded = asNeeded
+    asNeeded = asNeeded,
+    remoteId = remoteId,
+    updatedAt = updatedAt,
+    dirty = dirty
 )
 
 fun TreatmentEntity.toDomain(): Treatment = Treatment(
@@ -39,14 +54,22 @@ fun TreatmentEntity.toDomain(): Treatment = Treatment(
 )
 
 // --- DoseLog ---
-fun DoseLog.toEntity(patientProfileId: String): DoseLogEntity = DoseLogEntity(
+fun DoseLog.toEntity(
+    patientProfileId: String,
+    remoteId: String = UUID.randomUUID().toString(),
+    dirty: Boolean = false,
+    updatedAt: Long = System.currentTimeMillis()
+): DoseLogEntity = DoseLogEntity(
     id = id,
     patientProfileId = patientProfileId,
     treatmentId = treatmentId,
     scheduledAt = scheduledAt.toString(),
     status = status.name,
     takenAt = takenAt?.toString(),
-    isAsNeeded = isAsNeeded
+    isAsNeeded = isAsNeeded,
+    remoteId = remoteId,
+    updatedAt = updatedAt,
+    dirty = dirty
 )
 
 fun DoseLogEntity.toDomain(): DoseLog = DoseLog(

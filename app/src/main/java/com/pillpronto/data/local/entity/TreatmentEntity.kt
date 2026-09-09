@@ -15,5 +15,9 @@ data class TreatmentEntity(
     val startDate: String,         // ISO LocalDate
     val endDate: String?,          // ISO LocalDate sau null
     val active: Boolean,
-    val asNeeded: Boolean = false  // "la nevoie" (PRN) — fara orar fix
+    val asNeeded: Boolean = false,  // "la nevoie" (PRN) — fara orar fix
+    // --- sync Room <-> Supabase (Faza 1.5c, vezi data/sync/SyncManager.kt) ---
+    val remoteId: String,          // UUID stabil, generat client-side o singura data la creare
+    val updatedAt: Long,           // epoch millis, actualizat la fiecare scriere locala
+    val dirty: Boolean = true      // needs push la urmatorul ciclu de sync
 )

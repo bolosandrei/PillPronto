@@ -43,7 +43,9 @@ class TreatmentDaoTest {
         startDate = "2026-01-01",
         endDate = null,
         active = active,
-        asNeeded = asNeeded
+        asNeeded = asNeeded,
+        remoteId = java.util.UUID.randomUUID().toString(),
+        updatedAt = 0L
     )
 
     @Test

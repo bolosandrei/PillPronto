@@ -2,6 +2,8 @@ package com.pillpronto.data.work
 
 import android.content.Context
 import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.ExistingWorkPolicy
+import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -18,6 +20,28 @@ class MaintenanceScheduler @Inject constructor(
         WorkManager.getInstance(context).enqueueUniquePeriodicWork(
             AdherenceMaintenanceWorker.UNIQUE_NAME,
             ExistingPeriodicWorkPolicy.KEEP,
+            request
+        )
+
+        // Interval separat, mai des decat maintenance-ul de 6h — datele de sync alimenteaza
+        // vizibilitatea Apartinator/Medic (Faza 1.5d/e) si continuitatea cross-device. Minimul
+        // WorkManager pentru periodic work e 15 min.
+        val syncRequest = PeriodicWorkRequestBuilder<SyncWorker>(30, TimeUnit.MINUTES).build()
+        WorkManager.getInstance(context).enqueueUniquePeriodicWork(
+            SyncWorker.UNIQUE_NAME,
+            ExistingPeriodicWorkPolicy.KEEP,
+            syncRequest
+        )
+    }
+
+    /** "Pull la pornire" (docs/user-management-plan.md sectiunea 8, 1.5c) — sigur de rulat
+     * necondiționat, SyncManager face no-op daca userul nu e autentificat ca Pacient. REPLACE
+     * evita stivuirea la restart-uri rapide de proces. */
+    fun scheduleSyncOnStartup() {
+        val request = OneTimeWorkRequestBuilder<SyncWorker>().build()
+        WorkManager.getInstance(context).enqueueUniqueWork(
+            SyncWorker.STARTUP_UNIQUE_NAME,
+            ExistingWorkPolicy.REPLACE,
             request
         )
     }

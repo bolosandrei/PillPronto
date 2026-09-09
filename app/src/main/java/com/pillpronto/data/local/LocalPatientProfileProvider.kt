@@ -19,10 +19,10 @@ import javax.inject.Singleton
 @Singleton
 class LocalPatientProfileProvider @Inject constructor(
     @ApplicationContext context: Context
-) {
+) : PatientProfileIdProvider {
     private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
-    val patientProfileId: String by lazy {
+    override val patientProfileId: String by lazy {
         prefs.getString(KEY_PATIENT_PROFILE_ID, null) ?: UUID.randomUUID().toString().also { id ->
             prefs.edit { putString(KEY_PATIENT_PROFILE_ID, id) }
         }

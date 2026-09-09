@@ -2,9 +2,10 @@
 
 > Document de arhitectură + plan de implementare. Scris la brainstorming-ul din 2026-09-07.
 > Completează `CLAUDE.md` (nu-l duplică) — citit împreună cu acesta la sesiunile viitoare.
-> Status: **1.5a + 1.5b implementate** (2026-09-07) — schema + RLS + migrare Room, apoi SDK
-> Supabase Android + autentificare email/parolă + onboarding rol. **Google Sign-In + 1.5c-1.5g
-> rămân neimplementate.** Vezi secțiunea 8 pentru etapele propuse și starea fiecăreia.
+> Status: **1.5a + 1.5b + 1.5c implementate** (1.5a+1.5b: 2026-09-07; 1.5c: 2026-09-09) — schema +
+> RLS + migrare Room, SDK Supabase Android + autentificare email/parolă + onboarding rol, sync
+> layer Room↔Supabase. **Google Sign-In + 1.5d-1.5g rămân neimplementate.** Vezi secțiunea 8
+> pentru etapele propuse și starea fiecăreia.
 
 ---
 
@@ -146,7 +147,34 @@ construiască peste ea (toate vor referi `patient_profile_id`).
        creat cu succes, iar o reîncercare lovea coliziune de cheie primară. Fix: `AccountViewModel.refresh()`
        public, apelat din `AccountScreen` via `LifecycleEventEffect(ON_RESUME)` + `completeOnboarding`
        schimbat din `insert` în `upsert` (idempotent, tolerează reîncercări).
-- **1.5c — Sync layer:** `SyncWorker`, outbox local, pull la pornire + periodic.
+- **1.5c — Sync layer ✅ IMPLEMENTAT (2026-09-09):**
+  - Sincronizare bidirecțională a **propriilor** date ale Pacientului (`treatments`+`dose_logs`
+    cu status final) — Room rămâne sursa de adevăr locală, Supabase e strat opțional. Pull de la
+    profiluri legate (Aparținător/Medic) rămâne pentru 1.5d/e, nu e parte din 1.5c.
+  - **Decizie de scop:** dozele PENDING nu se sincronizează (stare de programare locală, nu
+    istoric de aderență — doar TAKEN/MISSED/SKIPPED merg la Supabase). Elimină nevoia de
+    tombstone-uri pentru `deleteFuturePending` (șterge doar PENDING viitoare, niciodată push-uite).
+  - Outbox pattern: `TreatmentEntity`/`DoseLogEntity` +`remoteId`/`updatedAt`/`dirty`
+    (`PillProntoDatabase` v4), tabel nou `pending_remote_deletes` pentru ștergeri de propagat.
+    Conflict resolution: last-write-wins pe `updatedAt`, un rând local `dirty` nu e niciodată
+    suprascris de un pull.
+  - `data/sync/SyncManager.kt` (coordonator, precedent `ReminderCoordinator`) — ordine strictă:
+    delete-uri → push treatments → push dose_logs → pull treatments → pull dose_logs →
+    regenerare doze PENDING pentru tratamentele nou-scrise din pull → resincronizare alarme.
+    `data/sync/SyncRemoteDataSource.kt`/`SupabaseSyncDataSource.kt` abstractizează Postgrest.
+  - `data/work/SyncWorker.kt` — periodic 30 min + o dată la pornirea aplicației (`PillProntoApp`),
+    no-op sigur dacă userul nu e autentificat ca Pacient.
+  - Seam-uri de testabilitate: `ReminderSync` (peste `ReminderCoordinator`) și
+    `PatientProfileIdProvider` (peste `LocalPatientProfileProvider`) — ambele clase concrete
+    originale ating Android framework (`AlarmManager`/`SharedPreferences` via `Context`) în
+    constructor, netestabile direct în JVM.
+  - Bug găsit în plan review, fixat înainte de implementare: `markOverdueMissed` (DAO) nu seta
+    `dirty`/`updatedAt` la tranziția PENDING→MISSED — fără fix, dozele ratate nu s-ar fi
+    sincronizat niciodată.
+  - Teste: `SyncManagerTest` (11 cazuri), fake-uri noi `FakeTreatmentDao`/`FakeDoseDao`/
+    `FakePendingRemoteDeleteDao`/`FakeSyncRemoteDataSource`/`FakeReminderSync`/
+    `FakePatientProfileIdProvider` în `util/`.
+  - **Neverificat încă pe device fizic** (Supabase Dashboard) — rămâne de făcut manual.
 - **1.5d — Flux Aparținător:** creare profil dependent, invitație (cod/QR), ecran „Pacienții mei"
   cu situația curentă per pacient, notificare la doză ratată.
 - **1.5e — Flux Medic/Farmacist:** onboarding profesionist (auto-declarat + flag „neverificat"
