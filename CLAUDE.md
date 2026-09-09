@@ -374,18 +374,20 @@ Use-cases existente: `AddTreatmentUseCase`, `EditTreatmentUseCase`, `DeleteTreat
 
 ### 8b. Roadmap faze următoare
 - **Faza 1.5 — Conturi & Roluri (Pacient/Aparținător/Medic/Farmacist):** **1.5a + 1.5b + 1.5c +
-  1.5d (+ rafinare UX) + 1.5e implementate**, 1.5a-1.5d mergeuite pe `main` (PR #1-#4), 1.5e pe
-  branch `feature/1.5e-medic-pharmacist` (vezi secțiunea 7 mai sus) — schema + RLS + migrare Room,
-  SDK Supabase + autentificare email/parolă + onboarding rol, sync layer Room↔Supabase, legătură
-  Pacient↔Aparținător/Medic/Farmacist read-only (cod + QR + scanare + deep link + nume/rol vizibil
-  + revocare/reinvitare + selecție rol la generare) + notificare doză ratată (doar CAREGIVER).
+  1.5d (+ rafinare UX) + 1.5e implementate și merge-uite pe `main`** (PR #1-#6, toate branch-urile
+  de feature șterse) — schema + RLS + migrare Room, SDK Supabase + autentificare email/parolă +
+  onboarding rol, sync layer Room↔Supabase, legătură Pacient↔Aparținător/Medic/Farmacist read-only
+  (cod + QR + scanare + deep link + nume/rol vizibil + revocare/reinvitare + selecție rol la
+  generare) + notificare doză ratată (doar CAREGIVER) + navigare cu buton de back pe toate ecranele
+  secundare + fix flash de reîncărcare la tab-uri (Cont/Gestionează accesul ×2/Pacienții mei), toate
+  **testate live pe device de utilizator** (2026-09-09).
   **Următorul pas, la alegere:**
   - **Confirmare finală de la utilizator** că toate migrările `supabase/migrations/0003-0007*.sql`
-    sunt rulate (Supabase Dashboard, în ordine, după 0001-0002) și fluxul complet funcționează
-    end-to-end (invitație pt. fiecare rol → claim cu validare de rol → vizibilitate → notificare →
-    revocare → reinvitare) — 1.5d testat live pe device, 1.5e nu încă.
+    sunt rulate (Supabase Dashboard, în ordine, după 0001-0002) — testarea live a acoperit fluxul
+    funcțional (1.5d + 1.5e), dar nu a fost verificat explicit dacă exact toate cele 7 migrări
+    rulaseră deja la momentul testării sau doar un subset suficient pentru ce s-a testat.
   - **1.5c (sync propriu-zis al Pacientului)** rămâne neverificat separat pe device — posibil
-    exercitat implicit prin testarea 1.5d, dar nu confirmat explicit.
+    exercitat implicit prin testarea 1.5d/1.5e, dar nu confirmat explicit.
   - **Google Sign-In** (completare 1.5b) — necesită acțiune manuală a utilizatorului mai întâi:
     2 OAuth Client ID-uri în Google Cloud Console (Web + Android, acesta din urmă cu amprenta
     SHA-1 a certificatului de semnare) + înregistrarea lor în Supabase Dashboard → Auth →
@@ -394,6 +396,8 @@ Use-cases existente: `AddTreatmentUseCase`, `EditTreatmentUseCase`, `DeleteTreat
     suport multi-profil local în Room (schimbare majoră de arhitectură).
   - Restul etapelor (1.5f audit, 1.5g teste RLS) — vezi
     `docs/user-management-plan.md` secțiunea 8, neatinse încă.
+  - **Sau considerăm Faza 1.5 suficient de matură și trecem direct la Faza 2** (identificare —
+    Nomenclator ANMDMR + scanare) — 1.5f/1.5g sunt hardening, nu blocante funcțional.
   Poziționată **înaintea** Fazei 2 pentru că schema (`patient_profile_id`) trebuia stabilă înainte
   ca Nomenclatorul/scanarea să construiască peste ea — acum e stabilă.
 - **Faza 2 — Identificare:** import Nomenclator ANMDMR (bază locală), scanare **DataMatrix/barcode** (ML Kit) + OCR, legare scanare → tratament. Investigare mapare **GTIN→cod CIM**.
