@@ -24,9 +24,12 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.pillpronto.R
+import com.pillpronto.ui.access.ManageAccessScreen
 import com.pillpronto.ui.account.AccountScreen
 import com.pillpronto.ui.adherence.AdherenceScreen
 import com.pillpronto.ui.onboarding.OnboardingScreen
+import com.pillpronto.ui.patients.MyPatientsScreen
+import com.pillpronto.ui.patients.PatientDetailScreen
 import com.pillpronto.ui.today.TodayScreen
 import com.pillpronto.ui.treatments.AddTreatmentScreen
 import com.pillpronto.ui.treatments.TreatmentDetailScreen
@@ -111,7 +114,9 @@ fun PillProntoNavHost(openTodayRequests: Flow<Unit> = emptyFlow()) {
             composable(Route.Account.path) {
                 AccountScreen(
                     padding,
-                    onNeedsOnboarding = { navController.navigate(Route.Onboarding.path) }
+                    onNeedsOnboarding = { navController.navigate(Route.Onboarding.path) },
+                    onManageAccess = { navController.navigate(Route.ManageAccess.path) },
+                    onMyPatients = { navController.navigate(Route.MyPatients.path) }
                 )
             }
             composable(Route.Onboarding.path) {
@@ -119,6 +124,21 @@ fun PillProntoNavHost(openTodayRequests: Flow<Unit> = emptyFlow()) {
                     padding,
                     onDone = { navController.popBackStack() }
                 )
+            }
+            composable(Route.ManageAccess.path) {
+                ManageAccessScreen(padding)
+            }
+            composable(Route.MyPatients.path) {
+                MyPatientsScreen(
+                    padding,
+                    onOpenPatient = { id -> navController.navigate(Route.PatientDetail.create(id)) }
+                )
+            }
+            composable(
+                route = Route.PatientDetail.path,
+                arguments = listOf(navArgument(Route.PatientDetail.ARG) { type = NavType.StringType })
+            ) {
+                PatientDetailScreen(padding)
             }
         }
     }

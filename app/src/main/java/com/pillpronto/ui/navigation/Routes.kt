@@ -8,6 +8,12 @@ sealed class Route(val path: String) {
     data object Adherence : Route("adherence")
     data object Account : Route("account")
     data object Onboarding : Route("onboarding")
+    data object ManageAccess : Route("manage_access")
+    data object MyPatients : Route("my_patients")
+    data object PatientDetail : Route("patient_detail/{patientProfileId}") {
+        const val ARG = "patientProfileId"
+        fun create(patientProfileId: String) = "patient_detail/$patientProfileId"
+    }
     data object AddEditTreatment : Route("treatment_form?treatmentId={treatmentId}") {
         const val ARG = "treatmentId"
         fun create(id: Long = -1L) = "treatment_form?treatmentId=$id"

@@ -151,9 +151,11 @@ Use-cases existente: `AddTreatmentUseCase`, `EditTreatmentUseCase`, `DeleteTreat
 - **Seam-uri de testabilitate introduse** (fiecare cu un motiv concret, nu abstractizare
   gratuită): `ReminderSync` (peste `ReminderCoordinator` — constructorul `ReminderScheduler` atinge
   `AlarmManager`/`Context` real, netestabil în JVM) și `PatientProfileIdProvider` (peste
-  `LocalPatientProfileProvider` — constructorul atinge `SharedPreferences`/`Context` real).
-  Restul consumatorilor existenți (ViewModels, use-cases, `BootReceiver`,
-  `AdherenceMaintenanceWorker`) continuă să injecteze clasele concrete, neschimbate.
+  `LocalPatientProfileProvider` — constructorul atinge `SharedPreferences`/`Context` real; mutată
+  în `domain/repository/` la 1.5d, vezi mai jos, ca ViewModels să o poată injecta prin use-case-uri
+  fără să încalce layering-ul domain/data). Restul consumatorilor existenți (ViewModels,
+  use-cases, `BootReceiver`, `AdherenceMaintenanceWorker`) continuă să injecteze clasele concrete,
+  neschimbate.
 - **Bug găsit în plan review, fixat înainte de implementare:** `markOverdueMissed` (DAO) nu seta
   `dirty`/`updatedAt` la tranziția PENDING→MISSED — fără fix, dozele ratate (cel mai important
   semnal de aderență) nu s-ar fi sincronizat niciodată.
@@ -167,6 +169,51 @@ Use-cases existente: `AddTreatmentUseCase`, `EditTreatmentUseCase`, `DeleteTreat
   propriu; verificarea manuală descrisă în planul de implementare (creare/editare/ștergere
   tratament + confirmare doză → apariția/dispariția rândurilor remote) rămâne de făcut.
 
+### Faza 1.5d — Flux Aparținător, viewer (implementat — 2026-09-09)
+- Un Aparținător se leagă de un Pacient **care are deja cont și telefon propriu** și îi vede
+  tratamentele + aderența, read-only, plus notificare la doză ratată. „Profil dependent" (pacient
+  vârstnic fără cont propriu) **amânat** — ar cere suport multi-profil local în Room, schimbare
+  majoră separată. Detalii complete: `docs/user-management-plan.md` secțiunea 8 (1.5d).
+- **Migrare `supabase/migrations/0003_links_open_invite.sql`** — de rulat manual de utilizator în
+  Supabase Dashboard, ca 0001/0002. Conține:
+  - `grantee_user_id` pe `links` devine nullable (invitația se creează înainte să se știe cine o
+    revendică).
+  - Funcție `claim_link(p_invite_code text) SECURITY DEFINER` — **decizie de securitate găsită în
+    plan review, nu în cererea inițială**: o politică RLS simplă de UPDATE pentru „claim" nu poate
+    funcționa corect (UPDATE cu WHERE cere vizibilitate SELECT separată pe rândul țintă; o
+    politică de SELECT „toate rândurile pending nerevendicate" ar scurge toate codurile de
+    invitație active, oricui autentificat — enumerare). Funcția ocolește RLS intern, acceptă doar
+    codul ca parametru, hardcodează exact ce coloane se modifică.
+  - Trigger `links_guard_update` — hardening suplimentar: închide o gaură preexistentă din
+    politica `links_grantee_respond` (1.5a), care nu împiedica un grantee să-și schimbe propriul
+    rând `links` către alt `patient_profile_id`/`role` în același UPDATE.
+- **Cod de invitație**: text simplu, 8 caractere alfanumerice (fără 0/O/1/I), generat client-side
+  (`SecureRandom`), distribuit prin Android share sheet (`Intent.ACTION_SEND`) — fără QR vizual în
+  v1 (fără dependență nouă).
+- **Notificare doză ratată**: worker periodic (`CaregiverAlertWorker`, 30 min, alături de
+  `SyncWorker`), no-op dacă rolul curent != CAREGIVER. Deduplicare pe mulțime de `remoteId`
+  (`MissedDoseChecker`, clasă pură testabilă — nu pe timestamp, un status MISSED e terminal).
+  Canal de notificare separat (`caregiver_alerts`) de `ReminderScheduler` (acela e specific
+  remindere proprii cu acțiuni Confirmă/Omite).
+- **Fetch date pacient legat**: direct din Supabase (`LinkedPatientDataRepository`), niciodată din
+  Room local. Filtrare server-side pe `treatment_id` (Postgrest `.isIn(...)`) — evită over-fetch-ul
+  dozelor altor pacienți legați ai aceluiași Apartinător.
+- **`AdherenceCalculator`** extras din `ComputeAdherenceUseCase` (formula PDC/MPR pură,
+  `compute(logs): AdherenceStats`) — reutilizat și de `GetLinkedPatientAdherenceUseCase` (loguri
+  remote). `ComputeAdherenceUseCase` rămâne wrapper subțire, semnătură publică neschimbată.
+- **UI**: fără tab nou în bottom bar — buton „Gestionează accesul"/„Pacienții mei" în
+  `AccountScreen`, condiționat de rol. Ecrane noi: `ui/access/ManageAccessScreen` (Pacient),
+  `ui/patients/MyPatientsScreen` + `PatientDetailScreen` (Apartinător, read-only, fără buton
+  editare — stil `TreatmentDetailScreen`).
+- **Teste unitare**: `AdherenceCalculatorTest`, `MissedDoseCheckerTest`,
+  `GetLinkedPatientAdherenceUseCaseTest`, `ManageAccessViewModelTest`, `MyPatientsViewModelTest`,
+  `PatientDetailViewModelTest` — 21 cazuri noi, toate trec. Fake-uri noi: `FakeLinkRepository`,
+  `FakeLinkedPatientDataRepository`.
+- **NU verificat încă pe device fizic + Supabase Dashboard** — migrarea 0003 trebuie rulată de
+  utilizator înainte ca fluxul complet (invitație → claim → vizibilitate → notificare) să
+  funcționeze end-to-end; planul de verificare manuală (inclusiv teste adversariale pe RLS) e în
+  `docs/user-management-plan.md` secțiunea 8.
+
 ---
 
 ## 8. CE URMEAZĂ — TODO
@@ -179,19 +226,21 @@ Use-cases existente: `AddTreatmentUseCase`, `EditTreatmentUseCase`, `DeleteTreat
   apelează `AppCompatDelegate.setApplicationLocales(...)` / API-ul per-app language din Android 13+).
 
 ### 8b. Roadmap faze următoare
-- **Faza 1.5 — Conturi & Roluri (Pacient/Aparținător/Medic/Farmacist):** **1.5a + 1.5b + 1.5c
-  implementate** (vezi secțiunea 7 mai sus) — schema + RLS + migrare Room, SDK Supabase +
-  autentificare email/parolă + onboarding rol, sync layer Room↔Supabase. **Următorul pas, la
-  alegere:**
+- **Faza 1.5 — Conturi & Roluri (Pacient/Aparținător/Medic/Farmacist):** **1.5a + 1.5b + 1.5c +
+  1.5d (viewer) implementate** (vezi secțiunea 7 mai sus) — schema + RLS + migrare Room, SDK
+  Supabase + autentificare email/parolă + onboarding rol, sync layer Room↔Supabase, legătură
+  Pacient↔Aparținător read-only + notificare doză ratată. **Următorul pas, la alegere:**
+  - **Rulare manuală `supabase/migrations/0003_links_open_invite.sql`** (Supabase Dashboard) +
+    verificare end-to-end pe device (inclusiv 1.5c, nefăcută încă) — blochează testarea reală a
+    1.5d, nu implementarea următorului pas.
   - **Google Sign-In** (completare 1.5b) — necesită acțiune manuală a utilizatorului mai întâi:
     2 OAuth Client ID-uri în Google Cloud Console (Web + Android, acesta din urmă cu amprenta
     SHA-1 a certificatului de semnare) + înregistrarea lor în Supabase Dashboard → Auth →
     providers → Google. Fără asta, nu se poate implementa.
-  - **Verificare manuală pe device a sync-ului 1.5c** (Supabase Dashboard) — nefăcută încă, vezi
-    secțiunea 7 mai sus.
-  - **1.5d — Flux Aparținător** (creare profil dependent, invitație, ecran „Pacienții mei") — nu
-    are blocaj extern, se poate începe oricând acum că sync-ul (1.5c) există.
-  - Restul etapelor (1.5e Medic/Farmacist, 1.5f audit, 1.5g teste RLS) — vezi
+  - **Profil dependent** (pacient vârstnic fără cont propriu) — amânat explicit din 1.5d, cere
+    suport multi-profil local în Room (schimbare majoră de arhitectură).
+  - **1.5e — Flux Medic/Farmacist** (read-only, similar 1.5d) — nu are blocaj extern.
+  - Restul etapelor (1.5f audit, 1.5g teste RLS) — vezi
     `docs/user-management-plan.md` secțiunea 8, neatinse încă.
   Poziționată **înaintea** Fazei 2 pentru că schema (`patient_profile_id`) trebuia stabilă înainte
   ca Nomenclatorul/scanarea să construiască peste ea — acum e stabilă.

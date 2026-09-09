@@ -15,3 +15,11 @@ data class PatientProfileInsertDto(
     @SerialName("display_name") val displayName: String,
     @SerialName("user_id") val userId: String
 )
+
+/** Citire minima pentru `patient_profiles` — folosita de Apartinator ca sa afiseze numele
+ * pacientilor legati ("Pacientii mei", Faza 1.5d). Accesibila prin RLS `patient_profiles_linked_read`. */
+@Serializable
+data class PatientProfileSummaryDto(
+    val id: String,
+    @SerialName("display_name") val displayName: String
+)

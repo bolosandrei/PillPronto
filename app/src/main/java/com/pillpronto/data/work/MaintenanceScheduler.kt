@@ -32,6 +32,14 @@ class MaintenanceScheduler @Inject constructor(
             ExistingPeriodicWorkPolicy.KEEP,
             syncRequest
         )
+
+        // Faza 1.5d — no-op daca userul curent nu e Apartinator (vezi CaregiverAlertWorker).
+        val caregiverAlertRequest = PeriodicWorkRequestBuilder<CaregiverAlertWorker>(30, TimeUnit.MINUTES).build()
+        WorkManager.getInstance(context).enqueueUniquePeriodicWork(
+            CaregiverAlertWorker.UNIQUE_NAME,
+            ExistingPeriodicWorkPolicy.KEEP,
+            caregiverAlertRequest
+        )
     }
 
     /** "Pull la pornire" (docs/user-management-plan.md sectiunea 8, 1.5c) — sigur de rulat

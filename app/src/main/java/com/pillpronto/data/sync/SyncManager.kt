@@ -1,6 +1,5 @@
 package com.pillpronto.data.sync
 
-import com.pillpronto.data.local.PatientProfileIdProvider
 import com.pillpronto.data.local.dao.DoseDao
 import com.pillpronto.data.local.dao.DoseSyncView
 import com.pillpronto.data.local.dao.PendingRemoteDeleteDao
@@ -17,6 +16,7 @@ import com.pillpronto.domain.model.AccountRole
 import com.pillpronto.domain.model.AuthSessionState
 import com.pillpronto.domain.repository.AuthRepository
 import com.pillpronto.domain.repository.DoseRepository
+import com.pillpronto.domain.repository.PatientProfileIdProvider
 import com.pillpronto.domain.repository.ProfileRepository
 import com.pillpronto.domain.usecase.GenerateDosesUseCase
 import kotlinx.coroutines.flow.first

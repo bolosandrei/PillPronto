@@ -30,6 +30,9 @@ class FakeSyncRemoteDataSource : SyncRemoteDataSource {
 
     override suspend fun pullDoseLogs(): List<DoseLogDto> = doseLogs.values.toList()
 
+    override suspend fun pullDoseLogsForTreatments(treatmentIds: List<String>): List<DoseLogDto> =
+        doseLogs.values.filter { it.treatmentId in treatmentIds }
+
     override suspend fun deleteTreatment(remoteId: String) {
         deleteTreatmentError?.let { throw it }
         treatments.remove(remoteId)
