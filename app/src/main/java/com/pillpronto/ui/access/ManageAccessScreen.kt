@@ -122,9 +122,18 @@ private fun LinkRow(
                     }
                 }
                 when (link.status) {
-                    LinkStatus.PENDING -> if (link.inviteCode != null) {
-                        IconButton(onClick = { onShare(link.inviteCode) }) {
-                            Icon(Icons.Filled.Share, contentDescription = stringResource(R.string.manage_access_share_button))
+                    // Cat timp e in asteptare (nimeni n-a revendicat codul inca), Pacientul tot
+                    // trebuie sa poata anula invitatia — reutilizeaza acelasi onRevoke ca la
+                    // ACCEPTED (revokeLink marcheaza randul ca revoked indiferent de statusul
+                    // curent, vezi LinkRepositoryImpl.revokeLink).
+                    LinkStatus.PENDING -> Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (link.inviteCode != null) {
+                            IconButton(onClick = { onShare(link.inviteCode) }) {
+                                Icon(Icons.Filled.Share, contentDescription = stringResource(R.string.manage_access_share_button))
+                            }
+                        }
+                        TextButton(onClick = { onRevoke(link.id) }) {
+                            Text(stringResource(R.string.manage_access_cancel_button))
                         }
                     }
                     LinkStatus.ACCEPTED -> TextButton(onClick = { onRevoke(link.id) }) {

@@ -145,6 +145,7 @@
     <string name="manage_access_share_button">Distribuie</string>
     <string name="manage_access_share_text">Cod de acces PillPronto: %1$s\nIntrodu-l în aplicație, la „Pacienții mei”, ca să-mi vezi tratamentele și aderența (sau scanează codul QR).\n\n%2$s</string>
     <string name="manage_access_revoke_button">Revocă</string>
+    <string name="manage_access_cancel_button">Anulează</string>
 
     <!-- Faza 1.5d: Apartinator — revendicare cod + lista pacientilor legati -->
     <string name="my_patients_title">Pacienții mei</string>
