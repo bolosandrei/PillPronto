@@ -278,6 +278,14 @@ Use-cases existente: `AddTreatmentUseCase`, `EditTreatmentUseCase`, `DeleteTreat
   - **Neverificat încă pe device**: doar migrarea 0005 (SQL, de rulat de utilizator după
     0001-0004) — restul (deep link, QR ca imagine, scanare, nume Aparținător) verificat live pe
     device fizic în timpul dezvoltării.
+  - **Bug real găsit la testarea scanării QR** (2026-09-09): revendicarea unui cod nou pentru un
+    Apartinator cu care Pacientul mai avusese o legătură (chiar revocată) eșua cu eroare brută
+    Postgres „duplicate key... links_patient_profile_id_grantee_user_id_key" (23505). Cauză:
+    `unique(patient_profile_id, grantee_user_id)` din 0001 e globală, se aplică și rândurilor
+    `revoked` — o reinvitare colidează cu istoricul revocat. Fix:
+    `supabase/migrations/0006_fix_links_reinvite_constraint.sql` — constrângerea devine index
+    unic parțial (`where status <> 'revoked'`), plus mesaj de eroare mai clar în `claim_link`
+    pentru cazul legitim rămas (a doua legătură activă simultan). **De rulat manual, după 0005.**
 
 ---
 
