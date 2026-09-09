@@ -38,7 +38,10 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
 
 @Composable
-fun PillProntoNavHost(openTodayRequests: Flow<Unit> = emptyFlow()) {
+fun PillProntoNavHost(
+    openTodayRequests: Flow<Unit> = emptyFlow(),
+    inviteCodeRequests: Flow<String> = emptyFlow()
+) {
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination
@@ -51,6 +54,14 @@ fun PillProntoNavHost(openTodayRequests: Flow<Unit> = emptyFlow()) {
                 popUpTo(Route.Today.path) { inclusive = true }
                 launchSingleTop = true
             }
+        }
+    }
+
+    // Deep link de invitatie (pillpronto://invite?code=...) -> "Pacientii mei" cu codul
+    // pre-completat (userul tot confirma apasand "Adauga pacient", vezi MyPatientsViewModel).
+    LaunchedEffect(Unit) {
+        inviteCodeRequests.collect { code ->
+            navController.navigate(Route.MyPatients.create(prefillCode = code))
         }
     }
 
@@ -116,7 +127,7 @@ fun PillProntoNavHost(openTodayRequests: Flow<Unit> = emptyFlow()) {
                     padding,
                     onNeedsOnboarding = { navController.navigate(Route.Onboarding.path) },
                     onManageAccess = { navController.navigate(Route.ManageAccess.path) },
-                    onMyPatients = { navController.navigate(Route.MyPatients.path) }
+                    onMyPatients = { navController.navigate(Route.MyPatients.create()) }
                 )
             }
             composable(Route.Onboarding.path) {
@@ -128,7 +139,12 @@ fun PillProntoNavHost(openTodayRequests: Flow<Unit> = emptyFlow()) {
             composable(Route.ManageAccess.path) {
                 ManageAccessScreen(padding)
             }
-            composable(Route.MyPatients.path) {
+            composable(
+                route = Route.MyPatients.path,
+                arguments = listOf(navArgument(Route.MyPatients.ARG_PREFILL_CODE) {
+                    type = NavType.StringType; nullable = true; defaultValue = null
+                })
+            ) {
                 MyPatientsScreen(
                     padding,
                     onOpenPatient = { id -> navController.navigate(Route.PatientDetail.create(id)) }

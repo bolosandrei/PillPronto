@@ -1,5 +1,6 @@
 package com.pillpronto.domain.repository
 
+import com.pillpronto.domain.model.CaregiverSummary
 import com.pillpronto.domain.model.PatientLink
 import com.pillpronto.domain.model.PatientSummary
 
@@ -21,4 +22,7 @@ interface LinkRepository {
 
     /** Apartinator: pacientii legati (accepted) cu numele lor. */
     suspend fun getMyPatients(granteeUserId: String): List<PatientSummary>
+
+    /** Pacient: Apartinatorii legati (accepted) cu numele lor — ecranul de gestionare acces. */
+    suspend fun getMyCaregivers(patientProfileId: String): List<CaregiverSummary>
 }

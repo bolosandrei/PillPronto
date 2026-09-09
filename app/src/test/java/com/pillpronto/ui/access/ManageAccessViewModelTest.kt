@@ -1,8 +1,10 @@
 package com.pillpronto.ui.access
 
+import com.pillpronto.domain.model.CaregiverSummary
 import com.pillpronto.domain.model.LinkStatus
 import com.pillpronto.domain.usecase.CreateInviteUseCase
 import com.pillpronto.domain.usecase.GetLocalPatientProfileIdUseCase
+import com.pillpronto.domain.usecase.GetMyCaregiversUseCase
 import com.pillpronto.domain.usecase.GetMyOutgoingLinksUseCase
 import com.pillpronto.domain.usecase.RevokeLinkUseCase
 import com.pillpronto.util.FakeLinkRepository
@@ -26,6 +28,7 @@ class ManageAccessViewModelTest {
         GetLocalPatientProfileIdUseCase(patientProfileIdProvider),
         CreateInviteUseCase(linkRepository),
         GetMyOutgoingLinksUseCase(linkRepository),
+        GetMyCaregiversUseCase(linkRepository),
         RevokeLinkUseCase(linkRepository)
     )
 
@@ -70,6 +73,21 @@ class ManageAccessViewModelTest {
         vm.onRevoke(linkId)
 
         assertEquals(LinkStatus.REVOKED, vm.state.value.links.first().status)
+    }
+
+    @Test
+    fun `legaturile ACCEPTED sunt potrivite cu numele Apartinatorului`() = runTest {
+        linkRepository.createInvite("patient-1")
+        val linkId = linkRepository.links.first().id
+        // Simuleaza revendicarea codului de catre un Apartinator (claim_link seteaza grantee+accepted).
+        linkRepository.links[0] = linkRepository.links.first()
+            .copy(granteeUserId = "caregiver-1", status = LinkStatus.ACCEPTED)
+        linkRepository.caregivers["patient-1"] = listOf(CaregiverSummary("caregiver-1", "Maria"))
+
+        val vm = createViewModel()
+
+        assertEquals("Maria", vm.state.value.caregiverNames["caregiver-1"])
+        assertEquals(LinkStatus.ACCEPTED, vm.state.value.links.first { it.id == linkId }.status)
     }
 
     @Test

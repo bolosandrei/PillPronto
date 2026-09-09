@@ -240,6 +240,32 @@ Use-cases existente: `AddTreatmentUseCase`, `EditTreatmentUseCase`, `DeleteTreat
   fereastra de recompunere vede „se verifică", nu „lipsă profil" — `AccountScreen` arată scurt
   `LoadingIndicator` în loc să navigheze greșit. Test nou: `AccountViewModelTest` (`refresh dupa
   onboarding reface profilul...`).
+- **Confirmat funcțional end-to-end pe device** (2026-09-09, după cele două fix-uri de mai sus) —
+  cod generat de Pacient → introdus manual de Aparținător → apare în „Pacienții mei". Utilizatorul
+  a cerut apoi 3 îmbunătățiri UX pe baza testării reale (vezi rafinarea de mai jos).
+- **Rafinare UX — fricțiune redusă la legare + nume Aparținător vizibil** (2026-09-09):
+  - **Deep link `pillpronto://invite?code=XXXX`** (schemă proprie, fără domeniu/App Links) —
+    pattern identic cu `openTodayRequests` (tap pe notificare reminder): `MainActivity` emite
+    printr-un `MutableSharedFlow`, `PillProntoNavHost` navighează la „Pacienții mei" cu codul
+    pre-completat (userul tot apasă „Adaugă pacient" — confirmare păstrată, nu claim automat
+    silențios). Parsare/construcție centralizate în `ui/access/InviteLink.kt`
+    (`buildInviteUri`/`extractInviteCode`) — pe `String`, nu pe `android.net.Uri` (stub în teste
+    JVM fără Robolectric), ca să rămână testabil.
+  - **Notă de expectanță importantă**: link-ul cu schemă proprie **nu e garantat clicabil** in text
+    simplu trimis prin WhatsApp/SMS (auto-linkify de obicei doar pe `http(s)://`). Mecanismul care
+    chiar livrează „fără tastare" e **codul QR** (`com.google.zxing:core`, doar generare — scanarea
+    ocolește complet problema de linkify, camera/OS rezolvă schema direct). Link-ul text rămâne
+    inclus în mesajul distribuit ca fallback, nu ca mecanism principal.
+  - **Numele Aparținătorului vizibil Pacientului** — migrare nouă
+    `supabase/migrations/0005_profiles_visible_to_linked_grantee.sql` (funcție `is_linked_grantee`
+    `SECURITY DEFINER`, aceeași tehnică ca 0004, deși aici niciun tabel nu subqueria `profiles`
+    azi — păstrat consecvent). `LinkRepository.getMyCaregivers` (pattern identic `getMyPatients`,
+    două query-uri) + `GetMyCaregiversUseCase`; `ManageAccessScreen` arată „Acces acordat lui
+    <nume>" în loc de textul generic pe legăturile `ACCEPTED`.
+  - Buton `AccountScreen`: „Gestionează accesul" → „Gestionează accesul Aparținătorilor".
+  - Teste noi: `InviteLinkTest` (6), + cazuri noi în `ManageAccessViewModelTest`/
+    `MyPatientsViewModelTest` (potrivire nume Aparținător, prefill din `SavedStateHandle`).
+  - **Neverificat încă pe device** — migrarea 0005 trebuie rulată de utilizator (după 0001-0004).
 
 ---
 
@@ -257,10 +283,10 @@ Use-cases existente: `AddTreatmentUseCase`, `EditTreatmentUseCase`, `DeleteTreat
   1.5d (viewer) implementate** (vezi secțiunea 7 mai sus) — schema + RLS + migrare Room, SDK
   Supabase + autentificare email/parolă + onboarding rol, sync layer Room↔Supabase, legătură
   Pacient↔Aparținător read-only + notificare doză ratată. **Următorul pas, la alegere:**
-  - **Rulare manuală `supabase/migrations/0003_links_open_invite.sql` + `0004_fix_links_rls_recursion.sql`**
-    (Supabase Dashboard, în această ordine) + verificare end-to-end pe device (inclusiv 1.5c,
-    nefăcută încă) — blochează testarea reală a 1.5d, nu implementarea următorului pas. 0004
-    rezolvă un bug real de recursivitate RLS găsit la primul test manual (vezi secțiunea 7).
+  - **1.5c confirmat funcțional pe device; 1.5d confirmat funcțional (flux de bază)** — rămâne de
+    rulat manual `supabase/migrations/0005_profiles_visible_to_linked_grantee.sql` (Supabase
+    Dashboard, după 0001-0004) + verificat pe device rafinarea UX (QR, deep link, nume
+    Aparținător) descrisă în secțiunea 7.
   - **Google Sign-In** (completare 1.5b) — necesită acțiune manuală a utilizatorului mai întâi:
     2 OAuth Client ID-uri în Google Cloud Console (Web + Android, acesta din urmă cu amprenta
     SHA-1 a certificatului de semnare) + înregistrarea lor în Supabase Dashboard → Auth →

@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.pillpronto.domain.model.PatientLink
 import com.pillpronto.domain.usecase.CreateInviteUseCase
 import com.pillpronto.domain.usecase.GetLocalPatientProfileIdUseCase
+import com.pillpronto.domain.usecase.GetMyCaregiversUseCase
 import com.pillpronto.domain.usecase.GetMyOutgoingLinksUseCase
 import com.pillpronto.domain.usecase.RevokeLinkUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -19,6 +20,8 @@ enum class ManageAccessError { GENERATE_FAILED, REVOKE_FAILED }
 
 data class ManageAccessUiState(
     val links: List<PatientLink> = emptyList(),
+    // granteeUserId -> nume afisat, doar pt. legaturile ACCEPTED (vezi GetMyCaregiversUseCase).
+    val caregiverNames: Map<String, String> = emptyMap(),
     val isLoading: Boolean = true,
     val isGenerating: Boolean = false,
     val error: ManageAccessError? = null
@@ -32,6 +35,7 @@ class ManageAccessViewModel @Inject constructor(
     private val getLocalPatientProfileId: GetLocalPatientProfileIdUseCase,
     private val createInvite: CreateInviteUseCase,
     private val getMyOutgoingLinks: GetMyOutgoingLinksUseCase,
+    private val getMyCaregivers: GetMyCaregiversUseCase,
     private val revokeLink: RevokeLinkUseCase
 ) : ViewModel() {
 
@@ -43,10 +47,16 @@ class ManageAccessViewModel @Inject constructor(
     fun refresh() {
         viewModelScope.launch {
             _state.update { it.copy(isLoading = true) }
-            val links = runCatching { getMyOutgoingLinks(getLocalPatientProfileId()) }
+            val patientProfileId = getLocalPatientProfileId()
+            val links = runCatching { getMyOutgoingLinks(patientProfileId) }
                 .onFailure { Log.e(TAG, "Nu am putut incarca legaturile", it) }
                 .getOrDefault(emptyList())
-            _state.update { it.copy(links = links, isLoading = false) }
+            val caregiverNames = runCatching { getMyCaregivers(patientProfileId) }
+                .onFailure { Log.e(TAG, "Nu am putut incarca numele apartinatorilor", it) }
+                .getOrDefault(emptyList())
+                .filter { it.displayName != null }
+                .associate { it.userId to it.displayName!! }
+            _state.update { it.copy(links = links, caregiverNames = caregiverNames, isLoading = false) }
         }
     }
 

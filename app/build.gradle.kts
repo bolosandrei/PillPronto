@@ -105,6 +105,7 @@ dependencies {
     implementation(libs.supabase.auth)
     implementation(libs.ktor.client.android)
     implementation(libs.kotlinx.serialization.json)
+    implementation(libs.zxing.core) // doar encoder QR (Faza 1.5d) - fara zxing-android-embedded/camera
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)

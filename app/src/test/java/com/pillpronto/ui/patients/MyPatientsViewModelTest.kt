@@ -1,5 +1,6 @@
 package com.pillpronto.ui.patients
 
+import androidx.lifecycle.SavedStateHandle
 import com.pillpronto.domain.model.AuthSessionState
 import com.pillpronto.domain.model.DoseLog
 import com.pillpronto.domain.model.DoseStatus
@@ -10,6 +11,7 @@ import com.pillpronto.domain.usecase.ClaimInviteUseCase
 import com.pillpronto.domain.usecase.GetLinkedPatientAdherenceUseCase
 import com.pillpronto.domain.usecase.GetMyPatientsUseCase
 import com.pillpronto.domain.usecase.ObserveAuthSessionUseCase
+import com.pillpronto.ui.navigation.Route
 import com.pillpronto.util.FakeAuthRepository
 import com.pillpronto.util.FakeLinkRepository
 import com.pillpronto.util.FakeLinkedPatientDataRepository
@@ -30,7 +32,8 @@ class MyPatientsViewModelTest {
     private val linkRepository = FakeLinkRepository()
     private val linkedPatientDataRepository = FakeLinkedPatientDataRepository()
 
-    private fun createViewModel() = MyPatientsViewModel(
+    private fun createViewModel(prefillCode: String? = null) = MyPatientsViewModel(
+        SavedStateHandle(prefillCode?.let { mapOf(Route.MyPatients.ARG_PREFILL_CODE to it) } ?: emptyMap()),
         ObserveAuthSessionUseCase(authRepository),
         ClaimInviteUseCase(linkRepository),
         GetMyPatientsUseCase(linkRepository),
@@ -82,6 +85,14 @@ class MyPatientsViewModelTest {
 
         assertTrue(vm.state.value.claimError)
         assertEquals("BAD", vm.state.value.codeInput) // pastrat, userul poate corecta
+    }
+
+    @Test
+    fun `codul din deep link pre-completeaza inputul, fara claim automat`() = runTest {
+        val vm = createViewModel(prefillCode = "XYZ789")
+
+        assertEquals("XYZ789", vm.state.value.codeInput)
+        assertEquals(null, linkRepository.lastClaimedCode) // userul tot trebuie sa apese butonul
     }
 
     @Test

@@ -1,5 +1,6 @@
 package com.pillpronto.util
 
+import com.pillpronto.domain.model.CaregiverSummary
 import com.pillpronto.domain.model.LinkRole
 import com.pillpronto.domain.model.LinkStatus
 import com.pillpronto.domain.model.PatientLink
@@ -11,6 +12,7 @@ class FakeLinkRepository : LinkRepository {
 
     val links = mutableListOf<PatientLink>()
     val patients = mutableMapOf<String, List<PatientSummary>>() // granteeUserId -> pacienti
+    val caregivers = mutableMapOf<String, List<CaregiverSummary>>() // patientProfileId -> apartinatori
     var createInviteError: Throwable? = null
     var revokeLinkError: Throwable? = null
     var claimInviteResult: Result<Unit> = Result.success(Unit)
@@ -49,4 +51,7 @@ class FakeLinkRepository : LinkRepository {
 
     override suspend fun getMyPatients(granteeUserId: String): List<PatientSummary> =
         patients[granteeUserId].orEmpty()
+
+    override suspend fun getMyCaregivers(patientProfileId: String): List<CaregiverSummary> =
+        caregivers[patientProfileId].orEmpty()
 }

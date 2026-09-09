@@ -4,6 +4,8 @@ import com.pillpronto.data.remote.dto.ClaimLinkParams
 import com.pillpronto.data.remote.dto.LinkDto
 import com.pillpronto.data.remote.dto.LinkInviteInsertDto
 import com.pillpronto.data.remote.dto.PatientProfileSummaryDto
+import com.pillpronto.data.remote.dto.ProfileDto
+import com.pillpronto.domain.model.CaregiverSummary
 import com.pillpronto.domain.model.LinkRole
 import com.pillpronto.domain.model.LinkStatus
 import com.pillpronto.domain.model.PatientLink
@@ -72,6 +74,21 @@ class LinkRepositoryImpl @Inject constructor(
         }
     }
 
+    override suspend fun getMyCaregivers(patientProfileId: String): List<CaregiverSummary> {
+        val links = supabase.from(LINKS_TABLE)
+            .select { filter { eq("patient_profile_id", patientProfileId); eq("status", STATUS_ACCEPTED) } }
+            .decodeList<LinkDto>()
+        val granteeIds = links.mapNotNull { it.granteeUserId }.distinct()
+        if (granteeIds.isEmpty()) return emptyList()
+
+        // Vizibilitate garantata de politica RLS `profiles_visible_to_linked_owner`
+        // (supabase/migrations/0005_profiles_visible_to_linked_grantee.sql).
+        return supabase.from(PROFILES_TABLE)
+            .select { filter { isIn("id", granteeIds) } }
+            .decodeList<ProfileDto>()
+            .map { CaregiverSummary(userId = it.id, displayName = it.displayName) }
+    }
+
     private fun generateInviteCode(): String =
         (1..INVITE_CODE_LENGTH).map { INVITE_CODE_ALPHABET[secureRandom.nextInt(INVITE_CODE_ALPHABET.length)] }
             .joinToString("")
@@ -103,6 +120,7 @@ class LinkRepositoryImpl @Inject constructor(
     private companion object {
         const val LINKS_TABLE = "links"
         const val PATIENT_PROFILES_TABLE = "patient_profiles"
+        const val PROFILES_TABLE = "profiles"
         const val ROLE_CAREGIVER_VIEWER = "caregiver_viewer"
         const val STATUS_ACCEPTED = "accepted"
         const val STATUS_REVOKED = "revoked"

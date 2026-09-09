@@ -221,6 +221,13 @@ construiască peste ea (toate vor referi `patient_profile_id`).
     curs" înainte de fetch-ul async) — userul era retrimis direct pe onboarding după ce-l termina
     cu succes. Fix + detalii complete: `CLAUDE.md` secțiunea 7 (blocul 1.5d), test nou
     `AccountViewModelTest`.
+  - **Confirmat funcțional end-to-end pe device** după fix-uri; utilizatorul a cerut apoi
+    reducerea fricțiunii la legare (cod de introdus manual = "tedios") + vizibilitate identitate.
+  - **Rafinare UX**: deep link `pillpronto://invite?code=...` (schemă proprie, `ui/access/InviteLink.kt`)
+    + cod QR (`com.google.zxing:core`, doar generare) ca mecanism principal „fără tastare" — link-ul
+    text NU e garantat clicabil în WhatsApp/SMS (auto-linkify doar pe `http(s)://`), QR-ul ocolește
+    problema complet. Nume Aparținător vizibil Pacientului — migrare nouă
+    `0005_profiles_visible_to_linked_grantee.sql`. Detalii complete: `CLAUDE.md` secțiunea 7.
 - **1.5e — Flux Medic/Farmacist:** onboarding profesionist (auto-declarat + flag „neverificat"
   vizibil — vezi limitarea din secțiunea 9), dashboard read-only pe pacienții legați.
 - **1.5f — Audit & consimțământ:** `audit_log` populat automat, ecran „Cine îmi vede datele"

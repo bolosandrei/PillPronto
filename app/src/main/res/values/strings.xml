@@ -115,7 +115,7 @@
     <string name="account_error_passwords_mismatch">Parolele nu coincid</string>
     <string name="account_error_auth_failed">Autentificare eșuată. Verifică datele introduse.</string>
     <string name="account_error_rate_limited">Prea multe încercări într-un timp scurt. Așteaptă câteva minute și încearcă din nou.</string>
-    <string name="account_manage_access_button">Gestionează accesul</string>
+    <string name="account_manage_access_button">Gestionează accesul Aparținătorilor</string>
     <string name="account_my_patients_button">Pacienții mei</string>
 
     <!-- Ecranul de onboarding (alegere rol, dupa primul cont creat) -->
@@ -138,10 +138,12 @@
     <string name="manage_access_error_revoke">Nu am putut revoca accesul. Încearcă din nou.</string>
     <string name="manage_access_status_pending">În așteptare</string>
     <string name="manage_access_status_accepted">Acces acordat</string>
+    <string name="manage_access_status_accepted_named">Acces acordat lui %1$s</string>
+    <string name="manage_access_qr_description">Cod QR de invitație — scanează-l cu telefonul Aparținătorului</string>
     <string name="manage_access_status_revoked">Acces revocat</string>
     <string name="manage_access_code_label">Cod: %1$s</string>
     <string name="manage_access_share_button">Distribuie</string>
-    <string name="manage_access_share_text">Cod de acces PillPronto: %1$s\nIntrodu-l în aplicație, la „Pacienții mei”, ca să-mi vezi tratamentele și aderența.</string>
+    <string name="manage_access_share_text">Cod de acces PillPronto: %1$s\nIntrodu-l în aplicație, la „Pacienții mei”, ca să-mi vezi tratamentele și aderența (sau scanează codul QR).\n%2$s</string>
     <string name="manage_access_revoke_button">Revocă</string>
 
     <!-- Faza 1.5d: Apartinator — revendicare cod + lista pacientilor legati -->

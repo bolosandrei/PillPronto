@@ -1,6 +1,7 @@
 package com.pillpronto.ui.patients
 
 import android.util.Log
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.pillpronto.domain.model.AdherenceStats
@@ -9,6 +10,7 @@ import com.pillpronto.domain.usecase.ClaimInviteUseCase
 import com.pillpronto.domain.usecase.GetLinkedPatientAdherenceUseCase
 import com.pillpronto.domain.usecase.GetMyPatientsUseCase
 import com.pillpronto.domain.usecase.ObserveAuthSessionUseCase
+import com.pillpronto.ui.navigation.Route
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -36,13 +38,18 @@ data class MyPatientsUiState(
  * (Faza 1.5d, read-only — datele vin direct din Supabase, niciodata din Room local). */
 @HiltViewModel
 class MyPatientsViewModel @Inject constructor(
+    savedStateHandle: SavedStateHandle,
     observeAuthSession: ObserveAuthSessionUseCase,
     private val claimInvite: ClaimInviteUseCase,
     private val getMyPatients: GetMyPatientsUseCase,
     private val getLinkedPatientAdherence: GetLinkedPatientAdherenceUseCase
 ) : ViewModel() {
 
-    private val _state = MutableStateFlow(MyPatientsUiState())
+    // Pre-completat din deep link-ul de invitatie (pillpronto://invite?code=...), daca ecranul a
+    // fost deschis asa — vezi PillProntoNavHost. Userul tot apasa "Adauga pacient" ca sa confirme.
+    private val prefillCode: String? = savedStateHandle[Route.MyPatients.ARG_PREFILL_CODE]
+
+    private val _state = MutableStateFlow(MyPatientsUiState(codeInput = prefillCode.orEmpty()))
     val state = _state.asStateFlow()
 
     private var userId: String? = null

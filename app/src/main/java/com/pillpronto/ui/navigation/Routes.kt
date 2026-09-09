@@ -9,7 +9,11 @@ sealed class Route(val path: String) {
     data object Account : Route("account")
     data object Onboarding : Route("onboarding")
     data object ManageAccess : Route("manage_access")
-    data object MyPatients : Route("my_patients")
+    data object MyPatients : Route("my_patients?prefillCode={prefillCode}") {
+        const val ARG_PREFILL_CODE = "prefillCode"
+        fun create(prefillCode: String? = null) =
+            if (prefillCode != null) "my_patients?prefillCode=$prefillCode" else "my_patients"
+    }
     data object PatientDetail : Route("patient_detail/{patientProfileId}") {
         const val ARG = "patientProfileId"
         fun create(patientProfileId: String) = "patient_detail/$patientProfileId"

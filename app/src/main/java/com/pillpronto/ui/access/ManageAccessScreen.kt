@@ -1,6 +1,7 @@
 package com.pillpronto.ui.access
 
 import android.content.Intent
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -8,6 +9,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -23,8 +25,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -82,7 +86,12 @@ fun ManageAccessScreen(
             )
             else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(state.links, key = { it.id }) { link ->
-                    LinkRow(link, onShare = { shareInviteCode(context, it) }, onRevoke = vm::onRevoke)
+                    LinkRow(
+                        link,
+                        caregiverName = link.granteeUserId?.let { state.caregiverNames[it] },
+                        onShare = { shareInviteCode(context, it) },
+                        onRevoke = vm::onRevoke
+                    )
                 }
             }
         }
@@ -90,49 +99,74 @@ fun ManageAccessScreen(
 }
 
 @Composable
-private fun LinkRow(link: PatientLink, onShare: (String) -> Unit, onRevoke: (String) -> Unit) {
+private fun LinkRow(
+    link: PatientLink,
+    caregiverName: String?,
+    onShare: (String) -> Unit,
+    onRevoke: (String) -> Unit
+) {
     Card(Modifier.fillMaxWidth()) {
-        Row(
-            Modifier.fillMaxWidth().padding(12.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column {
-                Text(linkStatusLabel(link.status), style = MaterialTheme.typography.bodyMedium)
-                if (link.status == LinkStatus.PENDING && link.inviteCode != null) {
-                    Text(
-                        stringResource(R.string.manage_access_code_label, link.inviteCode),
-                        style = MaterialTheme.typography.titleMedium
-                    )
-                }
-            }
-            when (link.status) {
-                LinkStatus.PENDING -> if (link.inviteCode != null) {
-                    IconButton(onClick = { onShare(link.inviteCode) }) {
-                        Icon(Icons.Filled.Share, contentDescription = stringResource(R.string.manage_access_share_button))
+        Column(Modifier.fillMaxWidth().padding(12.dp)) {
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text(linkStatusLabel(link.status, caregiverName), style = MaterialTheme.typography.bodyMedium)
+                    if (link.status == LinkStatus.PENDING && link.inviteCode != null) {
+                        Text(
+                            stringResource(R.string.manage_access_code_label, link.inviteCode),
+                            style = MaterialTheme.typography.titleMedium
+                        )
                     }
                 }
-                LinkStatus.ACCEPTED -> TextButton(onClick = { onRevoke(link.id) }) {
-                    Text(stringResource(R.string.manage_access_revoke_button))
+                when (link.status) {
+                    LinkStatus.PENDING -> if (link.inviteCode != null) {
+                        IconButton(onClick = { onShare(link.inviteCode) }) {
+                            Icon(Icons.Filled.Share, contentDescription = stringResource(R.string.manage_access_share_button))
+                        }
+                    }
+                    LinkStatus.ACCEPTED -> TextButton(onClick = { onRevoke(link.id) }) {
+                        Text(stringResource(R.string.manage_access_revoke_button))
+                    }
+                    LinkStatus.REVOKED -> {}
                 }
-                LinkStatus.REVOKED -> {}
+            }
+
+            // QR-ul e mecanismul principal "fara tastare" — scanarea deschide direct aplicatia pe
+            // ecranul de revendicare, cu codul pre-completat. Link-ul text din share sheet e doar
+            // fallback (nu toate aplicatiile fac linkify pe scheme proprii precum pillpronto://).
+            if (link.status == LinkStatus.PENDING && link.inviteCode != null) {
+                InviteQrCode(link.inviteCode, Modifier.padding(top = 12.dp))
             }
         }
     }
+}
+
+@Composable
+private fun InviteQrCode(code: String, modifier: Modifier = Modifier) {
+    val bitmap = remember(code) { generateQrBitmap(buildInviteUri(code)) }
+    Image(
+        bitmap = bitmap.asImageBitmap(),
+        contentDescription = stringResource(R.string.manage_access_qr_description),
+        modifier = modifier.size(160.dp)
+    )
 }
 
 private fun shareInviteCode(context: android.content.Context, code: String) {
     val intent = Intent(Intent.ACTION_SEND).apply {
         type = "text/plain"
-        putExtra(Intent.EXTRA_TEXT, context.getString(R.string.manage_access_share_text, code))
+        putExtra(Intent.EXTRA_TEXT, context.getString(R.string.manage_access_share_text, code, buildInviteUri(code)))
     }
     context.startActivity(Intent.createChooser(intent, context.getString(R.string.manage_access_share_button)))
 }
 
 @Composable
-private fun linkStatusLabel(status: LinkStatus): String = when (status) {
+private fun linkStatusLabel(status: LinkStatus, caregiverName: String?): String = when (status) {
     LinkStatus.PENDING -> stringResource(R.string.manage_access_status_pending)
-    LinkStatus.ACCEPTED -> stringResource(R.string.manage_access_status_accepted)
+    LinkStatus.ACCEPTED -> caregiverName?.let { stringResource(R.string.manage_access_status_accepted_named, it) }
+        ?: stringResource(R.string.manage_access_status_accepted)
     LinkStatus.REVOKED -> stringResource(R.string.manage_access_status_revoked)
 }
 
