@@ -2,11 +2,12 @@
 
 > Document de arhitectură + plan de implementare. Scris la brainstorming-ul din 2026-09-07.
 > Completează `CLAUDE.md` (nu-l duplică) — citit împreună cu acesta la sesiunile viitoare.
-> Status: **1.5a + 1.5b + 1.5c + 1.5d (viewer) implementate** (1.5a+1.5b: 2026-09-07; 1.5c+1.5d:
+> Status: **1.5a + 1.5b + 1.5c + 1.5d + 1.5e implementate** (1.5a+1.5b: 2026-09-07; 1.5c-1.5e:
 > 2026-09-09) — schema + RLS + migrare Room, SDK Supabase Android + autentificare email/parolă +
-> onboarding rol, sync layer Room↔Supabase, legătură Pacient↔Aparținător read-only + notificare
-> doză ratată. **Google Sign-In, profil dependent (amânat din 1.5d) și 1.5e-1.5g rămân
-> neimplementate.** Vezi secțiunea 8 pentru etapele propuse și starea fiecăreia.
+> onboarding rol, sync layer Room↔Supabase, legătură Pacient↔Aparținător/Medic/Farmacist read-only
+> + notificare doză ratată (doar Aparținător). **Google Sign-In, profil dependent (amânat din
+> 1.5d) și 1.5f-1.5g rămân neimplementate.** Vezi secțiunea 8 pentru etapele propuse și starea
+> fiecăreia.
 
 ---
 
@@ -228,8 +229,22 @@ construiască peste ea (toate vor referi `patient_profile_id`).
     text NU e garantat clicabil în WhatsApp/SMS (auto-linkify doar pe `http(s)://`), QR-ul ocolește
     problema complet. Nume Aparținător vizibil Pacientului — migrare nouă
     `0005_profiles_visible_to_linked_grantee.sql`. Detalii complete: `CLAUDE.md` secțiunea 7.
-- **1.5e — Flux Medic/Farmacist:** onboarding profesionist (auto-declarat + flag „neverificat"
-  vizibil — vezi limitarea din secțiunea 9), dashboard read-only pe pacienții legați.
+- **1.5e — Flux Medic/Farmacist ✅ IMPLEMENTAT (2026-09-09):**
+  - Infrastructura de citire (`MyPatientsScreen`/`PatientDetailScreen`, RLS) era deja agnostică la
+    rol din 1.5d — reutilizată integral, zero schimbări. `CaregiverAlertWorker` rămâne strict
+    pentru Aparținător (Medic/Farmacist nu primesc notificări, conform tabelului din secțiunea 6).
+  - Pacientul alege explicit rolul (Aparținător/Medic/Farmacist) la generarea codului —
+    `createInvite`/`claim_link` (migrare nouă `0007_professional_invite_role_check.sql`) validează
+    că rolul contului care revendică se potrivește cu cel declarat.
+  - Ecran separat `ManageProfessionalAccessScreen` (decizie explicită a utilizatorului, nu unificat
+    cu ecranul Aparținătorilor) — selector Medic/Farmacist, altfel aceeași structură.
+    `AccessLinkComponents.kt` extrage piesele reutilizabile (rând legătură, QR, distribuire) între
+    cele două ecrane.
+  - Flag „neverificat" (auto-declarat, fără validare CUIM — vezi limitarea din secțiunea 9) vizibil
+    atât pe lista Pacientului cât și pe propriul cont al Medicului/Farmacistului.
+  - Teste: `ManageProfessionalAccessViewModelTest` (7 cazuri noi) + extindere
+    `ManageAccessViewModelTest`, toate trec.
+  - **Neverificat încă pe device** — migrarea 0007 trebuie rulată de utilizator (după 0001-0006).
 - **1.5f — Audit & consimțământ:** `audit_log` populat automat, ecran „Cine îmi vede datele"
   (revocare acces) — obligatoriu GDPR, nu opțional.
 - **1.5g — Teste:** RLS policy tests (pgTAP sau echivalent), teste de integrare sync, teste unitare

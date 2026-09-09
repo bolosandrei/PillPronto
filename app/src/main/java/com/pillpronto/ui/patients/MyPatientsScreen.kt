@@ -20,6 +20,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -36,12 +37,14 @@ import com.google.mlkit.vision.barcode.common.Barcode
 import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions
 import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
 import com.pillpronto.R
+import com.pillpronto.core.ui.components.BackTopAppBar
 import com.pillpronto.domain.model.AdherenceStats
 import com.pillpronto.ui.access.extractInviteCode
 
 @Composable
 fun MyPatientsScreen(
     padding: PaddingValues,
+    onBack: () -> Unit,
     onOpenPatient: (String) -> Unit,
     vm: MyPatientsViewModel = hiltViewModel()
 ) {
@@ -50,47 +53,51 @@ fun MyPatientsScreen(
 
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { vm.refresh() }
 
-    Column(
-        Modifier.fillMaxSize().padding(padding).padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        Text(stringResource(R.string.my_patients_title), style = MaterialTheme.typography.headlineSmall)
-
-        OutlinedTextField(
-            state.codeInput,
-            vm::onCodeChange,
-            label = { Text(stringResource(R.string.my_patients_claim_label)) },
-            trailingIcon = {
-                IconButton(onClick = { scanInviteQrCode(context, vm::onCodeChange) }) {
-                    Icon(Icons.Filled.QrCodeScanner, contentDescription = stringResource(R.string.my_patients_scan_button))
-                }
-            },
-            modifier = Modifier.fillMaxWidth()
-        )
-        if (state.claimError) {
-            Text(stringResource(R.string.my_patients_claim_error), color = MaterialTheme.colorScheme.error)
-        }
-        Button(
-            onClick = vm::onClaim,
-            enabled = !state.isClaiming && state.codeInput.isNotBlank(),
-            modifier = Modifier.fillMaxWidth()
+    Scaffold(topBar = { BackTopAppBar(stringResource(R.string.my_patients_title), onBack) }) { innerPadding ->
+        Column(
+            Modifier.fillMaxSize().padding(padding).padding(innerPadding).padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Text(stringResource(R.string.my_patients_claim_button))
-        }
-
-        HorizontalDivider(Modifier.padding(vertical = 4.dp))
-
-        when {
-            state.isLoadingPatients -> Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-                CircularProgressIndicator(Modifier.padding(top = 16.dp))
-            }
-            state.patients.isEmpty() -> Text(
-                stringResource(R.string.my_patients_empty),
-                style = MaterialTheme.typography.bodyMedium
+            OutlinedTextField(
+                state.codeInput,
+                vm::onCodeChange,
+                label = { Text(stringResource(R.string.my_patients_claim_label)) },
+                trailingIcon = {
+                    IconButton(onClick = { scanInviteQrCode(context, vm::onCodeChange) }) {
+                        Icon(Icons.Filled.QrCodeScanner, contentDescription = stringResource(R.string.my_patients_scan_button))
+                    }
+                },
+                modifier = Modifier.fillMaxWidth()
             )
-            else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(state.patients, key = { it.patientProfileId }) { patient ->
-                    PatientRow(patient, onClick = { onOpenPatient(patient.patientProfileId) })
+            if (state.claimError) {
+                Text(stringResource(R.string.my_patients_claim_error), color = MaterialTheme.colorScheme.error)
+            }
+            Button(
+                onClick = vm::onClaim,
+                enabled = !state.isClaiming && state.codeInput.isNotBlank(),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(stringResource(R.string.my_patients_claim_button))
+            }
+
+            HorizontalDivider(Modifier.padding(vertical = 4.dp))
+
+            // isLoadingPatients && patients.isEmpty(): abia primul fetch -> spinner justificat.
+            // Un refresh ulterior (revenire pe ecran) tot seteaza isLoadingPatients=true, dar daca
+            // lista veche e deja pe ecran o pastram vizibila neintrerupt — acelasi fix ca la
+            // AccountScreen/ManageAccessScreen.
+            when {
+                state.isLoadingPatients && state.patients.isEmpty() -> Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                    CircularProgressIndicator(Modifier.padding(top = 16.dp))
+                }
+                state.patients.isEmpty() -> Text(
+                    stringResource(R.string.my_patients_empty),
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(state.patients, key = { it.patientProfileId }) { patient ->
+                        PatientRow(patient, onClick = { onOpenPatient(patient.patientProfileId) })
+                    }
                 }
             }
         }

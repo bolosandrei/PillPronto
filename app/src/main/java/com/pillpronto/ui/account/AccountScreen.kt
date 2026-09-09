@@ -38,13 +38,25 @@ fun AccountScreen(
     padding: PaddingValues,
     onNeedsOnboarding: () -> Unit,
     onManageAccess: () -> Unit,
+    onManageProfessionalAccess: () -> Unit,
     onMyPatients: () -> Unit,
     vm: AccountViewModel = hiltViewModel()
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
 
-    // Reface profilul la fiecare revenire pe ecran (ex. dupa onboarding reusit) — sesiunea nu se
-    // schimba in acel moment, deci fetch-ul reactiv din ViewModel nu s-ar re-declansa singur.
+    // Reface profilul de fiecare data cand AccountScreen intra in compozitie (ex. dupa onboarding
+    // reusit, cand popBackStack() aduce inapoi acest ecran) — DECLARAT INAINTEA efectului de mai
+    // jos, cu intentie: LaunchedEffect(Unit) ruleaza sincron in aceeasi trecere de aplicare a
+    // efectelor compozitiei curente, deci `vm.refresh()` (care marcheaza profileChecked=false
+    // imediat, vezi AccountViewModel) apuca sa "curete" starea veche INAINTE ca efectul de
+    // verificare de mai jos sa apuce sa o citeasca. `LifecycleEventEffect(ON_RESUME)` nu oferea
+    // aceasta garantie de ordine — evenimentul de lifecycle se declanseaza separat, uneori DUPA
+    // ce efectul de verificare deja a citit starea veche (bug real, gasit la testarea 1.5e: dupa
+    // onboarding reusit, userul era retrimis pe onboarding, uneori de mai multe ori la rand).
+    LaunchedEffect(Unit) { vm.refresh() }
+    // Pastrat si acesta — acopera revenirea din fundal (Android real resume), unde compozitia NU
+    // se reface (deci LaunchedEffect(Unit) de mai sus nu ruleaza din nou), doar Lifecycle-ul
+    // trece prin ON_RESUME.
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { vm.refresh() }
 
     // Autentificat dar fara rand in `profiles` (cont nou sau onboarding neterminat) -> onboarding.
@@ -67,12 +79,18 @@ fun AccountScreen(
                     LoggedOutForm(state = state, vm = vm)
                 }
             is AuthSessionState.Authenticated ->
-                if (state.profileChecked && state.profile != null) {
+                // Afisam profilul de indata ce-l avem, chiar daca un refresh() e in curs pe fundal
+                // (profileChecked=false temporar la fiecare revenire pe tab, vezi LaunchedEffect
+                // de mai sus) — altfel ecranul clipeste la spinner de fiecare data cand userul
+                // reintra pe tab-ul "Cont", desi datele vechi erau oricum corecte in >99% din
+                // cazuri. Spinner-ul ramane doar pentru primul fetch real (profile == null).
+                if (state.profile != null) {
                     LoggedInView(
                         displayName = state.profile!!.displayName,
                         role = state.profile!!.role,
                         onSignOut = vm::onSignOut,
                         onManageAccess = onManageAccess,
+                        onManageProfessionalAccess = onManageProfessionalAccess,
                         onMyPatients = onMyPatients
                     )
                 } else {
@@ -147,6 +165,7 @@ private fun LoggedInView(
     role: AccountRole,
     onSignOut: () -> Unit,
     onManageAccess: () -> Unit,
+    onManageProfessionalAccess: () -> Unit,
     onMyPatients: () -> Unit
 ) {
     Text(
@@ -154,17 +173,34 @@ private fun LoggedInView(
         style = MaterialTheme.typography.headlineSmall
     )
     Text(stringResource(R.string.account_role_label, roleLabel(role)), style = MaterialTheme.typography.bodyMedium)
+    if (role == AccountRole.DOCTOR || role == AccountRole.PHARMACIST) {
+        // Faza 1.5e: auto-declarare, fara validare reala a numarului de ordin/CUIM — vezi
+        // docs/user-management-plan.md sectiunea 9. Vizibil si aici (propriul cont), nu doar la
+        // Pacient (ManageProfessionalAccessScreen).
+        Text(
+            stringResource(R.string.account_unverified_badge),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.error
+        )
+    }
 
-    // Faza 1.5d: legatura Pacient<->Apartinator — fiecare rol isi vede doar butonul relevant.
-    // DOCTOR/PHARMACIST raman fara buton dedicat pana la 1.5e.
+    // Faza 1.5d/1.5e: legatura Pacient<->Apartinator/Medic/Farmacist — fiecare rol isi vede
+    // butonul relevant. Pacientul are doua ecrane separate (decizie explicita), restul rolurilor
+    // (care REVENDICA acces, nu genereaza) reutilizeaza acelasi ecran "Pacientii mei", agnostic
+    // la rol.
     when (role) {
-        AccountRole.PATIENT -> OutlinedButton(onClick = onManageAccess, modifier = Modifier.fillMaxWidth()) {
-            Text(stringResource(R.string.account_manage_access_button))
+        AccountRole.PATIENT -> {
+            OutlinedButton(onClick = onManageAccess, modifier = Modifier.fillMaxWidth()) {
+                Text(stringResource(R.string.account_manage_access_button))
+            }
+            OutlinedButton(onClick = onManageProfessionalAccess, modifier = Modifier.fillMaxWidth()) {
+                Text(stringResource(R.string.account_manage_professional_access_button))
+            }
         }
-        AccountRole.CAREGIVER -> OutlinedButton(onClick = onMyPatients, modifier = Modifier.fillMaxWidth()) {
-            Text(stringResource(R.string.account_my_patients_button))
-        }
-        else -> {}
+        AccountRole.CAREGIVER, AccountRole.DOCTOR, AccountRole.PHARMACIST ->
+            OutlinedButton(onClick = onMyPatients, modifier = Modifier.fillMaxWidth()) {
+                Text(stringResource(R.string.account_my_patients_button))
+            }
     }
 
     OutlinedButton(onClick = onSignOut, modifier = Modifier.fillMaxWidth()) {

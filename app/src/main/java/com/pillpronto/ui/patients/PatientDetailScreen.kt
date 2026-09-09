@@ -13,6 +13,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -24,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.pillpronto.R
+import com.pillpronto.core.ui.components.BackTopAppBar
 import com.pillpronto.core.ui.theme.DoseMissed
 import com.pillpronto.core.ui.theme.DoseTaken
 import com.pillpronto.domain.model.AdherenceStats
@@ -42,39 +44,38 @@ private val HM = DateTimeFormatter.ofPattern("HH:mm")
 @Composable
 fun PatientDetailScreen(
     padding: PaddingValues,
+    onBack: () -> Unit,
     vm: PatientDetailViewModel = hiltViewModel()
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
+    val title = state.displayName ?: stringResource(R.string.patient_detail_loading)
 
-    Column(Modifier.fillMaxSize().padding(padding).padding(16.dp)) {
-        Text(
-            state.displayName ?: stringResource(R.string.patient_detail_loading),
-            style = MaterialTheme.typography.headlineSmall
-        )
-
-        if (state.isLoading) {
-            Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-                CircularProgressIndicator(Modifier.padding(top = 32.dp))
+    Scaffold(topBar = { BackTopAppBar(title, onBack) }) { innerPadding ->
+        Column(Modifier.fillMaxSize().padding(padding).padding(innerPadding).padding(16.dp)) {
+            if (state.isLoading) {
+                Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                    CircularProgressIndicator(Modifier.padding(top = 32.dp))
+                }
+                return@Column
             }
-            return@Column
-        }
 
-        AdherenceSummary(state.stats, Modifier.padding(top = 8.dp))
+            AdherenceSummary(state.stats)
 
-        HorizontalDivider(Modifier.padding(vertical = 16.dp))
+            HorizontalDivider(Modifier.padding(vertical = 16.dp))
 
-        if (state.treatments.isEmpty()) {
-            Text(
-                stringResource(R.string.patient_detail_no_treatments),
-                style = MaterialTheme.typography.bodyMedium
-            )
-        } else {
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                items(state.treatments, key = { it.remoteId }) { linked ->
-                    TreatmentSection(
-                        linked,
-                        doses = state.doseLogs.filter { it.treatmentRemoteId == linked.remoteId }
-                    )
+            if (state.treatments.isEmpty()) {
+                Text(
+                    stringResource(R.string.patient_detail_no_treatments),
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            } else {
+                LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    items(state.treatments, key = { it.remoteId }) { linked ->
+                        TreatmentSection(
+                            linked,
+                            doses = state.doseLogs.filter { it.treatmentRemoteId == linked.remoteId }
+                        )
+                    }
                 }
             }
         }

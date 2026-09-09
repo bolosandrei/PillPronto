@@ -17,22 +17,25 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-enum class ManageAccessError { GENERATE_FAILED, REVOKE_FAILED }
-
-data class ManageAccessUiState(
+data class ManageProfessionalAccessUiState(
+    val selectedRole: LinkRole = LinkRole.DOCTOR,
     val links: List<PatientLink> = emptyList(),
     // granteeUserId -> nume afisat, doar pt. legaturile ACCEPTED (vezi GetMyCaregiversUseCase).
-    val caregiverNames: Map<String, String> = emptyMap(),
+    val grantedNames: Map<String, String> = emptyMap(),
     val isLoading: Boolean = true,
     val isGenerating: Boolean = false,
     val error: ManageAccessError? = null
 )
 
-/** Pacient: generare/distribuire cod de invitatie + gestionare legaturi acordate (Faza 1.5d).
- * Fiecare rand `PENDING` isi arata propriul cod (Pacientul isi vede intotdeauna randurile
- * proprii, indiferent de status — nu e nevoie de o stare separata "cod tocmai generat"). */
+/** Pacient — gestionarea accesului Medic/Farmacist (`links.role in {doctor, pharmacist}`), Faza
+ * 1.5e. Ecran separat de `ManageAccessScreen` (Aparținători, decizie explicită a utilizatorului),
+ * dar aceeași logică de fond — reutilizează `GetMyOutgoingLinksUseCase`/`GetMyCaregiversUseCase`/
+ * `RevokeLinkUseCase` neschimbate, doar filtrate pe alt set de roluri, plus un selector de rol la
+ * generare (`createInvite` primește acum rolul ales, nu mai e hardcodat CAREGIVER_VIEWER). Toate
+ * legăturile afișate aici sunt neverificate (fără validare reală CUIM — vezi
+ * docs/user-management-plan.md secțiunea 9). */
 @HiltViewModel
-class ManageAccessViewModel @Inject constructor(
+class ManageProfessionalAccessViewModel @Inject constructor(
     private val getLocalPatientProfileId: GetLocalPatientProfileIdUseCase,
     private val createInvite: CreateInviteUseCase,
     private val getMyOutgoingLinks: GetMyOutgoingLinksUseCase,
@@ -40,29 +43,28 @@ class ManageAccessViewModel @Inject constructor(
     private val revokeLink: RevokeLinkUseCase
 ) : ViewModel() {
 
-    private val _state = MutableStateFlow(ManageAccessUiState())
+    private val _state = MutableStateFlow(ManageProfessionalAccessUiState())
     val state = _state.asStateFlow()
 
     init { refresh() }
+
+    fun onRoleSelected(role: LinkRole) = _state.update { it.copy(selectedRole = role) }
 
     fun refresh() {
         viewModelScope.launch {
             _state.update { it.copy(isLoading = true) }
             val patientProfileId = getLocalPatientProfileId()
-            // Filtrat la CAREGIVER_VIEWER — tabela `links` poate contine acum si randuri
-            // DOCTOR/PHARMACIST (generate din ManageProfessionalAccessScreen, Faza 1.5e), care nu
-            // trebuie sa apara aici (ecrane separate, decizie explicita).
             val links = runCatching { getMyOutgoingLinks(patientProfileId) }
                 .onFailure { Log.e(TAG, "Nu am putut incarca legaturile", it) }
                 .getOrDefault(emptyList())
-                .filter { it.role == LinkRole.CAREGIVER_VIEWER }
+                .filter { it.role == LinkRole.DOCTOR || it.role == LinkRole.PHARMACIST }
             val granteeIds = links.mapNotNull { it.granteeUserId }.toSet()
-            val caregiverNames = runCatching { getMyCaregivers(patientProfileId) }
-                .onFailure { Log.e(TAG, "Nu am putut incarca numele apartinatorilor", it) }
+            val grantedNames = runCatching { getMyCaregivers(patientProfileId) }
+                .onFailure { Log.e(TAG, "Nu am putut incarca numele profesionistilor", it) }
                 .getOrDefault(emptyList())
                 .filter { it.displayName != null && it.userId in granteeIds }
                 .associate { it.userId to it.displayName!! }
-            _state.update { it.copy(links = links, caregiverNames = caregiverNames, isLoading = false) }
+            _state.update { it.copy(links = links, grantedNames = grantedNames, isLoading = false) }
         }
     }
 
@@ -70,7 +72,7 @@ class ManageAccessViewModel @Inject constructor(
         viewModelScope.launch {
             _state.update { it.copy(isGenerating = true, error = null) }
             try {
-                createInvite(getLocalPatientProfileId())
+                createInvite(getLocalPatientProfileId(), _state.value.selectedRole)
                 _state.update { it.copy(isGenerating = false) }
                 refresh()
             } catch (e: Exception) {
@@ -93,6 +95,6 @@ class ManageAccessViewModel @Inject constructor(
     }
 
     private companion object {
-        const val TAG = "ManageAccessViewModel"
+        const val TAG = "ManageProfessionalAccessViewModel"
     }
 }

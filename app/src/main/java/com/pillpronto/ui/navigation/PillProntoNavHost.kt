@@ -25,6 +25,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.pillpronto.R
 import com.pillpronto.ui.access.ManageAccessScreen
+import com.pillpronto.ui.access.ManageProfessionalAccessScreen
 import com.pillpronto.ui.account.AccountScreen
 import com.pillpronto.ui.adherence.AdherenceScreen
 import com.pillpronto.ui.onboarding.OnboardingScreen
@@ -110,7 +111,8 @@ fun PillProntoNavHost(
                         } else {
                             navController.popBackStack()
                         }
-                    }
+                    },
+                    onBack = { navController.popBackStack() }
                 )
             }
             composable(
@@ -119,25 +121,37 @@ fun PillProntoNavHost(
             ) {
                 TreatmentDetailScreen(
                     padding,
-                    onEdit = { id -> navController.navigate(Route.AddEditTreatment.create(id)) }
+                    onEdit = { id -> navController.navigate(Route.AddEditTreatment.create(id)) },
+                    onBack = { navController.popBackStack() }
                 )
             }
             composable(Route.Account.path) {
                 AccountScreen(
                     padding,
-                    onNeedsOnboarding = { navController.navigate(Route.Onboarding.path) },
+                    // launchSingleTop: plasa de siguranta — daca AccountScreen ar mai declansa
+                    // aceasta navigare de mai multe ori la rand (ex. o viitoare regresie a
+                    // fix-ului din AccountScreen.kt), nu se mai stivuiesc mai multe instante de
+                    // Onboarding, care ar cere userului sa apese Back de mai multe ori.
+                    onNeedsOnboarding = {
+                        navController.navigate(Route.Onboarding.path) { launchSingleTop = true }
+                    },
                     onManageAccess = { navController.navigate(Route.ManageAccess.path) },
+                    onManageProfessionalAccess = { navController.navigate(Route.ManageProfessionalAccess.path) },
                     onMyPatients = { navController.navigate(Route.MyPatients.create()) }
                 )
             }
             composable(Route.Onboarding.path) {
                 OnboardingScreen(
                     padding,
-                    onDone = { navController.popBackStack() }
+                    onDone = { navController.popBackStack() },
+                    onBack = { navController.popBackStack() }
                 )
             }
             composable(Route.ManageAccess.path) {
-                ManageAccessScreen(padding)
+                ManageAccessScreen(padding, onBack = { navController.popBackStack() })
+            }
+            composable(Route.ManageProfessionalAccess.path) {
+                ManageProfessionalAccessScreen(padding, onBack = { navController.popBackStack() })
             }
             composable(
                 route = Route.MyPatients.path,
@@ -147,6 +161,7 @@ fun PillProntoNavHost(
             ) {
                 MyPatientsScreen(
                     padding,
+                    onBack = { navController.popBackStack() },
                     onOpenPatient = { id -> navController.navigate(Route.PatientDetail.create(id)) }
                 )
             }
@@ -154,7 +169,7 @@ fun PillProntoNavHost(
                 route = Route.PatientDetail.path,
                 arguments = listOf(navArgument(Route.PatientDetail.ARG) { type = NavType.StringType })
             ) {
-                PatientDetailScreen(padding)
+                PatientDetailScreen(padding, onBack = { navController.popBackStack() })
             }
         }
     }

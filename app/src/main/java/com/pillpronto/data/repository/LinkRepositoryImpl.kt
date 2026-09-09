@@ -22,10 +22,10 @@ class LinkRepositoryImpl @Inject constructor(
     private val supabase: SupabaseClient
 ) : LinkRepository {
 
-    override suspend fun createInvite(patientProfileId: String): PatientLink {
+    override suspend fun createInvite(patientProfileId: String, role: LinkRole): PatientLink {
         val insertDto = LinkInviteInsertDto(
             patientProfileId = patientProfileId,
-            role = ROLE_CAREGIVER_VIEWER,
+            role = role.toDbValue(),
             inviteCode = generateInviteCode()
         )
         val dto = supabase.from(LINKS_TABLE)
@@ -101,6 +101,13 @@ class LinkRepositoryImpl @Inject constructor(
         status = status.toLinkStatus(),
         inviteCode = inviteCode
     )
+
+    private fun LinkRole.toDbValue(): String = when (this) {
+        LinkRole.CAREGIVER_VIEWER -> ROLE_CAREGIVER_VIEWER
+        LinkRole.CAREGIVER_DELEGATE -> "caregiver_delegate"
+        LinkRole.DOCTOR -> "doctor"
+        LinkRole.PHARMACIST -> "pharmacist"
+    }
 
     private fun String.toLinkRole(): LinkRole = when (this) {
         "caregiver_viewer" -> LinkRole.CAREGIVER_VIEWER

@@ -3,6 +3,7 @@ package com.pillpronto.ui.access
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -10,6 +11,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -27,28 +29,41 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.pillpronto.R
 import com.pillpronto.core.ui.components.BackTopAppBar
+import com.pillpronto.domain.model.LinkRole
 
-/** Pacient — gestionarea accesului Aparținătorilor (`links.role == caregiver_viewer`). Vezi
- * `ManageProfessionalAccessScreen` pentru ecranul analog Medic/Farmacist (Faza 1.5e) — ecrane
- * separate la cererea utilizatorului, componente de listă/QR/share partajate în
+/** Pacient — gestionarea accesului Medic/Farmacist (Faza 1.5e). Vezi `ManageAccessScreen`
+ * (Aparținători) pentru ecranul analog; componente de listă/QR/share partajate în
  * `AccessLinkComponents.kt`. */
 @Composable
-fun ManageAccessScreen(
+fun ManageProfessionalAccessScreen(
     padding: PaddingValues,
     onBack: () -> Unit,
-    vm: ManageAccessViewModel = hiltViewModel()
+    vm: ManageProfessionalAccessViewModel = hiltViewModel()
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { vm.refresh() }
 
-    Scaffold(topBar = { BackTopAppBar(stringResource(R.string.manage_access_title), onBack) }) { innerPadding ->
+    Scaffold(topBar = { BackTopAppBar(stringResource(R.string.manage_professional_access_title), onBack) }) { innerPadding ->
         Column(
             Modifier.fillMaxSize().padding(padding).padding(innerPadding).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Text(stringResource(R.string.manage_access_subtitle), style = MaterialTheme.typography.bodyMedium)
+            Text(stringResource(R.string.manage_professional_access_subtitle), style = MaterialTheme.typography.bodyMedium)
+
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(
+                    selected = state.selectedRole == LinkRole.DOCTOR,
+                    onClick = { vm.onRoleSelected(LinkRole.DOCTOR) },
+                    label = { Text(stringResource(R.string.account_role_doctor)) }
+                )
+                FilterChip(
+                    selected = state.selectedRole == LinkRole.PHARMACIST,
+                    onClick = { vm.onRoleSelected(LinkRole.PHARMACIST) },
+                    label = { Text(stringResource(R.string.account_role_pharmacist)) }
+                )
+            }
 
             Button(
                 onClick = vm::onGenerateInvite,
@@ -86,8 +101,8 @@ fun ManageAccessScreen(
                     items(state.links, key = { it.id }) { link ->
                         LinkRow(
                             link,
-                            grantedName = link.granteeUserId?.let { state.caregiverNames[it] },
-                            unverified = false,
+                            grantedName = link.granteeUserId?.let { state.grantedNames[it] },
+                            unverified = true,
                             onShare = { shareInviteCode(context, it) },
                             onRevoke = vm::onRevoke
                         )

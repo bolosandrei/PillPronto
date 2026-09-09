@@ -22,6 +22,7 @@ import androidx.compose.material3.InputChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -40,6 +41,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.pillpronto.R
+import com.pillpronto.core.ui.components.BackTopAppBar
 import com.pillpronto.core.ui.components.DatePickerDialogBox
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
@@ -52,6 +54,7 @@ private val DMY = DateTimeFormatter.ofPattern("dd.MM.yyyy")
 fun AddTreatmentScreen(
     padding: PaddingValues,
     onDone: (deleted: Boolean) -> Unit,
+    onBack: () -> Unit,
     vm: AddTreatmentViewModel = hiltViewModel()
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
@@ -62,60 +65,65 @@ fun AddTreatmentScreen(
     var showEndPicker by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
 
-    Column(
-        Modifier.fillMaxSize().padding(padding).padding(16.dp).verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        Text(
-            stringResource(if (state.isEditing) R.string.add_treatment_title_edit else R.string.add_treatment_title_new),
-            style = MaterialTheme.typography.headlineSmall
-        )
-        OutlinedTextField(state.name, vm::onName, label = { Text(stringResource(R.string.add_treatment_name_label)) }, modifier = Modifier.fillMaxWidth())
-        OutlinedTextField(state.dosage, vm::onDosage, label = { Text(stringResource(R.string.add_treatment_dosage_label)) }, modifier = Modifier.fillMaxWidth())
-
-        Row(
-            Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(Modifier.weight(1f).padding(end = 8.dp)) {
-                Text(stringResource(R.string.add_treatment_as_needed_title), style = MaterialTheme.typography.titleSmall)
-                Text(
-                    stringResource(R.string.add_treatment_as_needed_desc),
-                    style = MaterialTheme.typography.bodySmall
-                )
-            }
-            Switch(checked = state.asNeeded, onCheckedChange = vm::onAsNeededToggle)
+    Scaffold(
+        topBar = {
+            BackTopAppBar(
+                stringResource(if (state.isEditing) R.string.add_treatment_title_edit else R.string.add_treatment_title_new),
+                onBack
+            )
         }
+    ) { innerPadding ->
+        Column(
+            Modifier.fillMaxSize().padding(padding).padding(innerPadding).padding(16.dp).verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            OutlinedTextField(state.name, vm::onName, label = { Text(stringResource(R.string.add_treatment_name_label)) }, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(state.dosage, vm::onDosage, label = { Text(stringResource(R.string.add_treatment_dosage_label)) }, modifier = Modifier.fillMaxWidth())
 
-        if (!state.asNeeded) {
-            Text(stringResource(R.string.add_treatment_times_title), style = MaterialTheme.typography.titleSmall)
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                state.times.forEach { time ->
-                    InputChip(
-                        selected = false,
-                        onClick = { vm.removeTime(time) },
-                        label = { Text(time.format(HM)) },
-                        trailingIcon = { Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.add_treatment_remove_time_content_desc)) }
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(Modifier.weight(1f).padding(end = 8.dp)) {
+                    Text(stringResource(R.string.add_treatment_as_needed_title), style = MaterialTheme.typography.titleSmall)
+                    Text(
+                        stringResource(R.string.add_treatment_as_needed_desc),
+                        style = MaterialTheme.typography.bodySmall
                     )
                 }
-                AssistChip(onClick = { showTimePicker = true }, label = { Text(stringResource(R.string.add_treatment_add_time)) })
+                Switch(checked = state.asNeeded, onCheckedChange = vm::onAsNeededToggle)
             }
-        }
 
-        OutlinedButton(onClick = { showStartPicker = true }, modifier = Modifier.fillMaxWidth()) {
-            Text(stringResource(R.string.common_start_label, state.startDate.format(DMY)))
-        }
-        OutlinedButton(onClick = { showEndPicker = true }, modifier = Modifier.fillMaxWidth()) {
-            Text(stringResource(R.string.common_end_label, state.endDate?.format(DMY) ?: stringResource(R.string.common_no_end_date)))
-        }
+            if (!state.asNeeded) {
+                Text(stringResource(R.string.add_treatment_times_title), style = MaterialTheme.typography.titleSmall)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    state.times.forEach { time ->
+                        InputChip(
+                            selected = false,
+                            onClick = { vm.removeTime(time) },
+                            label = { Text(time.format(HM)) },
+                            trailingIcon = { Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.add_treatment_remove_time_content_desc)) }
+                        )
+                    }
+                    AssistChip(onClick = { showTimePicker = true }, label = { Text(stringResource(R.string.add_treatment_add_time)) })
+                }
+            }
 
-        state.error?.let { Text(errorMessage(it), color = MaterialTheme.colorScheme.error) }
+            OutlinedButton(onClick = { showStartPicker = true }, modifier = Modifier.fillMaxWidth()) {
+                Text(stringResource(R.string.common_start_label, state.startDate.format(DMY)))
+            }
+            OutlinedButton(onClick = { showEndPicker = true }, modifier = Modifier.fillMaxWidth()) {
+                Text(stringResource(R.string.common_end_label, state.endDate?.format(DMY) ?: stringResource(R.string.common_no_end_date)))
+            }
 
-        Button(onClick = vm::save, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.common_save)) }
-        if (state.isEditing) {
-            OutlinedButton(onClick = { showDeleteConfirm = true }, modifier = Modifier.fillMaxWidth()) {
-                Text(stringResource(R.string.add_treatment_delete_treatment), color = MaterialTheme.colorScheme.error)
+            state.error?.let { Text(errorMessage(it), color = MaterialTheme.colorScheme.error) }
+
+            Button(onClick = vm::save, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.common_save)) }
+            if (state.isEditing) {
+                OutlinedButton(onClick = { showDeleteConfirm = true }, modifier = Modifier.fillMaxWidth()) {
+                    Text(stringResource(R.string.add_treatment_delete_treatment), color = MaterialTheme.colorScheme.error)
+                }
             }
         }
     }

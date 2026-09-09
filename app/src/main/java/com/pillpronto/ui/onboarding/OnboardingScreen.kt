@@ -10,6 +10,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -20,6 +21,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.pillpronto.R
+import com.pillpronto.core.ui.components.BackTopAppBar
 import com.pillpronto.domain.model.AccountRole
 import com.pillpronto.ui.account.roleLabel
 
@@ -27,38 +29,40 @@ import com.pillpronto.ui.account.roleLabel
 fun OnboardingScreen(
     padding: PaddingValues,
     onDone: () -> Unit,
+    onBack: () -> Unit,
     vm: OnboardingViewModel = hiltViewModel()
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
     LaunchedEffect(state.done) { if (state.done) onDone() }
 
-    Column(
-        Modifier.fillMaxSize().padding(padding).padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        Text(stringResource(R.string.onboarding_title), style = MaterialTheme.typography.headlineSmall)
-        Text(stringResource(R.string.onboarding_subtitle), style = MaterialTheme.typography.bodyMedium)
+    Scaffold(topBar = { BackTopAppBar(stringResource(R.string.onboarding_title), onBack) }) { innerPadding ->
+        Column(
+            Modifier.fillMaxSize().padding(padding).padding(innerPadding).padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text(stringResource(R.string.onboarding_subtitle), style = MaterialTheme.typography.bodyMedium)
 
-        AccountRole.entries.forEach { role ->
-            val selected = state.selectedRole == role
-            val button: @Composable () -> Unit = { Text(roleLabel(role)) }
-            if (selected) {
-                Button(onClick = { vm.onRoleSelected(role) }, modifier = Modifier.fillMaxWidth()) { button() }
-            } else {
-                OutlinedButton(onClick = { vm.onRoleSelected(role) }, modifier = Modifier.fillMaxWidth()) { button() }
+            AccountRole.entries.forEach { role ->
+                val selected = state.selectedRole == role
+                val button: @Composable () -> Unit = { Text(roleLabel(role)) }
+                if (selected) {
+                    Button(onClick = { vm.onRoleSelected(role) }, modifier = Modifier.fillMaxWidth()) { button() }
+                } else {
+                    OutlinedButton(onClick = { vm.onRoleSelected(role) }, modifier = Modifier.fillMaxWidth()) { button() }
+                }
             }
-        }
 
-        OutlinedTextField(
-            state.displayName, vm::onDisplayNameChange,
-            label = { Text(stringResource(R.string.onboarding_display_name_label)) },
-            modifier = Modifier.fillMaxWidth()
-        )
+            OutlinedTextField(
+                state.displayName, vm::onDisplayNameChange,
+                label = { Text(stringResource(R.string.onboarding_display_name_label)) },
+                modifier = Modifier.fillMaxWidth()
+            )
 
-        state.error?.let { Text(onboardingErrorMessage(it), color = MaterialTheme.colorScheme.error) }
+            state.error?.let { Text(onboardingErrorMessage(it), color = MaterialTheme.colorScheme.error) }
 
-        Button(onClick = vm::submit, enabled = !state.isSubmitting, modifier = Modifier.fillMaxWidth()) {
-            Text(stringResource(R.string.onboarding_submit))
+            Button(onClick = vm::submit, enabled = !state.isSubmitting, modifier = Modifier.fillMaxWidth()) {
+                Text(stringResource(R.string.onboarding_submit))
+            }
         }
     }
 }

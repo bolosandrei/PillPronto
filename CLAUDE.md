@@ -287,6 +287,80 @@ Use-cases existente: `AddTreatmentUseCase`, `EditTreatmentUseCase`, `DeleteTreat
     unic parțial (`where status <> 'revoked'`), plus mesaj de eroare mai clar în `claim_link`
     pentru cazul legitim rămas (a doua legătură activă simultan). **De rulat manual, după 0005.**
 
+### Faza 1.5e — Flux Medic/Farmacist, read-only (implementat — 2026-09-09)
+- Analog cu 1.5d (Aparținător) — infrastructura de bază (RLS, `MyPatientsScreen`/
+  `PatientDetailScreen`/use-case-urile de citire) era deja **agnostică la rol**, reutilizată
+  integral, zero schimbări. `CaregiverAlertWorker` rămâne strict pentru CAREGIVER (notificare doză
+  ratată) — Medic/Farmacist nu primesc notificări, conform `docs/user-management-plan.md`
+  secțiunea 6.
+- **Pacientul alege rolul la generarea codului** (decizie confirmată cu utilizatorul) —
+  `LinkRepository.createInvite`/`CreateInviteUseCase` capătă parametru `role: LinkRole =
+  CAREGIVER_VIEWER` (default păstrat, niciun call-site existent nu s-a schimbat).
+  `supabase/migrations/0007_professional_invite_role_check.sql` rescrie `claim_link` să valideze
+  că rolul contului care revendică (citit din `profiles.role`/`clinician_type`) se potrivește cu
+  rolul declarat al invitației — altfel eroare clară, nu confuzie tăcută. **De rulat manual, după
+  0006.**
+- **Ecran separat** pentru Pacient (decizie confirmată, nu unificat cu Aparținătorii):
+  `ManageProfessionalAccessScreen`/`ManageProfessionalAccessViewModel` — selector de rol (`FilterChip`
+  Medic/Farmacist, reutilizează `account_role_doctor`/`account_role_pharmacist`), altfel aceeași
+  structură ca `ManageAccessScreen`. Ambele ecrane filtrează acum `links` client-side pe rol (tabela
+  poate conține rânduri mixte) — `LinkRow`/`InviteQrCode`/`shareInviteCode`/`linkStatusLabel`/
+  `manageAccessErrorMessage` extrase în `ui/access/AccessLinkComponents.kt` ca să nu se dubleze
+  între cele două ecrane.
+- **Flag „neverificat"** (auto-declarare, fără validare CUIM — decizie deja luată în
+  `docs/user-management-plan.md` secțiunea 9) vizibil în **ambele** locuri cerute: pe lista
+  Pacientului (`LinkRow(unverified = true)` pe `ManageProfessionalAccessScreen`) și pe propriul
+  `AccountScreen` al Medicului/Farmacistului (`account_unverified_badge`).
+- `AccountScreen.LoggedInView`: Pacientul are acum **două** butoane („Gestionează accesul
+  Aparținătorilor" + „Gestionează accesul Medic/Farmacist"); CAREGIVER/DOCTOR/PHARMACIST rutează
+  toate spre același buton „Pacienții mei" (`onMyPatients`), fără ecran separat pt. partea de
+  citire.
+- Teste noi: `ManageProfessionalAccessViewModelTest` (7 cazuri) + caz nou în
+  `ManageAccessViewModelTest` (filtrare rol), toate trec.
+- **Neverificat încă pe device** — migrarea 0007 trebuie rulată de utilizator (după 0001-0006).
+- **Bug recurent găsit la testarea pe device a unui cont Medic nou** (2026-09-09): fix-ul de
+  cursă din 1.5d (mai sus) era incomplet — userul tot era retrimis pe onboarding după succes
+  (uneori de mai multe ori la rând, cerea mai multe Back-uri). Cauză reală: `LifecycleEventEffect(
+  ON_RESUME)` din `AccountScreen` declanșează `vm.refresh()` printr-un callback de Lifecycle cu
+  **timing incert** față de `LaunchedEffect`-ul de verificare din aceeași compoziție — uneori
+  verificarea rula înaintea refresh-ului, citind starea veche. Fix definitiv: adăugat
+  `LaunchedEffect(Unit) { vm.refresh() }` în `AccountScreen.kt`, declarat **înaintea**
+  efectului de verificare (garantează ordine sincronă în aceeași trecere de compoziție);
+  `LifecycleEventEffect(ON_RESUME)` păstrat separat pentru revenirea reală din fundal (unde
+  compoziția nu se reface). Plasă de siguranță suplimentară: `launchSingleTop = true` pe
+  `navController.navigate(Route.Onboarding.path)` în `PillProntoNavHost.kt`, ca eventuale
+  regresii viitoare să nu mai stivuiască mai multe instanțe de Onboarding.
+- **Navigare — buton de back pe toate ecranele secundare** (2026-09-09, cerut de utilizator după
+  ce a semnalat bug-ul de mai sus): `BackTopAppBar` nou (`core/ui/components/BackTopAppBar.kt`,
+  `TopAppBar` + `IconButton` cu `Icons.AutoMirrored.Filled.ArrowBack`), adăugat pe toate cele 7
+  ecrane secundare (nu sunt în bara de jos): Onboarding, Gestionează accesul (Aparținători +
+  Medic/Farmacist), Pacienții mei, Detaliu pacient, Adăugare/editare tratament, Detaliu tratament.
+  Fiecare ecran capătă parametru nou `onBack: () -> Unit`, legat în `PillProntoNavHost.kt` la
+  `navController.popBackStack()`. Gestul/butonul de sistem de back funcționau deja, dar o săgeată
+  vizibilă e recomandarea Material Design curentă pentru discoverability — relevant mai ales aici,
+  unde publicul țintă include pacienți vârstnici. Compilare + teste unitare + build APK debug +
+  instalare pe device confirmate; testare manuală pe device încă neconfirmată de utilizator.
+- **Testat pe device de utilizator** (2026-09-09) — navigarea cu butoane de back funcționează.
+  A semnalat un efect secundar: tab-ul „Cont" arăta un „flash" de reîncărcare (spinner) de fiecare
+  dată când revenea pe el, chiar dacă profilul era deja cunoscut — cauzat de `refresh()` (apelat
+  la fiecare intrare în compoziție, vezi mai sus) care resetează sincron `profileChecked=false`,
+  iar `AccountScreen` cerea `profileChecked && profile != null` ca să arate `LoggedInView`, deci
+  orice refresh (chiar reușit din prima) trecea vizibil prin `LoadingIndicator`. Fix: condiția de
+  randare devine doar `profile != null` — profilul cunoscut (chiar "stale" cât timp refresh-ul
+  rulează tăcut pe fundal) rămâne afișat neîntrerupt; spinner-ul apare doar la primul fetch real
+  (`profile == null`), nu la fiecare revenire pe tab. Logica de `profileChecked` pentru declanșarea
+  onboarding-ului (`LaunchedEffect(state.sessionState, state.profileChecked, state.profile)`)
+  rămâne neschimbată. Compilare + teste unitare + build APK + instalare pe device confirmate.
+- **Același flash semnalat pe cele două ecrane de acces** (`ManageAccessScreen`/
+  `ManageProfessionalAccessScreen`) și reparat proactiv și pe `MyPatientsScreen` (identic:
+  `LifecycleEventEffect(ON_RESUME)` → `refresh()` → `isLoading=true` sincron la fiecare revenire pe
+  ecran). Fix analog celui de la `AccountScreen`: condiția de spinner devine
+  `isLoading && list.isEmpty()` (doar la primul fetch real), nu doar `isLoading` — lista veche
+  rămâne afișată neîntrerupt cât timp refresh-ul rulează tăcut pe fundal. `PatientDetailScreen`
+  NU are aceeași problemă (ecran de navigare simplă, fără stare salvată de tab de jos — un
+  ViewModel nou la fiecare intrare, deci un scurt loading la intrare e comportamentul așteptat, nu
+  un flash repetat). Compilare + teste unitare + build APK + instalare pe device confirmate.
+
 ---
 
 ## 8. CE URMEAZĂ — TODO
@@ -300,15 +374,16 @@ Use-cases existente: `AddTreatmentUseCase`, `EditTreatmentUseCase`, `DeleteTreat
 
 ### 8b. Roadmap faze următoare
 - **Faza 1.5 — Conturi & Roluri (Pacient/Aparținător/Medic/Farmacist):** **1.5a + 1.5b + 1.5c +
-  1.5d (viewer, + rafinare UX completă) implementate și mergeuite pe `main`** (PR #1-#4, vezi
-  secțiunea 7 mai sus) — schema + RLS + migrare Room, SDK Supabase + autentificare email/parolă +
-  onboarding rol, sync layer Room↔Supabase, legătură Pacient↔Aparținător read-only (cod + QR +
-  scanare + deep link + nume Aparținător vizibil + revocare/reinvitare) + notificare doză ratată.
+  1.5d (+ rafinare UX) + 1.5e implementate**, 1.5a-1.5d mergeuite pe `main` (PR #1-#4), 1.5e pe
+  branch `feature/1.5e-medic-pharmacist` (vezi secțiunea 7 mai sus) — schema + RLS + migrare Room,
+  SDK Supabase + autentificare email/parolă + onboarding rol, sync layer Room↔Supabase, legătură
+  Pacient↔Aparținător/Medic/Farmacist read-only (cod + QR + scanare + deep link + nume/rol vizibil
+  + revocare/reinvitare + selecție rol la generare) + notificare doză ratată (doar CAREGIVER).
   **Următorul pas, la alegere:**
-  - **Confirmare finală de la utilizator** că toate migrările `supabase/migrations/0003-0006*.sql`
+  - **Confirmare finală de la utilizator** că toate migrările `supabase/migrations/0003-0007*.sql`
     sunt rulate (Supabase Dashboard, în ordine, după 0001-0002) și fluxul complet funcționează
-    end-to-end (invitație → claim → vizibilitate → notificare → revocare → reinvitare) — testat
-    live pe device în timpul dezvoltării, dar merită o trecere finală de confirmare.
+    end-to-end (invitație pt. fiecare rol → claim cu validare de rol → vizibilitate → notificare →
+    revocare → reinvitare) — 1.5d testat live pe device, 1.5e nu încă.
   - **1.5c (sync propriu-zis al Pacientului)** rămâne neverificat separat pe device — posibil
     exercitat implicit prin testarea 1.5d, dar nu confirmat explicit.
   - **Google Sign-In** (completare 1.5b) — necesită acțiune manuală a utilizatorului mai întâi:
@@ -317,7 +392,6 @@ Use-cases existente: `AddTreatmentUseCase`, `EditTreatmentUseCase`, `DeleteTreat
     providers → Google. Fără asta, nu se poate implementa.
   - **Profil dependent** (pacient vârstnic fără cont propriu) — amânat explicit din 1.5d, cere
     suport multi-profil local în Room (schimbare majoră de arhitectură).
-  - **1.5e — Flux Medic/Farmacist** (read-only, similar 1.5d) — nu are blocaj extern.
   - Restul etapelor (1.5f audit, 1.5g teste RLS) — vezi
     `docs/user-management-plan.md` secțiunea 8, neatinse încă.
   Poziționată **înaintea** Fazei 2 pentru că schema (`patient_profile_id`) trebuia stabilă înainte
