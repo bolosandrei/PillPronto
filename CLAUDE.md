@@ -187,6 +187,20 @@ Use-cases existente: `AddTreatmentUseCase`, `EditTreatmentUseCase`, `DeleteTreat
   - Trigger `links_guard_update` — hardening suplimentar: închide o gaură preexistentă din
     politica `links_grantee_respond` (1.5a), care nu împiedica un grantee să-și schimbe propriul
     rând `links` către alt `patient_profile_id`/`role` în același UPDATE.
+- **Migrare `supabase/migrations/0004_fix_links_rls_recursion.sql`** — **bug real găsit la
+  testarea pe device** (2026-09-09, primul test manual al 1.5d): `ManageAccessScreen` → „Generează
+  cod nou" întorcea eroare Postgres `infinite recursion detected in policy for relation "links"`
+  (cod `42P17`). Cauză, prezentă încă din 1.5a (`0002_rls_policies.sql`), nedescoperită pentru că
+  nimic nu interogase direct `links`/`treatments`/`dose_logs` până la 1.5d: `links_owner_manage`
+  face subquery pe `patient_profiles`, iar `patient_profiles_linked_read` face subquery invers pe
+  `links` — RLS se reevaluează tranzitiv la fiecare acces la tabel, deci evaluarea uneia declanșează
+  evaluarea celeilalte, la nesfârșit. **Același tipar există și între `treatments`/`links` și
+  `dose_logs`/`treatments`/`patient_profiles`/`links`** — ar fi blocat probabil și sync-ul din
+  1.5c, nedescoperit din același motiv (1.5c nu e verificat încă pe device). Fix: funcții
+  `SECURITY DEFINER` (`is_patient_profile_owner`, `has_accepted_link`, `is_treatment_owner`,
+  `has_accepted_link_for_treatment`) care ocolesc RLS intern, înlocuind subquery-urile corelate
+  directe din politici — pattern-ul standard Postgres/Supabase pentru acest caz. **De rulat manual
+  de utilizator, după 0003.**
 - **Cod de invitație**: text simplu, 8 caractere alfanumerice (fără 0/O/1/I), generat client-side
   (`SecureRandom`), distribuit prin Android share sheet (`Intent.ACTION_SEND`) — fără QR vizual în
   v1 (fără dependență nouă).
@@ -209,10 +223,11 @@ Use-cases existente: `AddTreatmentUseCase`, `EditTreatmentUseCase`, `DeleteTreat
   `GetLinkedPatientAdherenceUseCaseTest`, `ManageAccessViewModelTest`, `MyPatientsViewModelTest`,
   `PatientDetailViewModelTest` — 21 cazuri noi, toate trec. Fake-uri noi: `FakeLinkRepository`,
   `FakeLinkedPatientDataRepository`.
-- **NU verificat încă pe device fizic + Supabase Dashboard** — migrarea 0003 trebuie rulată de
-  utilizator înainte ca fluxul complet (invitație → claim → vizibilitate → notificare) să
-  funcționeze end-to-end; planul de verificare manuală (inclusiv teste adversariale pe RLS) e în
-  `docs/user-management-plan.md` secțiunea 8.
+- **Testat parțial pe device fizic** (2026-09-09) — primul test manual (generare cod) a scos la
+  iveală bug-ul de recursivitate RLS de mai sus (`0004_fix_links_rls_recursion.sql`). Migrările
+  0003+0004 trebuie rulate de utilizator (în această ordine) înainte ca fluxul complet (invitație
+  → claim → vizibilitate → notificare) să funcționeze end-to-end; planul de verificare manuală
+  (inclusiv teste adversariale pe RLS) e în `docs/user-management-plan.md` secțiunea 8.
 
 ---
 
@@ -230,9 +245,10 @@ Use-cases existente: `AddTreatmentUseCase`, `EditTreatmentUseCase`, `DeleteTreat
   1.5d (viewer) implementate** (vezi secțiunea 7 mai sus) — schema + RLS + migrare Room, SDK
   Supabase + autentificare email/parolă + onboarding rol, sync layer Room↔Supabase, legătură
   Pacient↔Aparținător read-only + notificare doză ratată. **Următorul pas, la alegere:**
-  - **Rulare manuală `supabase/migrations/0003_links_open_invite.sql`** (Supabase Dashboard) +
-    verificare end-to-end pe device (inclusiv 1.5c, nefăcută încă) — blochează testarea reală a
-    1.5d, nu implementarea următorului pas.
+  - **Rulare manuală `supabase/migrations/0003_links_open_invite.sql` + `0004_fix_links_rls_recursion.sql`**
+    (Supabase Dashboard, în această ordine) + verificare end-to-end pe device (inclusiv 1.5c,
+    nefăcută încă) — blochează testarea reală a 1.5d, nu implementarea următorului pas. 0004
+    rezolvă un bug real de recursivitate RLS găsit la primul test manual (vezi secțiunea 7).
   - **Google Sign-In** (completare 1.5b) — necesită acțiune manuală a utilizatorului mai întâi:
     2 OAuth Client ID-uri în Google Cloud Console (Web + Android, acesta din urmă cu amprenta
     SHA-1 a certificatului de semnare) + înregistrarea lor în Supabase Dashboard → Auth →

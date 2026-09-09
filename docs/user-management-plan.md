@@ -202,9 +202,20 @@ construiască peste ea (toate vor referi `patient_profile_id`).
   - Teste: 21 cazuri noi (`AdherenceCalculatorTest`, `MissedDoseCheckerTest`,
     `GetLinkedPatientAdherenceUseCaseTest`, `ManageAccessViewModelTest`, `MyPatientsViewModelTest`,
     `PatientDetailViewModelTest`), toate trec.
-  - **Neverificat încă pe device fizic + Supabase Dashboard** — migrarea 0003 trebuie rulată de
-    utilizator înainte ca fluxul complet (invitație → claim → vizibilitate → notificare) să
-    funcționeze end-to-end.
+  - **Migrare `supabase/migrations/0004_fix_links_rls_recursion.sql`** — bug real găsit la primul
+    test manual pe device (2026-09-09): „Generează cod nou" întorcea eroare Postgres `infinite
+    recursion detected in policy for relation "links"` (cod `42P17`). Cauză, prezentă din 1.5a
+    (`0002_rls_policies.sql`), nedescoperită pentru că nimic nu interogase direct
+    `links`/`treatments`/`dose_logs` până la 1.5d: `links_owner_manage` subqueria
+    `patient_profiles`, iar `patient_profiles_linked_read` subqueria invers `links` — RLS se
+    reevaluează tranzitiv la fiecare acces la tabel, deci evaluarea uneia declanșa evaluarea
+    celeilalte, la nesfârșit. Același tipar exista între `treatments`/`links` și
+    `dose_logs`/`treatments`/`patient_profiles`/`links` — ar fi blocat probabil și sync-ul din
+    1.5c. Fix: funcții `SECURITY DEFINER` care ocolesc RLS intern, înlocuind subquery-urile
+    corelate din politici.
+  - **Testat parțial pe device fizic** — primul test manual (generare cod) a găsit bug-ul de mai
+    sus. Migrările 0003+0004 trebuie rulate de utilizator (în această ordine) înainte ca fluxul
+    complet (invitație → claim → vizibilitate → notificare) să funcționeze end-to-end.
 - **1.5e — Flux Medic/Farmacist:** onboarding profesionist (auto-declarat + flag „neverificat"
   vizibil — vezi limitarea din secțiunea 9), dashboard read-only pe pacienții legați.
 - **1.5f — Audit & consimțământ:** `audit_log` populat automat, ecran „Cine îmi vede datele"
