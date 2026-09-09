@@ -106,6 +106,10 @@ dependencies {
     implementation(libs.ktor.client.android)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.zxing.core) // doar encoder QR (Faza 1.5d) - fara zxing-android-embedded/camera
+    // Scaner QR gata facut (UI + camera + permisiune, gestionate de modulul Play Services insusi)
+    // - NU e inceputul CameraX/ML Kit din Faza 2 (acela ramane pt. detectie multi-obiect pe cutii
+    // de medicamente); aici doar citim textul unui singur cod QR pt. fluxul de invitatie 1.5d.
+    implementation(libs.play.services.code.scanner)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)

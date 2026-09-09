@@ -150,6 +150,7 @@
     <!-- Faza 1.5d: Apartinator — revendicare cod + lista pacientilor legati -->
     <string name="my_patients_title">Pacienții mei</string>
     <string name="my_patients_claim_label">Cod de acces</string>
+    <string name="my_patients_scan_button">Scanează codul QR</string>
     <string name="my_patients_claim_button">Adaugă pacient</string>
     <string name="my_patients_claim_error">Cod invalid sau deja folosit.</string>
     <string name="my_patients_empty">Nu ai încă niciun pacient legat. Introdu un cod primit de la un pacient.</string>

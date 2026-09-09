@@ -243,7 +243,8 @@ Use-cases existente: `AddTreatmentUseCase`, `EditTreatmentUseCase`, `DeleteTreat
 - **Confirmat funcțional end-to-end pe device** (2026-09-09, după cele două fix-uri de mai sus) —
   cod generat de Pacient → introdus manual de Aparținător → apare în „Pacienții mei". Utilizatorul
   a cerut apoi 3 îmbunătățiri UX pe baza testării reale (vezi rafinarea de mai jos).
-- **Rafinare UX — fricțiune redusă la legare + nume Aparținător vizibil** (2026-09-09):
+- **Rafinare UX — fricțiune redusă la legare + nume Aparținător vizibil** (2026-09-09, mai multe
+  iterații pe baza testării live a utilizatorului):
   - **Deep link `pillpronto://invite?code=XXXX`** (schemă proprie, fără domeniu/App Links) —
     pattern identic cu `openTodayRequests` (tap pe notificare reminder): `MainActivity` emite
     printr-un `MutableSharedFlow`, `PillProntoNavHost` navighează la „Pacienții mei" cu codul
@@ -251,21 +252,32 @@ Use-cases existente: `AddTreatmentUseCase`, `EditTreatmentUseCase`, `DeleteTreat
     silențios). Parsare/construcție centralizate în `ui/access/InviteLink.kt`
     (`buildInviteUri`/`extractInviteCode`) — pe `String`, nu pe `android.net.Uri` (stub în teste
     JVM fără Robolectric), ca să rămână testabil.
-  - **Notă de expectanță importantă**: link-ul cu schemă proprie **nu e garantat clicabil** in text
-    simplu trimis prin WhatsApp/SMS (auto-linkify de obicei doar pe `http(s)://`). Mecanismul care
-    chiar livrează „fără tastare" e **codul QR** (`com.google.zxing:core`, doar generare — scanarea
-    ocolește complet problema de linkify, camera/OS rezolvă schema direct). Link-ul text rămâne
-    inclus în mesajul distribuit ca fallback, nu ca mecanism principal.
+  - **Link-ul text s-a confirmat pe device necliclabil în WhatsApp** (auto-linkify doar pe
+    `http(s)://`, nu pe scheme proprii — semnalat înainte de implementare, confirmat de user după
+    3 încercări de reformatare). **Eliminat complet din textul distribuit** — rămâne doar codul +
+    mențiunea codului QR. Codul QR (`com.google.zxing:core`, doar generare) e mecanismul „fără
+    tastare" funcțional: **atașat ca imagine reală** în share sheet (nu doar codat în text) via
+    `FileProvider` (`res/xml/file_paths.xml`, PNG temporar în `cache/shared_images/`,
+    `Intent.ACTION_SEND` cu `type=image/png` + `EXTRA_STREAM`) — `file://` direct ar arunca
+    `FileUriExposedException` pe Android 7+.
+  - **Buton de scanare QR** pe „Pacienții mei" (Apartinător) — `com.google.android.gms:play-services-code-scanner`
+    (`GmsBarcodeScanning`), NU CameraX/ML Kit manual: modulul gestionează integral UI-ul de
+    cameră + permisiunea, fără `CAMERA` în manifest. **Nu e începutul Fazei 2** (aceea ramane
+    CameraX + ML Kit pentru detecție multi-obiect pe cutii de medicamente) — aici doar citește
+    textul unui singur cod QR, reutilizând `extractInviteCode` din același `InviteLink.kt`.
   - **Numele Aparținătorului vizibil Pacientului** — migrare nouă
     `supabase/migrations/0005_profiles_visible_to_linked_grantee.sql` (funcție `is_linked_grantee`
     `SECURITY DEFINER`, aceeași tehnică ca 0004, deși aici niciun tabel nu subqueria `profiles`
     azi — păstrat consecvent). `LinkRepository.getMyCaregivers` (pattern identic `getMyPatients`,
     două query-uri) + `GetMyCaregiversUseCase`; `ManageAccessScreen` arată „Acces acordat lui
     <nume>" în loc de textul generic pe legăturile `ACCEPTED`.
-  - Buton `AccountScreen`: „Gestionează accesul" → „Gestionează accesul Aparținătorilor".
+  - Buton `AccountScreen`: „Gestionează accesul" → „Gestionează accesul Aparținătorilor". Buton
+    nou „Anulează" pe invitațiile `PENDING` (reutilizează `revokeLink` existent).
   - Teste noi: `InviteLinkTest` (6), + cazuri noi în `ManageAccessViewModelTest`/
     `MyPatientsViewModelTest` (potrivire nume Aparținător, prefill din `SavedStateHandle`).
-  - **Neverificat încă pe device** — migrarea 0005 trebuie rulată de utilizator (după 0001-0004).
+  - **Neverificat încă pe device**: doar migrarea 0005 (SQL, de rulat de utilizator după
+    0001-0004) — restul (deep link, QR ca imagine, scanare, nume Aparținător) verificat live pe
+    device fizic în timpul dezvoltării.
 
 ---
 
