@@ -143,7 +143,7 @@
     <string name="manage_access_status_revoked">Acces revocat</string>
     <string name="manage_access_code_label">Cod: %1$s</string>
     <string name="manage_access_share_button">Distribuie</string>
-    <string name="manage_access_share_text">Cod de acces PillPronto: %1$s\nIntrodu-l în aplicație, la „Pacienții mei”, ca să-mi vezi tratamentele și aderența (sau scanează codul QR).\n\n%2$s</string>
+    <string name="manage_access_share_text">%2$s\n\nCod de acces PillPronto: %1$s\nIntrodu-l în aplicație, la „Pacienții mei”, ca să-mi vezi tratamentele și aderența (sau scanează codul QR).</string>
     <string name="manage_access_revoke_button">Revocă</string>
     <string name="manage_access_cancel_button">Anulează</string>
 
