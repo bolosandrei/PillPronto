@@ -2,10 +2,11 @@
 
 > Document de arhitectură + plan de implementare. Scris la brainstorming-ul din 2026-09-07.
 > Completează `CLAUDE.md` (nu-l duplică) — citit împreună cu acesta la sesiunile viitoare.
-> Status: **1.5a + 1.5b + 1.5c implementate** (1.5a+1.5b: 2026-09-07; 1.5c: 2026-09-09) — schema +
-> RLS + migrare Room, SDK Supabase Android + autentificare email/parolă + onboarding rol, sync
-> layer Room↔Supabase. **Google Sign-In + 1.5d-1.5g rămân neimplementate.** Vezi secțiunea 8
-> pentru etapele propuse și starea fiecăreia.
+> Status: **1.5a + 1.5b + 1.5c + 1.5d (viewer) implementate** (1.5a+1.5b: 2026-09-07; 1.5c+1.5d:
+> 2026-09-09) — schema + RLS + migrare Room, SDK Supabase Android + autentificare email/parolă +
+> onboarding rol, sync layer Room↔Supabase, legătură Pacient↔Aparținător read-only + notificare
+> doză ratată. **Google Sign-In, profil dependent (amânat din 1.5d) și 1.5e-1.5g rămân
+> neimplementate.** Vezi secțiunea 8 pentru etapele propuse și starea fiecăreia.
 
 ---
 
@@ -175,8 +176,58 @@ construiască peste ea (toate vor referi `patient_profile_id`).
     `FakePendingRemoteDeleteDao`/`FakeSyncRemoteDataSource`/`FakeReminderSync`/
     `FakePatientProfileIdProvider` în `util/`.
   - **Neverificat încă pe device fizic** (Supabase Dashboard) — rămâne de făcut manual.
-- **1.5d — Flux Aparținător:** creare profil dependent, invitație (cod/QR), ecran „Pacienții mei"
-  cu situația curentă per pacient, notificare la doză ratată.
+- **1.5d — Flux Aparținător (viewer) ✅ IMPLEMENTAT (2026-09-09):**
+  - Scop v1, decis explicit cu utilizatorul: **doar** Aparținător ↔ Pacient cu cont propriu,
+    read-only. „Profil dependent" (pacient vârstnic fără cont propriu) **amânat** — ar cere suport
+    multi-profil local în Room, schimbare majoră separată.
+  - **Migrare `supabase/migrations/0003_links_open_invite.sql`** — `grantee_user_id` pe `links`
+    devine nullable; funcție `claim_link(p_invite_code) SECURITY DEFINER` pentru revendicarea
+    invitației (nu o politică RLS de UPDATE — verificat împotriva documentației PostgreSQL că
+    UPDATE cu WHERE cere vizibilitate SELECT separată pe rândul țintă, iar o politică de SELECT
+    „toate rândurile pending nerevendicate" ar permite enumerarea tuturor codurilor active,
+    oricui autentificat); trigger `links_guard_update` — hardening suplimentar, închide o gaură
+    preexistentă din `links_grantee_respond` (1.5a) care nu împiedica un grantee să-și schimbe
+    propriul rând `links` către alt `patient_profile_id`/`role`. Găsit în plan review, nu în
+    cererea inițială — vezi CLAUDE.md secțiunea 7 pentru detalii complete.
+  - Cod de invitație: text simplu, 8 caractere (fără 0/O/1/I), `SecureRandom`, distribuit prin
+    Android share sheet — fără QR vizual în v1 (fără dependență nouă).
+  - `LinkRepository`/`LinkedPatientDataRepository` (citire remote directă, niciodată din Room
+    local) + `AdherenceCalculator` extras din `ComputeAdherenceUseCase` (formulă PDC/MPR pură,
+    reutilizată și pentru loguri remote).
+  - `CaregiverAlertWorker` (periodic 30 min, no-op dacă rolul != CAREGIVER) + `MissedDoseChecker`
+    (deduplicare pe mulțime de `remoteId`, nu pe timestamp — status MISSED e terminal).
+  - UI fără tab nou în bottom bar — buton condiționat de rol în `AccountScreen`:
+    `ui/access/ManageAccessScreen` (Pacient), `ui/patients/MyPatientsScreen` +
+    `PatientDetailScreen` (Apartinător, read-only).
+  - Teste: 21 cazuri noi (`AdherenceCalculatorTest`, `MissedDoseCheckerTest`,
+    `GetLinkedPatientAdherenceUseCaseTest`, `ManageAccessViewModelTest`, `MyPatientsViewModelTest`,
+    `PatientDetailViewModelTest`), toate trec.
+  - **Migrare `supabase/migrations/0004_fix_links_rls_recursion.sql`** — bug real găsit la primul
+    test manual pe device (2026-09-09): „Generează cod nou" întorcea eroare Postgres `infinite
+    recursion detected in policy for relation "links"` (cod `42P17`). Cauză, prezentă din 1.5a
+    (`0002_rls_policies.sql`), nedescoperită pentru că nimic nu interogase direct
+    `links`/`treatments`/`dose_logs` până la 1.5d: `links_owner_manage` subqueria
+    `patient_profiles`, iar `patient_profiles_linked_read` subqueria invers `links` — RLS se
+    reevaluează tranzitiv la fiecare acces la tabel, deci evaluarea uneia declanșa evaluarea
+    celeilalte, la nesfârșit. Același tipar exista între `treatments`/`links` și
+    `dose_logs`/`treatments`/`patient_profiles`/`links` — ar fi blocat probabil și sync-ul din
+    1.5c. Fix: funcții `SECURITY DEFINER` care ocolesc RLS intern, înlocuind subquery-urile
+    corelate din politici.
+  - **Testat parțial pe device fizic** — primul test manual (generare cod) a găsit bug-ul de mai
+    sus. Migrările 0003+0004 trebuie rulate de utilizator (în această ordine) înainte ca fluxul
+    complet (invitație → claim → vizibilitate → notificare) să funcționeze end-to-end.
+  - **Al doilea bug găsit la testare** (cont Apartinător nou, onboarding): condiție de cursă
+    rămasă în fix-ul din 1.5b (`AccountViewModel.refreshProfile` nu marca sincron „verificare în
+    curs" înainte de fetch-ul async) — userul era retrimis direct pe onboarding după ce-l termina
+    cu succes. Fix + detalii complete: `CLAUDE.md` secțiunea 7 (blocul 1.5d), test nou
+    `AccountViewModelTest`.
+  - **Confirmat funcțional end-to-end pe device** după fix-uri; utilizatorul a cerut apoi
+    reducerea fricțiunii la legare (cod de introdus manual = "tedios") + vizibilitate identitate.
+  - **Rafinare UX**: deep link `pillpronto://invite?code=...` (schemă proprie, `ui/access/InviteLink.kt`)
+    + cod QR (`com.google.zxing:core`, doar generare) ca mecanism principal „fără tastare" — link-ul
+    text NU e garantat clicabil în WhatsApp/SMS (auto-linkify doar pe `http(s)://`), QR-ul ocolește
+    problema complet. Nume Aparținător vizibil Pacientului — migrare nouă
+    `0005_profiles_visible_to_linked_grantee.sql`. Detalii complete: `CLAUDE.md` secțiunea 7.
 - **1.5e — Flux Medic/Farmacist:** onboarding profesionist (auto-declarat + flag „neverificat"
   vizibil — vezi limitarea din secțiunea 9), dashboard read-only pe pacienții legați.
 - **1.5f — Audit & consimțământ:** `audit_log` populat automat, ecran „Cine îmi vede datele"

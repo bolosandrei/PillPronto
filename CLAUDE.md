@@ -151,9 +151,11 @@ Use-cases existente: `AddTreatmentUseCase`, `EditTreatmentUseCase`, `DeleteTreat
 - **Seam-uri de testabilitate introduse** (fiecare cu un motiv concret, nu abstractizare
   gratuită): `ReminderSync` (peste `ReminderCoordinator` — constructorul `ReminderScheduler` atinge
   `AlarmManager`/`Context` real, netestabil în JVM) și `PatientProfileIdProvider` (peste
-  `LocalPatientProfileProvider` — constructorul atinge `SharedPreferences`/`Context` real).
-  Restul consumatorilor existenți (ViewModels, use-cases, `BootReceiver`,
-  `AdherenceMaintenanceWorker`) continuă să injecteze clasele concrete, neschimbate.
+  `LocalPatientProfileProvider` — constructorul atinge `SharedPreferences`/`Context` real; mutată
+  în `domain/repository/` la 1.5d, vezi mai jos, ca ViewModels să o poată injecta prin use-case-uri
+  fără să încalce layering-ul domain/data). Restul consumatorilor existenți (ViewModels,
+  use-cases, `BootReceiver`, `AdherenceMaintenanceWorker`) continuă să injecteze clasele concrete,
+  neschimbate.
 - **Bug găsit în plan review, fixat înainte de implementare:** `markOverdueMissed` (DAO) nu seta
   `dirty`/`updatedAt` la tranziția PENDING→MISSED — fără fix, dozele ratate (cel mai important
   semnal de aderență) nu s-ar fi sincronizat niciodată.
@@ -167,6 +169,124 @@ Use-cases existente: `AddTreatmentUseCase`, `EditTreatmentUseCase`, `DeleteTreat
   propriu; verificarea manuală descrisă în planul de implementare (creare/editare/ștergere
   tratament + confirmare doză → apariția/dispariția rândurilor remote) rămâne de făcut.
 
+### Faza 1.5d — Flux Aparținător, viewer (implementat — 2026-09-09)
+- Un Aparținător se leagă de un Pacient **care are deja cont și telefon propriu** și îi vede
+  tratamentele + aderența, read-only, plus notificare la doză ratată. „Profil dependent" (pacient
+  vârstnic fără cont propriu) **amânat** — ar cere suport multi-profil local în Room, schimbare
+  majoră separată. Detalii complete: `docs/user-management-plan.md` secțiunea 8 (1.5d).
+- **Migrare `supabase/migrations/0003_links_open_invite.sql`** — de rulat manual de utilizator în
+  Supabase Dashboard, ca 0001/0002. Conține:
+  - `grantee_user_id` pe `links` devine nullable (invitația se creează înainte să se știe cine o
+    revendică).
+  - Funcție `claim_link(p_invite_code text) SECURITY DEFINER` — **decizie de securitate găsită în
+    plan review, nu în cererea inițială**: o politică RLS simplă de UPDATE pentru „claim" nu poate
+    funcționa corect (UPDATE cu WHERE cere vizibilitate SELECT separată pe rândul țintă; o
+    politică de SELECT „toate rândurile pending nerevendicate" ar scurge toate codurile de
+    invitație active, oricui autentificat — enumerare). Funcția ocolește RLS intern, acceptă doar
+    codul ca parametru, hardcodează exact ce coloane se modifică.
+  - Trigger `links_guard_update` — hardening suplimentar: închide o gaură preexistentă din
+    politica `links_grantee_respond` (1.5a), care nu împiedica un grantee să-și schimbe propriul
+    rând `links` către alt `patient_profile_id`/`role` în același UPDATE.
+- **Migrare `supabase/migrations/0004_fix_links_rls_recursion.sql`** — **bug real găsit la
+  testarea pe device** (2026-09-09, primul test manual al 1.5d): `ManageAccessScreen` → „Generează
+  cod nou" întorcea eroare Postgres `infinite recursion detected in policy for relation "links"`
+  (cod `42P17`). Cauză, prezentă încă din 1.5a (`0002_rls_policies.sql`), nedescoperită pentru că
+  nimic nu interogase direct `links`/`treatments`/`dose_logs` până la 1.5d: `links_owner_manage`
+  face subquery pe `patient_profiles`, iar `patient_profiles_linked_read` face subquery invers pe
+  `links` — RLS se reevaluează tranzitiv la fiecare acces la tabel, deci evaluarea uneia declanșează
+  evaluarea celeilalte, la nesfârșit. **Același tipar există și între `treatments`/`links` și
+  `dose_logs`/`treatments`/`patient_profiles`/`links`** — ar fi blocat probabil și sync-ul din
+  1.5c, nedescoperit din același motiv (1.5c nu e verificat încă pe device). Fix: funcții
+  `SECURITY DEFINER` (`is_patient_profile_owner`, `has_accepted_link`, `is_treatment_owner`,
+  `has_accepted_link_for_treatment`) care ocolesc RLS intern, înlocuind subquery-urile corelate
+  directe din politici — pattern-ul standard Postgres/Supabase pentru acest caz. **De rulat manual
+  de utilizator, după 0003.**
+- **Cod de invitație**: text simplu, 8 caractere alfanumerice (fără 0/O/1/I), generat client-side
+  (`SecureRandom`), distribuit prin Android share sheet (`Intent.ACTION_SEND`) — fără QR vizual în
+  v1 (fără dependență nouă).
+- **Notificare doză ratată**: worker periodic (`CaregiverAlertWorker`, 30 min, alături de
+  `SyncWorker`), no-op dacă rolul curent != CAREGIVER. Deduplicare pe mulțime de `remoteId`
+  (`MissedDoseChecker`, clasă pură testabilă — nu pe timestamp, un status MISSED e terminal).
+  Canal de notificare separat (`caregiver_alerts`) de `ReminderScheduler` (acela e specific
+  remindere proprii cu acțiuni Confirmă/Omite).
+- **Fetch date pacient legat**: direct din Supabase (`LinkedPatientDataRepository`), niciodată din
+  Room local. Filtrare server-side pe `treatment_id` (Postgrest `.isIn(...)`) — evită over-fetch-ul
+  dozelor altor pacienți legați ai aceluiași Apartinător.
+- **`AdherenceCalculator`** extras din `ComputeAdherenceUseCase` (formula PDC/MPR pură,
+  `compute(logs): AdherenceStats`) — reutilizat și de `GetLinkedPatientAdherenceUseCase` (loguri
+  remote). `ComputeAdherenceUseCase` rămâne wrapper subțire, semnătură publică neschimbată.
+- **UI**: fără tab nou în bottom bar — buton „Gestionează accesul"/„Pacienții mei" în
+  `AccountScreen`, condiționat de rol. Ecrane noi: `ui/access/ManageAccessScreen` (Pacient),
+  `ui/patients/MyPatientsScreen` + `PatientDetailScreen` (Apartinător, read-only, fără buton
+  editare — stil `TreatmentDetailScreen`).
+- **Teste unitare**: `AdherenceCalculatorTest`, `MissedDoseCheckerTest`,
+  `GetLinkedPatientAdherenceUseCaseTest`, `ManageAccessViewModelTest`, `MyPatientsViewModelTest`,
+  `PatientDetailViewModelTest` — 21 cazuri noi, toate trec. Fake-uri noi: `FakeLinkRepository`,
+  `FakeLinkedPatientDataRepository`.
+- **Testat parțial pe device fizic** (2026-09-09) — primul test manual (generare cod) a scos la
+  iveală bug-ul de recursivitate RLS de mai sus (`0004_fix_links_rls_recursion.sql`). Migrările
+  0003+0004 trebuie rulate de utilizator (în această ordine) înainte ca fluxul complet (invitație
+  → claim → vizibilitate → notificare) să funcționeze end-to-end; planul de verificare manuală
+  (inclusiv teste adversariale pe RLS) e în `docs/user-management-plan.md` secțiunea 8.
+- **Al doilea bug găsit la testare pe device** (2026-09-09, cont Apartinător nou): după onboarding
+  reușit (rol + nume + Continuă), userul era retrimis direct înapoi pe ecranul „Ce fel de cont
+  ai?" — nu un bug nou de 1.5d, ci o condiție de cursă rămasă în fix-ul din 1.5b
+  (`AccountViewModel.refreshProfile`). `refresh()` (apelat de `AccountScreen` la
+  `ON_RESUME`, după ce onboarding-ul face `popBackStack()`) pornea fetch-ul de profil async **fără**
+  să marcheze mai întâi "verificare în curs" — recompunerea imediată a `AccountScreen` vedea starea
+  veche (`profileChecked=true`, `profile=null`, rămasă de dinainte de onboarding) și sărea înapoi
+  pe onboarding prin `LaunchedEffect`, înainte ca fetch-ul proaspăt să apuce să răspundă. Fix:
+  `refreshProfile` setează sincron `profileChecked=false` chiar înainte de a porni fetch-ul, deci
+  fereastra de recompunere vede „se verifică", nu „lipsă profil" — `AccountScreen` arată scurt
+  `LoadingIndicator` în loc să navigheze greșit. Test nou: `AccountViewModelTest` (`refresh dupa
+  onboarding reface profilul...`).
+- **Confirmat funcțional end-to-end pe device** (2026-09-09, după cele două fix-uri de mai sus) —
+  cod generat de Pacient → introdus manual de Aparținător → apare în „Pacienții mei". Utilizatorul
+  a cerut apoi 3 îmbunătățiri UX pe baza testării reale (vezi rafinarea de mai jos).
+- **Rafinare UX — fricțiune redusă la legare + nume Aparținător vizibil** (2026-09-09, mai multe
+  iterații pe baza testării live a utilizatorului):
+  - **Deep link `pillpronto://invite?code=XXXX`** (schemă proprie, fără domeniu/App Links) —
+    pattern identic cu `openTodayRequests` (tap pe notificare reminder): `MainActivity` emite
+    printr-un `MutableSharedFlow`, `PillProntoNavHost` navighează la „Pacienții mei" cu codul
+    pre-completat (userul tot apasă „Adaugă pacient" — confirmare păstrată, nu claim automat
+    silențios). Parsare/construcție centralizate în `ui/access/InviteLink.kt`
+    (`buildInviteUri`/`extractInviteCode`) — pe `String`, nu pe `android.net.Uri` (stub în teste
+    JVM fără Robolectric), ca să rămână testabil.
+  - **Link-ul text s-a confirmat pe device necliclabil în WhatsApp** (auto-linkify doar pe
+    `http(s)://`, nu pe scheme proprii — semnalat înainte de implementare, confirmat de user după
+    3 încercări de reformatare). **Eliminat complet din textul distribuit** — rămâne doar codul +
+    mențiunea codului QR. Codul QR (`com.google.zxing:core`, doar generare) e mecanismul „fără
+    tastare" funcțional: **atașat ca imagine reală** în share sheet (nu doar codat în text) via
+    `FileProvider` (`res/xml/file_paths.xml`, PNG temporar în `cache/shared_images/`,
+    `Intent.ACTION_SEND` cu `type=image/png` + `EXTRA_STREAM`) — `file://` direct ar arunca
+    `FileUriExposedException` pe Android 7+.
+  - **Buton de scanare QR** pe „Pacienții mei" (Apartinător) — `com.google.android.gms:play-services-code-scanner`
+    (`GmsBarcodeScanning`), NU CameraX/ML Kit manual: modulul gestionează integral UI-ul de
+    cameră + permisiunea, fără `CAMERA` în manifest. **Nu e începutul Fazei 2** (aceea ramane
+    CameraX + ML Kit pentru detecție multi-obiect pe cutii de medicamente) — aici doar citește
+    textul unui singur cod QR, reutilizând `extractInviteCode` din același `InviteLink.kt`.
+  - **Numele Aparținătorului vizibil Pacientului** — migrare nouă
+    `supabase/migrations/0005_profiles_visible_to_linked_grantee.sql` (funcție `is_linked_grantee`
+    `SECURITY DEFINER`, aceeași tehnică ca 0004, deși aici niciun tabel nu subqueria `profiles`
+    azi — păstrat consecvent). `LinkRepository.getMyCaregivers` (pattern identic `getMyPatients`,
+    două query-uri) + `GetMyCaregiversUseCase`; `ManageAccessScreen` arată „Acces acordat lui
+    <nume>" în loc de textul generic pe legăturile `ACCEPTED`.
+  - Buton `AccountScreen`: „Gestionează accesul" → „Gestionează accesul Aparținătorilor". Buton
+    nou „Anulează" pe invitațiile `PENDING` (reutilizează `revokeLink` existent).
+  - Teste noi: `InviteLinkTest` (6), + cazuri noi în `ManageAccessViewModelTest`/
+    `MyPatientsViewModelTest` (potrivire nume Aparținător, prefill din `SavedStateHandle`).
+  - **Neverificat încă pe device**: doar migrarea 0005 (SQL, de rulat de utilizator după
+    0001-0004) — restul (deep link, QR ca imagine, scanare, nume Aparținător) verificat live pe
+    device fizic în timpul dezvoltării.
+  - **Bug real găsit la testarea scanării QR** (2026-09-09): revendicarea unui cod nou pentru un
+    Apartinator cu care Pacientul mai avusese o legătură (chiar revocată) eșua cu eroare brută
+    Postgres „duplicate key... links_patient_profile_id_grantee_user_id_key" (23505). Cauză:
+    `unique(patient_profile_id, grantee_user_id)` din 0001 e globală, se aplică și rândurilor
+    `revoked` — o reinvitare colidează cu istoricul revocat. Fix:
+    `supabase/migrations/0006_fix_links_reinvite_constraint.sql` — constrângerea devine index
+    unic parțial (`where status <> 'revoked'`), plus mesaj de eroare mai clar în `claim_link`
+    pentru cazul legitim rămas (a doua legătură activă simultan). **De rulat manual, după 0005.**
+
 ---
 
 ## 8. CE URMEAZĂ — TODO
@@ -179,19 +299,22 @@ Use-cases existente: `AddTreatmentUseCase`, `EditTreatmentUseCase`, `DeleteTreat
   apelează `AppCompatDelegate.setApplicationLocales(...)` / API-ul per-app language din Android 13+).
 
 ### 8b. Roadmap faze următoare
-- **Faza 1.5 — Conturi & Roluri (Pacient/Aparținător/Medic/Farmacist):** **1.5a + 1.5b + 1.5c
-  implementate** (vezi secțiunea 7 mai sus) — schema + RLS + migrare Room, SDK Supabase +
-  autentificare email/parolă + onboarding rol, sync layer Room↔Supabase. **Următorul pas, la
-  alegere:**
+- **Faza 1.5 — Conturi & Roluri (Pacient/Aparținător/Medic/Farmacist):** **1.5a + 1.5b + 1.5c +
+  1.5d (viewer) implementate** (vezi secțiunea 7 mai sus) — schema + RLS + migrare Room, SDK
+  Supabase + autentificare email/parolă + onboarding rol, sync layer Room↔Supabase, legătură
+  Pacient↔Aparținător read-only + notificare doză ratată. **Următorul pas, la alegere:**
+  - **1.5c confirmat funcțional pe device; 1.5d confirmat funcțional (flux de bază)** — rămâne de
+    rulat manual `supabase/migrations/0005_profiles_visible_to_linked_grantee.sql` (Supabase
+    Dashboard, după 0001-0004) + verificat pe device rafinarea UX (QR, deep link, nume
+    Aparținător) descrisă în secțiunea 7.
   - **Google Sign-In** (completare 1.5b) — necesită acțiune manuală a utilizatorului mai întâi:
     2 OAuth Client ID-uri în Google Cloud Console (Web + Android, acesta din urmă cu amprenta
     SHA-1 a certificatului de semnare) + înregistrarea lor în Supabase Dashboard → Auth →
     providers → Google. Fără asta, nu se poate implementa.
-  - **Verificare manuală pe device a sync-ului 1.5c** (Supabase Dashboard) — nefăcută încă, vezi
-    secțiunea 7 mai sus.
-  - **1.5d — Flux Aparținător** (creare profil dependent, invitație, ecran „Pacienții mei") — nu
-    are blocaj extern, se poate începe oricând acum că sync-ul (1.5c) există.
-  - Restul etapelor (1.5e Medic/Farmacist, 1.5f audit, 1.5g teste RLS) — vezi
+  - **Profil dependent** (pacient vârstnic fără cont propriu) — amânat explicit din 1.5d, cere
+    suport multi-profil local în Room (schimbare majoră de arhitectură).
+  - **1.5e — Flux Medic/Farmacist** (read-only, similar 1.5d) — nu are blocaj extern.
+  - Restul etapelor (1.5f audit, 1.5g teste RLS) — vezi
     `docs/user-management-plan.md` secțiunea 8, neatinse încă.
   Poziționată **înaintea** Fazei 2 pentru că schema (`patient_profile_id`) trebuia stabilă înainte
   ca Nomenclatorul/scanarea să construiască peste ea — acum e stabilă.

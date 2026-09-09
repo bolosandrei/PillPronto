@@ -77,6 +77,12 @@ class AccountViewModel @Inject constructor(
     }
 
     private fun refreshProfile(userId: String) {
+        // profileChecked=false IMEDIAT (sincron, inainte de fetch-ul async): altfel, intre
+        // apelul acesta si raspunsul retelei, AccountScreen se poate recompune cu starea veche
+        // (profileChecked=true, profile=null, ramasa de dinainte de onboarding) si LaunchedEffect-ul
+        // ei sare direct inapoi pe onboarding, inainte ca fetch-ul proaspat sa apuce sa raspunda —
+        // exact bug-ul raportat la testarea 1.5d (onboarding reusit -> bounce imediat inapoi).
+        _state.update { it.copy(profileChecked = false) }
         viewModelScope.launch {
             val profile = runCatching { getProfile(userId) }
                 .onFailure { Log.e("AccountViewModel", "Nu am putut prelua profilul", it) }

@@ -37,6 +37,8 @@ import com.pillpronto.domain.model.AuthSessionState
 fun AccountScreen(
     padding: PaddingValues,
     onNeedsOnboarding: () -> Unit,
+    onManageAccess: () -> Unit,
+    onMyPatients: () -> Unit,
     vm: AccountViewModel = hiltViewModel()
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
@@ -66,7 +68,13 @@ fun AccountScreen(
                 }
             is AuthSessionState.Authenticated ->
                 if (state.profileChecked && state.profile != null) {
-                    LoggedInView(displayName = state.profile!!.displayName, role = state.profile!!.role, onSignOut = vm::onSignOut)
+                    LoggedInView(
+                        displayName = state.profile!!.displayName,
+                        role = state.profile!!.role,
+                        onSignOut = vm::onSignOut,
+                        onManageAccess = onManageAccess,
+                        onMyPatients = onMyPatients
+                    )
                 } else {
                     LoadingIndicator()
                 }
@@ -134,12 +142,31 @@ private fun SignUpConfirmationPending(email: String, onBackToSignIn: () -> Unit)
 }
 
 @Composable
-private fun LoggedInView(displayName: String?, role: AccountRole, onSignOut: () -> Unit) {
+private fun LoggedInView(
+    displayName: String?,
+    role: AccountRole,
+    onSignOut: () -> Unit,
+    onManageAccess: () -> Unit,
+    onMyPatients: () -> Unit
+) {
     Text(
         stringResource(R.string.account_logged_in_as, displayName ?: "—"),
         style = MaterialTheme.typography.headlineSmall
     )
     Text(stringResource(R.string.account_role_label, roleLabel(role)), style = MaterialTheme.typography.bodyMedium)
+
+    // Faza 1.5d: legatura Pacient<->Apartinator — fiecare rol isi vede doar butonul relevant.
+    // DOCTOR/PHARMACIST raman fara buton dedicat pana la 1.5e.
+    when (role) {
+        AccountRole.PATIENT -> OutlinedButton(onClick = onManageAccess, modifier = Modifier.fillMaxWidth()) {
+            Text(stringResource(R.string.account_manage_access_button))
+        }
+        AccountRole.CAREGIVER -> OutlinedButton(onClick = onMyPatients, modifier = Modifier.fillMaxWidth()) {
+            Text(stringResource(R.string.account_my_patients_button))
+        }
+        else -> {}
+    }
+
     OutlinedButton(onClick = onSignOut, modifier = Modifier.fillMaxWidth()) {
         Text(stringResource(R.string.account_sign_out))
     }

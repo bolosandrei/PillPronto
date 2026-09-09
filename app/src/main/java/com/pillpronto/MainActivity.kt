@@ -14,6 +14,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import com.pillpronto.core.ui.theme.PillProntoTheme
+import com.pillpronto.ui.access.extractInviteCode
 import com.pillpronto.ui.navigation.PillProntoNavHost
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -25,6 +26,10 @@ class MainActivity : ComponentActivity() {
     // Semnal pentru navigarea fortata pe tab-ul "Azi" cand app-ul e deschis dintr-o notificare
     // de reminder (cold start prin onCreate SAU activitate deja pornita prin onNewIntent).
     private val openTodayRequests = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+
+    // Semnal pentru deep link-ul de invitatie (Faza 1.5d) — pillpronto://invite?code=XXXX,
+    // acelasi pattern (cold start + onNewIntent).
+    private val inviteCodeRequests = MutableSharedFlow<String>(extraBufferCapacity = 1)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -46,7 +51,10 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                PillProntoNavHost(openTodayRequests = openTodayRequests.asSharedFlow())
+                PillProntoNavHost(
+                    openTodayRequests = openTodayRequests.asSharedFlow(),
+                    inviteCodeRequests = inviteCodeRequests.asSharedFlow()
+                )
             }
         }
     }
@@ -61,6 +69,7 @@ class MainActivity : ComponentActivity() {
         if (intent.getBooleanExtra(EXTRA_OPEN_TODAY, false)) {
             openTodayRequests.tryEmit(Unit)
         }
+        extractInviteCode(intent.data?.toString())?.let { inviteCodeRequests.tryEmit(it) }
     }
 
     companion object {

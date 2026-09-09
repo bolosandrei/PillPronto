@@ -2,6 +2,7 @@ package com.pillpronto.data.local
 
 import android.content.Context
 import androidx.core.content.edit
+import com.pillpronto.domain.repository.PatientProfileIdProvider
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.util.UUID
 import javax.inject.Inject

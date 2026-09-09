@@ -26,6 +26,13 @@ class SupabaseSyncDataSource @Inject constructor(
     override suspend fun pullDoseLogs(): List<DoseLogDto> =
         supabase.from(DOSE_LOGS_TABLE).select().decodeList<DoseLogDto>()
 
+    override suspend fun pullDoseLogsForTreatments(treatmentIds: List<String>): List<DoseLogDto> {
+        if (treatmentIds.isEmpty()) return emptyList()
+        return supabase.from(DOSE_LOGS_TABLE)
+            .select { filter { isIn("treatment_id", treatmentIds) } }
+            .decodeList<DoseLogDto>()
+    }
+
     override suspend fun deleteTreatment(remoteId: String) {
         supabase.from(TREATMENTS_TABLE).delete { filter { eq("id", remoteId) } }
     }

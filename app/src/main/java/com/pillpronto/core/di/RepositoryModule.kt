@@ -1,17 +1,21 @@
 package com.pillpronto.core.di
 
 import com.pillpronto.data.local.LocalPatientProfileProvider
-import com.pillpronto.data.local.PatientProfileIdProvider
 import com.pillpronto.data.reminder.ReminderCoordinator
 import com.pillpronto.data.reminder.ReminderSync
 import com.pillpronto.data.repository.AuthRepositoryImpl
 import com.pillpronto.data.repository.DoseRepositoryImpl
+import com.pillpronto.data.repository.LinkRepositoryImpl
+import com.pillpronto.data.repository.LinkedPatientDataRepositoryImpl
 import com.pillpronto.data.repository.ProfileRepositoryImpl
 import com.pillpronto.data.repository.TreatmentRepositoryImpl
 import com.pillpronto.data.sync.SupabaseSyncDataSource
 import com.pillpronto.data.sync.SyncRemoteDataSource
 import com.pillpronto.domain.repository.AuthRepository
 import com.pillpronto.domain.repository.DoseRepository
+import com.pillpronto.domain.repository.LinkRepository
+import com.pillpronto.domain.repository.LinkedPatientDataRepository
+import com.pillpronto.domain.repository.PatientProfileIdProvider
 import com.pillpronto.domain.repository.ProfileRepository
 import com.pillpronto.domain.repository.TreatmentRepository
 import dagger.Binds
@@ -51,4 +55,12 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindPatientProfileIdProvider(impl: LocalPatientProfileProvider): PatientProfileIdProvider
+
+    @Binds
+    @Singleton
+    abstract fun bindLinkRepository(impl: LinkRepositoryImpl): LinkRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindLinkedPatientDataRepository(impl: LinkedPatientDataRepositoryImpl): LinkedPatientDataRepository
 }

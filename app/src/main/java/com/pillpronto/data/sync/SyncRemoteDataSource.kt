@@ -18,5 +18,11 @@ interface SyncRemoteDataSource {
      * FK-ul catre treatments), iar RLS (dose_logs_owner_all) scopeaza deja rezultatul la randurile
      * proprii — vezi supabase/migrations/0002_rls_policies.sql. */
     suspend fun pullDoseLogs(): List<DoseLogDto>
+
+    /** Doze filtrate server-side pe un set de tratamente (remoteId) — folosit de Apartinator
+     * (Faza 1.5d) ca sa citeasca dozele UNUI SINGUR pacient legat, fara sa aduca dozele tuturor
+     * pacientilor legati (cum ar face `pullDoseLogs()` fara filtru). */
+    suspend fun pullDoseLogsForTreatments(treatmentIds: List<String>): List<DoseLogDto>
+
     suspend fun deleteTreatment(remoteId: String)
 }

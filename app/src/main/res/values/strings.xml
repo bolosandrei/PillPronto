@@ -115,6 +115,8 @@
     <string name="account_error_passwords_mismatch">Parolele nu coincid</string>
     <string name="account_error_auth_failed">Autentificare eșuată. Verifică datele introduse.</string>
     <string name="account_error_rate_limited">Prea multe încercări într-un timp scurt. Așteaptă câteva minute și încearcă din nou.</string>
+    <string name="account_manage_access_button">Gestionează accesul Aparținătorilor</string>
+    <string name="account_my_patients_button">Pacienții mei</string>
 
     <!-- Ecranul de onboarding (alegere rol, dupa primul cont creat) -->
     <string name="onboarding_title">Ce fel de cont ai?</string>
@@ -125,6 +127,45 @@
     <string name="onboarding_error_empty_name">Introdu un nume</string>
     <string name="onboarding_error_not_authenticated">Sesiunea a expirat — autentifică-te din nou</string>
     <string name="onboarding_error_save_failed">Eroare la salvare. Încearcă din nou.</string>
+
+    <!-- Faza 1.5d: Pacient — gestionare acces (generare/distribuire cod, revocare) -->
+    <string name="manage_access_title">Gestionează accesul</string>
+    <string name="manage_access_subtitle">Generează un cod și distribuie-l unui aparținător ca să-ți vadă tratamentele și aderența — fără să poată edita nimic.</string>
+    <string name="manage_access_generate_button">Generează cod nou</string>
+    <string name="manage_access_generating">Se generează…</string>
+    <string name="manage_access_empty">Nu ai încă niciun cod generat.</string>
+    <string name="manage_access_error_generate">Nu am putut genera codul. Încearcă din nou.</string>
+    <string name="manage_access_error_revoke">Nu am putut revoca accesul. Încearcă din nou.</string>
+    <string name="manage_access_status_pending">În așteptare</string>
+    <string name="manage_access_status_accepted">Acces acordat</string>
+    <string name="manage_access_status_accepted_named">Acces acordat lui %1$s</string>
+    <string name="manage_access_qr_description">Cod QR de invitație — scanează-l cu telefonul Aparținătorului</string>
+    <string name="manage_access_status_revoked">Acces revocat</string>
+    <string name="manage_access_code_label">Cod: %1$s</string>
+    <string name="manage_access_share_button">Distribuie</string>
+    <string name="manage_access_share_text">Cod de acces PillPronto: %1$s\nIntrodu-l în aplicație, la „Pacienții mei”, ca să-mi vezi tratamentele și aderența — sau scanează codul QR de mai jos.</string>
+    <string name="manage_access_revoke_button">Revocă</string>
+    <string name="manage_access_cancel_button">Anulează</string>
+
+    <!-- Faza 1.5d: Apartinator — revendicare cod + lista pacientilor legati -->
+    <string name="my_patients_title">Pacienții mei</string>
+    <string name="my_patients_claim_label">Cod de acces</string>
+    <string name="my_patients_scan_button">Scanează codul QR</string>
+    <string name="my_patients_claim_button">Adaugă pacient</string>
+    <string name="my_patients_claim_error">Cod invalid sau deja folosit.</string>
+    <string name="my_patients_empty">Nu ai încă niciun pacient legat. Introdu un cod primit de la un pacient.</string>
+    <string name="my_patients_adherence_summary">PDC %1$d%%</string>
+
+    <!-- Faza 1.5d: Apartinator — detaliu pacient (read-only) -->
+    <string name="patient_detail_loading">Se încarcă…</string>
+    <string name="patient_detail_no_treatments">Acest pacient nu are tratamente înregistrate.</string>
+    <string name="patient_detail_adherence_summary">PDC %1$d%% · MPR %2$d%%</string>
+
+    <!-- Faza 1.5d: notificare Apartinator la doza ratata -->
+    <string name="caregiver_alerts_channel_name">Alerte pacienți</string>
+    <string name="caregiver_alerts_channel_desc">Notificări când un pacient legat ratează o doză</string>
+    <string name="caregiver_alert_missed_dose_title">%1$s a ratat o doză</string>
+    <string name="caregiver_alert_missed_dose_text">Verifică ecranul „Pacienții mei” pentru detalii.</string>
 
     <!-- Notificari de reminder -->
     <string name="reminder_channel_name">Remindere medicație</string>

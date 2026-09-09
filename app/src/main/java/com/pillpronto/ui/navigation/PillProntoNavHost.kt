@@ -24,9 +24,12 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.pillpronto.R
+import com.pillpronto.ui.access.ManageAccessScreen
 import com.pillpronto.ui.account.AccountScreen
 import com.pillpronto.ui.adherence.AdherenceScreen
 import com.pillpronto.ui.onboarding.OnboardingScreen
+import com.pillpronto.ui.patients.MyPatientsScreen
+import com.pillpronto.ui.patients.PatientDetailScreen
 import com.pillpronto.ui.today.TodayScreen
 import com.pillpronto.ui.treatments.AddTreatmentScreen
 import com.pillpronto.ui.treatments.TreatmentDetailScreen
@@ -35,7 +38,10 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
 
 @Composable
-fun PillProntoNavHost(openTodayRequests: Flow<Unit> = emptyFlow()) {
+fun PillProntoNavHost(
+    openTodayRequests: Flow<Unit> = emptyFlow(),
+    inviteCodeRequests: Flow<String> = emptyFlow()
+) {
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination
@@ -48,6 +54,14 @@ fun PillProntoNavHost(openTodayRequests: Flow<Unit> = emptyFlow()) {
                 popUpTo(Route.Today.path) { inclusive = true }
                 launchSingleTop = true
             }
+        }
+    }
+
+    // Deep link de invitatie (pillpronto://invite?code=...) -> "Pacientii mei" cu codul
+    // pre-completat (userul tot confirma apasand "Adauga pacient", vezi MyPatientsViewModel).
+    LaunchedEffect(Unit) {
+        inviteCodeRequests.collect { code ->
+            navController.navigate(Route.MyPatients.create(prefillCode = code))
         }
     }
 
@@ -111,7 +125,9 @@ fun PillProntoNavHost(openTodayRequests: Flow<Unit> = emptyFlow()) {
             composable(Route.Account.path) {
                 AccountScreen(
                     padding,
-                    onNeedsOnboarding = { navController.navigate(Route.Onboarding.path) }
+                    onNeedsOnboarding = { navController.navigate(Route.Onboarding.path) },
+                    onManageAccess = { navController.navigate(Route.ManageAccess.path) },
+                    onMyPatients = { navController.navigate(Route.MyPatients.create()) }
                 )
             }
             composable(Route.Onboarding.path) {
@@ -119,6 +135,26 @@ fun PillProntoNavHost(openTodayRequests: Flow<Unit> = emptyFlow()) {
                     padding,
                     onDone = { navController.popBackStack() }
                 )
+            }
+            composable(Route.ManageAccess.path) {
+                ManageAccessScreen(padding)
+            }
+            composable(
+                route = Route.MyPatients.path,
+                arguments = listOf(navArgument(Route.MyPatients.ARG_PREFILL_CODE) {
+                    type = NavType.StringType; nullable = true; defaultValue = null
+                })
+            ) {
+                MyPatientsScreen(
+                    padding,
+                    onOpenPatient = { id -> navController.navigate(Route.PatientDetail.create(id)) }
+                )
+            }
+            composable(
+                route = Route.PatientDetail.path,
+                arguments = listOf(navArgument(Route.PatientDetail.ARG) { type = NavType.StringType })
+            ) {
+                PatientDetailScreen(padding)
             }
         }
     }
