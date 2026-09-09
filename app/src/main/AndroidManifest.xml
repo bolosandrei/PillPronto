@@ -55,6 +55,18 @@
             </intent-filter>
         </receiver>
 
+        <!-- Distribuire cod QR de invitatie prin share sheet (Faza 1.5d) — vezi
+             ui/access/QrCodeGenerator.kt si res/xml/file_paths.xml. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
         <!-- Hilt + WorkManager: dezactivam initializatorul implicit ca sa folosim WorkerFactory. -->
         <provider
             android:name="androidx.startup.InitializationProvider"

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- FileProvider (Faza 1.5d) — expune doar fisierele temporare de distribuire (ex. cod QR de
+     invitatie, vezi ui/access/QrCodeGenerator.kt), nu tot cache-ul aplicatiei. -->
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <cache-path name="shared_images" path="shared_images/" />
+</paths>
