@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.Room
 import com.pillpronto.data.local.PillProntoDatabase
 import com.pillpronto.data.local.dao.DoseDao
+import com.pillpronto.data.local.dao.PendingRemoteDeleteDao
 import com.pillpronto.data.local.dao.TreatmentDao
 import dagger.Module
 import dagger.Provides
@@ -28,4 +29,8 @@ object DatabaseModule {
 
     @Provides
     fun provideDoseDao(db: PillProntoDatabase): DoseDao = db.doseDao()
+
+    @Provides
+    fun providePendingRemoteDeleteDao(db: PillProntoDatabase): PendingRemoteDeleteDao =
+        db.pendingRemoteDeleteDao()
 }

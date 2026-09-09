@@ -22,5 +22,6 @@ class PillProntoApp : Application(), Configuration.Provider {
         super.onCreate()
         reminderScheduler.createNotificationChannel()
         maintenanceScheduler.schedulePeriodic()
+        maintenanceScheduler.scheduleSyncOnStartup()
     }
 }

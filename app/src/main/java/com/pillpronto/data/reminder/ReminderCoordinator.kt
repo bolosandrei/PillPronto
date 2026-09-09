@@ -10,8 +10,8 @@ import javax.inject.Singleton
 class ReminderCoordinator @Inject constructor(
     private val doseRepository: DoseRepository,
     private val scheduler: ReminderScheduler
-) {
-    suspend fun syncReminders(horizonDays: Long = SCHEDULE_HORIZON_DAYS) {
+) : ReminderSync {
+    override suspend fun syncReminders(horizonDays: Long) {
         val now = LocalDateTime.now()
         val until = now.plusDays(horizonDays)
         doseRepository.getUpcomingPendingItems(now, until).forEach { item ->

@@ -23,4 +23,18 @@ interface TreatmentDao {
 
     @Query("DELETE FROM treatments WHERE id = :id")
     suspend fun deleteById(id: Long)
+
+    // --- sync Room <-> Supabase (Faza 1.5c) ---
+
+    @Query("SELECT * FROM treatments WHERE dirty = 1")
+    suspend fun getDirty(): List<TreatmentEntity>
+
+    @Query("SELECT * FROM treatments WHERE remoteId = :remoteId")
+    suspend fun getByRemoteId(remoteId: String): TreatmentEntity?
+
+    /** Curata flag-ul de push doar daca randul n-a fost editat din nou intre citire si push
+     * (updatedAt neschimbat) — altfel o editare locala survenita chiar in timpul push-ului ar fi
+     * marcata gresit ca "sincronizata". */
+    @Query("UPDATE treatments SET dirty = 0 WHERE id = :id AND updatedAt = :updatedAt")
+    suspend fun clearDirtyIfUnchanged(id: Long, updatedAt: Long)
 }
