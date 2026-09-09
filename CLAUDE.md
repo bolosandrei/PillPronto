@@ -351,6 +351,15 @@ Use-cases existente: `AddTreatmentUseCase`, `EditTreatmentUseCase`, `DeleteTreat
   (`profile == null`), nu la fiecare revenire pe tab. Logica de `profileChecked` pentru declanșarea
   onboarding-ului (`LaunchedEffect(state.sessionState, state.profileChecked, state.profile)`)
   rămâne neschimbată. Compilare + teste unitare + build APK + instalare pe device confirmate.
+- **Același flash semnalat pe cele două ecrane de acces** (`ManageAccessScreen`/
+  `ManageProfessionalAccessScreen`) și reparat proactiv și pe `MyPatientsScreen` (identic:
+  `LifecycleEventEffect(ON_RESUME)` → `refresh()` → `isLoading=true` sincron la fiecare revenire pe
+  ecran). Fix analog celui de la `AccountScreen`: condiția de spinner devine
+  `isLoading && list.isEmpty()` (doar la primul fetch real), nu doar `isLoading` — lista veche
+  rămâne afișată neîntrerupt cât timp refresh-ul rulează tăcut pe fundal. `PatientDetailScreen`
+  NU are aceeași problemă (ecran de navigare simplă, fără stare salvată de tab de jos — un
+  ViewModel nou la fiecare intrare, deci un scurt loading la intrare e comportamentul așteptat, nu
+  un flash repetat). Compilare + teste unitare + build APK + instalare pe device confirmate.
 
 ---
 

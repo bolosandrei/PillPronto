@@ -84,8 +84,13 @@ fun ManageProfessionalAccessScreen(
 
             HorizontalDivider(Modifier.padding(vertical = 4.dp))
 
+            // isLoading && links.isEmpty(): abia primul fetch, fara date afisate inca ->
+            // spinner justificat. Un refresh() ulterior (ex. revenire pe ecran, vezi
+            // LifecycleEventEffect de mai jos) tot seteaza isLoading=true, dar daca lista veche e
+            // deja pe ecran o pastram vizibila neintrerupt in loc sa clipim la spinner de fiecare
+            // data — acelasi fix ca la AccountScreen.
             when {
-                state.isLoading -> Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                state.isLoading && state.links.isEmpty() -> Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
                     CircularProgressIndicator(Modifier.padding(top = 16.dp))
                 }
                 state.links.isEmpty() -> Text(

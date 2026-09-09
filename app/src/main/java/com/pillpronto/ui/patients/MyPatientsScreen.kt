@@ -82,8 +82,12 @@ fun MyPatientsScreen(
 
             HorizontalDivider(Modifier.padding(vertical = 4.dp))
 
+            // isLoadingPatients && patients.isEmpty(): abia primul fetch -> spinner justificat.
+            // Un refresh ulterior (revenire pe ecran) tot seteaza isLoadingPatients=true, dar daca
+            // lista veche e deja pe ecran o pastram vizibila neintrerupt — acelasi fix ca la
+            // AccountScreen/ManageAccessScreen.
             when {
-                state.isLoadingPatients -> Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                state.isLoadingPatients && state.patients.isEmpty() -> Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
                     CircularProgressIndicator(Modifier.padding(top = 16.dp))
                 }
                 state.patients.isEmpty() -> Text(
