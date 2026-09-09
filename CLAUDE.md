@@ -300,13 +300,17 @@ Use-cases existente: `AddTreatmentUseCase`, `EditTreatmentUseCase`, `DeleteTreat
 
 ### 8b. Roadmap faze următoare
 - **Faza 1.5 — Conturi & Roluri (Pacient/Aparținător/Medic/Farmacist):** **1.5a + 1.5b + 1.5c +
-  1.5d (viewer) implementate** (vezi secțiunea 7 mai sus) — schema + RLS + migrare Room, SDK
-  Supabase + autentificare email/parolă + onboarding rol, sync layer Room↔Supabase, legătură
-  Pacient↔Aparținător read-only + notificare doză ratată. **Următorul pas, la alegere:**
-  - **1.5c confirmat funcțional pe device; 1.5d confirmat funcțional (flux de bază)** — rămâne de
-    rulat manual `supabase/migrations/0005_profiles_visible_to_linked_grantee.sql` (Supabase
-    Dashboard, după 0001-0004) + verificat pe device rafinarea UX (QR, deep link, nume
-    Aparținător) descrisă în secțiunea 7.
+  1.5d (viewer, + rafinare UX completă) implementate și mergeuite pe `main`** (PR #1-#4, vezi
+  secțiunea 7 mai sus) — schema + RLS + migrare Room, SDK Supabase + autentificare email/parolă +
+  onboarding rol, sync layer Room↔Supabase, legătură Pacient↔Aparținător read-only (cod + QR +
+  scanare + deep link + nume Aparținător vizibil + revocare/reinvitare) + notificare doză ratată.
+  **Următorul pas, la alegere:**
+  - **Confirmare finală de la utilizator** că toate migrările `supabase/migrations/0003-0006*.sql`
+    sunt rulate (Supabase Dashboard, în ordine, după 0001-0002) și fluxul complet funcționează
+    end-to-end (invitație → claim → vizibilitate → notificare → revocare → reinvitare) — testat
+    live pe device în timpul dezvoltării, dar merită o trecere finală de confirmare.
+  - **1.5c (sync propriu-zis al Pacientului)** rămâne neverificat separat pe device — posibil
+    exercitat implicit prin testarea 1.5d, dar nu confirmat explicit.
   - **Google Sign-In** (completare 1.5b) — necesită acțiune manuală a utilizatorului mai întâi:
     2 OAuth Client ID-uri în Google Cloud Console (Web + Android, acesta din urmă cu amprenta
     SHA-1 a certificatului de semnare) + înregistrarea lor în Supabase Dashboard → Auth →
