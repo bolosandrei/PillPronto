@@ -7,6 +7,11 @@
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- Faza 3a-i: feed live CameraX pt. scanare vizuala (Viziune). Prima permisiune de camera
+         din proiect — codul de bare/QR si OCR-ul (eliminat) au delegat mereu la componente care
+         isi gestionau singure permisiunea (GmsBarcodeScanning, ACTION_IMAGE_CAPTURE). -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
 
     <application
         android:name=".PillProntoApp"

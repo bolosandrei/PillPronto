@@ -26,4 +26,15 @@ object Permissions {
             runCatching { context.startActivity(intent) }
         }
     }
+
+    /** Deschide ecranul de detalii al aplicatiei (fallback generic pt. orice permisiune runtime
+     * refuzata definitiv "nu mai intreba" — ex. CAMERA, Faza 3a-i — userul trebuie s-o acorde
+     * manual de acolo, un al doilea `requestPermission()` nu mai arata dialogul de sistem). */
+    fun openAppSettings(context: Context) {
+        val intent = Intent(
+            Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+            Uri.fromParts("package", context.packageName, null)
+        ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        runCatching { context.startActivity(intent) }
+    }
 }

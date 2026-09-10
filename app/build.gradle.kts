@@ -119,6 +119,12 @@ dependencies {
     implementation(libs.androidx.credentials)
     implementation(libs.androidx.credentials.play.services.auth)
     implementation(libs.googleid)
+    // CameraX (Faza 3a-i) - feed live de camera, Compose-nativ (camera-compose, stabil din 1.6.2).
+    // Doar preview aici, FARA model/inferenta - acelea intra in Faza 3a-ii (LiteRT + YOLO-seg).
+    implementation(libs.androidx.camera.core)
+    implementation(libs.androidx.camera.camera2)
+    implementation(libs.androidx.camera.lifecycle)
+    implementation(libs.androidx.camera.compose)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)

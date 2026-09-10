@@ -48,6 +48,8 @@ din `auth-kt`), JDK 17, Gradle KTS + version catalog (`gradle/libs.versions.toml
 - `ui/today/`, `ui/treatments/`, `ui/adherence/` — Faza 1.
 - `ui/account/`, `ui/onboarding/` — Faza 1.5a/b.
 - `ui/access/`, `ui/patients/` — Faza 1.5d/e.
+- `ui/gtinmapping/` — Faza 2b-i (asociere coduri GTIN).
+- `ui/vision/` — `CameraPreview`, `VisionScanScreen` — Faza 3a-i (feed live cameră, fără ML încă).
 
 ## 4. Convenții de cod
 
@@ -489,6 +491,51 @@ cascada Fazei 3, nu ca sursă unică de decizie).
   Room+FTS4 reale — singurul mod de a testa fallback-ul, nu poate fi simulat cu un fake) — toate
   trec, verificate live pe device.
 
+### Faza 3a-i — CameraX: feed live + permisiune, fără ML încă (implementat, testat — 2026-09-10)
+
+Primul pas din Faza 3 (Viziune). Decizie luată cu utilizatorul: nu se așteaptă dataset-ul propriu
+de cutii RO/UE (nu există încă) — se validează întâi pipeline-ul tehnic (CameraX → inferență
+on-device → overlay) cu un model generic preantrenat (clase COCO), împărțit pe bucăți testabile
+separat, ca la Faza 2: **3a-i** (acest pas, doar feed cameră) / **3a-ii** (viitor, model LiteRT
+YOLO11n-seg + decodare ieșire + overlay contururi gri).
+
+- **CameraX Compose-nativ**, `androidx.camera:camera-core`/`camera-camera2`/`camera-lifecycle`/
+  `camera-compose`, versiune **1.6.2** (confirmată exact prin `maven-metadata.xml`, nu prin căutare
+  indirectă — 1.7.0 e doar alpha). `CameraXViewfinder` (pachet `androidx.camera.compose`) +
+  `ImplementationMode` (pachet **`androidx.camera.viewfinder.core`**, nu `...viewfinder.surface`
+  cum ar sugera unele exemple vechi/AI-generate — verificat direct din `.aar`-ul real din cache-ul
+  Gradle local la primul build eșuat cu „Unresolved reference"). `SurfaceRequest` din
+  `androidx.camera.core`.
+- **`ui/vision/CameraPreview.kt`** — Composable reutilizabil: `Preview.Builder()` +
+  `ProcessCameraProvider.getInstance(context)` + `bindToLifecycle(lifecycleOwner,
+  CameraSelector.DEFAULT_BACK_CAMERA, previewUseCase)`, bind/unbind automat via `DisposableEffect`
+  scopat pe `LocalLifecycleOwner` — fără nicio analiză de frame-uri sau model de inferență (acelea
+  intră în 3a-ii).
+- **`ui/vision/VisionScanScreen.kt`** — ecran nou, punct de intrare necondiționat (fără gating pe
+  rol — doar preview, fără scriere de date) din `AccountScreen`, lângă „Asociere coduri (GTIN)",
+  marcat explicit „(experimental)". Cere `CAMERA` runtime **la intrarea pe ecran**, nu la pornirea
+  aplicației (spre deosebire de `POST_NOTIFICATIONS` din `MainActivity`) — prima permisiune de
+  cameră din proiect (scanarea de coduri/OCR-ul eliminat delegau mereu la componente
+  self-permisionate: `GmsBarcodeScanning`, `ACTION_IMAGE_CAPTURE`). Fallback „permisiune refuzată"
+  → text + buton spre setările aplicației (`Permissions.openAppSettings`, funcție nouă, pattern
+  generic reutilizabil pt. orice permisiune refuzată definitiv „nu mai întreba").
+- **Manifest**: `android.permission.CAMERA` + `<uses-feature android:name="android.hardware.camera"
+  android:required="false" />` (nu blochează instalarea pe device-uri fără cameră spate).
+- **Fără teste automate** — plumbing pur de cameră, netestabil semnificativ în JVM fără Robolectric
+  (neconfigurat în proiect); verificare **doar manuală, pe device fizic**: feed live confirmat OK
+  (fără lag/crash), refuz permisiune confirmat OK (fallback fără crash), intrare/ieșire repetată pe
+  ecran confirmată OK (fără resursă de cameră blocată).
+- **`scripts/export-yolo-seg-model.py`** — script Python separat (rulat local de utilizator, NU
+  parte din build-ul Gradle, cere `pip install ultralytics`): descarcă `yolo11n-seg.pt` preantrenat
+  și îl exportă la LiteRT (`.tflite`, `model.export(format="tflite")`). Pregătit acum pt. Faza
+  3a-ii, **neconsumat încă** de aplicație în acest stadiu.
+- **De făcut sesiunea viitoare (Faza 3a-ii, plan mode separat)**: userul rulează scriptul Python
+  local, copiază `.tflite`-ul rezultat în `app/src/main/assets/`; Claude adaugă dependența LiteRT
+  (`com.google.ai.edge.litert`, coordonată Maven exactă de confirmat la momentul respectiv),
+  decodare ieșire YOLO-seg (boxes + mask coefficients, NMS), overlay Compose cu contururi gri
+  peste feed-ul deja funcțional din 3a-i, mapare corectă a coordonatelor de detecție pe
+  coordonatele preview-ului de cameră.
+
 ---
 
 ## 8. CE URMEAZĂ — TODO
@@ -522,16 +569,19 @@ cascada Fazei 3, nu ca sursă unică de decizie).
     considerată suficient de matură funcțional, 1.5f/1.5g sunt hardening, nu blocante.
 - **Faza 2a — Import Nomenclator + căutare/asociere:** ✅ **complet implementată, mergeuită pe
   `main` (PR #10)**, migrările `0008`/`0009` rulate — vezi secțiunea 7.
-- **Faza 2b-i — Scanare GS1 DataMatrix + catalog `gtin_mappings`:** ✅ **implementată, testată
-  funcțional pe device** (bug de parser găsit + fixat live) + **cautare fuzzy Nomenclator** (bug
-  găsit prin testare live, fixat) — **PR #11 deschis** (`feature/faza2b-i-gs1-scan` → `main`), încă
-  nemergeuit — de rulat manual migrările `0010`+`0011`+`0012` (în ordine), de marcat userul
-  contribuitor de încredere, de testat push+pull către catalogul partajat, apoi merge — vezi
-  secțiunea 7 pentru detalii complete.
+- **Faza 2b-i — Scanare GS1 DataMatrix + catalog `gtin_mappings`:** ✅ **complet implementată,
+  mergeuită pe `main` (PR #11)** — bug de parser găsit + fixat live, cautare fuzzy Nomenclator, dată
+  expirare + alerte — vezi secțiunea 7. Rămas la utilizator (de rulat manual): migrările
+  `0010`+`0011`+`0012`, marcarea contului drept contribuitor de încredere, testarea push+pull către
+  catalogul partajat.
 - **Faza 2b-ii — OCR fallback:** ❌ **implementată, testată live, apoi ELIMINATĂ** — rată de succes
   prea scăzută în practică (vezi secțiunea 7). Rămân doar scanare cod + introducere manuală
   (cu fallback fuzzy) ca metode de identificare la această etapă.
-- **Faza 3 — Viziune:** feed CameraX, **YOLO-seg** (LiteRT/ONNX), detecție multi-obiect pe cadru de ansamblu, **contururi gri** (detectat/neidentificat).
+- **Faza 3a-i — CameraX feed live + permisiune:** ✅ **implementată, testată live pe device** — vezi
+  secțiunea 7. Pe branch `feature/faza3a-i-camerax-feed`, necomisă încă push/PR.
+- **Faza 3a-ii — model LiteRT (YOLO-seg) + overlay contururi gri:** următorul pas, plan mode separat
+  — vezi secțiunea 7 pentru ce rămâne de făcut.
+- **Faza 3 (restul) — Viziune:** detecție/segmentare multi-obiect pe cadru de ansamblu (după 3a-ii).
 - **Faza 4 — Recunoaștere & enrollment:** model de **embeddings** (metric learning), galerie nearest-neighbor, enrollment multi-view + top-k candidați, **colorare contur** după statusul dozei.
 - **Faza 5 — Tracking & AR:** ByteTrack + netezire, ancorare dinamică a panoului de info, buton show/hide; ancore ARCore pentru scanare progresivă.
 - **Faza 6 — Chatbot RAG + interacțiuni:** RAG peste tratament activ + prospecte, guardrails + disclaimere, verificare interacțiuni medicamentoase.
