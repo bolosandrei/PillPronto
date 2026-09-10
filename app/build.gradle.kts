@@ -115,10 +115,6 @@ dependencies {
     // - NU e inceputul CameraX/ML Kit din Faza 2 (acela ramane pt. detectie multi-obiect pe cutii
     // de medicamente); aici doar citim textul unui singur cod QR pt. fluxul de invitatie 1.5d.
     implementation(libs.play.services.code.scanner)
-    // OCR fallback (Faza 2b-ii) — model Latin bundled (nu play-services-mlkit-text-recognition,
-    // care descarca modelul separat prin Play Services, intarziere la prima utilizare); doar text
-    // recognition, fara CameraX (o poza + procesare, nu feed continuu).
-    implementation(libs.mlkit.text.recognition)
     // Google Sign-In nativ (Faza 1.5b, completare) - Credential Manager, nu WebView/Custom Tabs OAuth.
     implementation(libs.androidx.credentials)
     implementation(libs.androidx.credentials.play.services.auth)

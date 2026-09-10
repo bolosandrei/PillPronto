@@ -1,8 +1,5 @@
 package com.pillpronto.ui.treatments
 
-import android.net.Uri
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -88,16 +85,6 @@ fun AddTreatmentScreen(
     val context = LocalContext.current
     LaunchedEffect(state.saved) { if (state.saved) onDone(state.deleted) }
 
-    // Poza in asteptare pt. OCR fallback (Faza 2b-ii) — URI-ul unde camera sistemului scrie
-    // rezultatul, setat chiar inainte de lansarea launcher-ului.
-    var ocrCaptureUri by remember { mutableStateOf<Uri?>(null) }
-    val ocrLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
-        // Anulare (userul inchide camera fara poza) ramane tacuta, ca la scanarea de cod — doar o
-        // poza facuta dar fara text util recunoscut ajunge sa arate hint-ul de esec.
-        val uri = ocrCaptureUri
-        if (success && uri != null) recognizeText(context, uri, vm::onOcrTextRecognized)
-    }
-
     var showTimePicker by remember { mutableStateOf(false) }
     var showStartPicker by remember { mutableStateOf(false) }
     var showEndPicker by remember { mutableStateOf(false) }
@@ -153,25 +140,6 @@ fun AddTreatmentScreen(
                     stringResource(textRes, DMY.format(expiry)),
                     style = MaterialTheme.typography.bodySmall,
                     color = warningColor ?: MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            OutlinedButton(
-                onClick = {
-                    if (isCameraAvailable(context)) {
-                        val uri = createOcrCaptureUri(context)
-                        ocrCaptureUri = uri
-                        ocrLauncher.launch(uri)
-                    }
-                },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text(stringResource(R.string.add_treatment_ocr_button))
-            }
-            if (state.ocrFailed) {
-                Text(
-                    stringResource(R.string.add_treatment_ocr_failed),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error
                 )
             }
             if (state.suggestions.isNotEmpty()) {

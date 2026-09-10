@@ -426,47 +426,27 @@ device. Testele instrumentate rămân de rulat de utilizator. Migrările `0010`/
   is_trusted_contributor = true where id = '<uid>'`), testează pe device: confirmarea unei mapări
   + verificare apariție rând în `gtin_mappings` (Supabase Table Editor) + pull pe alt cont/device;
   scanarea unei cutii cu dată de expirare (culoare corectă în `AddTreatmentScreen`/
-  `TreatmentDetailScreen`). OCR + fallback fuzzy deja testate live (vezi mai jos). De investigat
-  separat: crash-ul `NavigationSmokeTest`. Apoi commit + push + PR + merge.
+  `TreatmentDetailScreen`). Fallback fuzzy la căutare deja testat live (vezi mai jos; OCR a fost
+  eliminat). De investigat separat: crash-ul `NavigationSmokeTest`. Apoi commit + push + PR + merge.
 
-### Faza 2b-ii — OCR fallback pentru cutii fără cod lizibil (implementat — 2026-09-10)
+### Faza 2b-ii — OCR fallback: implementat, testat, ELIMINAT (2026-09-10)
 
-Pe branch `feature/faza2b-i-gs1-scan`, aceeași sesiune. Compilat + teste unitare trec local +
-**testat live pe device de user** — funcțional (a dus direct la găsirea bug-ului de căutare fuzzy
-de mai jos).
-
-- Scop clarificat explicit cu userul (discuție despre cascada Viziune→OCR→cod 2D): **doar**
-  fallback pt. cutii cu cod absent/deteriorat dar text lizibil pe ambalaj — NU recunoaștere de
-  folie/pastilă fără cutie (asta rămâne exclusiv Faza 4, embeddings — o folie n-are niciodată cod
-  de bare, iar textul de pe ea e mult mai greu de citit prin OCR decât cel de pe cutie).
-- **Fără CameraX, fără dependență Document Scanner nouă** — o singură poză + OCR e suficient.
-  Intent implicit `ACTION_IMAGE_CAPTURE` către camera sistemului (`ActivityResultContracts.TakePicture()`),
-  cu `EXTRA_OUTPUT` printr-un `content://` URI — `FileProvider` deja configurat (Faza 1.5d),
-  extins cu un al doilea `cache-path` (`ocr_captures/`, distinct de `shared_images/`).
-  **Niciun `CAMERA` nou în manifest** (camera sistemului își gestionează propria permisiune),
-  **niciun `<queries>` nou** (`ACTION_IMAGE_CAPTURE` e exceptat de la package visibility Android 11+).
-- **Dependență nouă**: `com.google.mlkit:text-recognition:16.0.1` (model Latin, **bundled**, nu
-  `play-services-mlkit-text-recognition` — acela descarcă modelul separat, întârziere la prima
-  utilizare; bundled = funcționează offline imediat, consecvent cu restul aplicației).
-- **`ui/treatments/OcrCapture.kt`** — `isCameraAvailable` (verificare înainte de lansare, esec
-  tăcut dacă nu există aplicație cameră), `createOcrCaptureUri`, `recognizeText` (rulează
-  `TextRecognizer`, șterge fișierul temporar după, succes sau eșec), `bestCandidateLine` (funcție
-  pură, testabilă: prima linie nevidă ≥3 caractere din blocul recunoscut — euristică minimă, nu
-  parsare structurată; rezultatul rămâne editabil în UI).
-- **Integrare**: rezultatul OCR alimentează direct `AddTreatmentViewModel.onName` (deci debounce +
-  căutare Nomenclator + listă de sugestii deja existente, **zero UI nou de căutare**) — buton nou
-  în `AddTreatmentScreen`, mereu vizibil (nu condiționat de un scan de cod eșuat anterior — Play
-  Services Code Scanner nu oferă un semnal curat de "niciun cod găsit", doar succes sau tăcere, deci
-  un trigger automat ar fi ambiguu). Anularea pozei rămâne tăcută (ca la scanarea de cod); doar o
-  poză făcută fără text util recunoscut arată hint-ul de eșec (`ocrFailed`).
-- **Doar `AddTreatmentScreen`** — `AssociateGtinScreen` mapează GTIN-uri; fără GTIN scanat n-are ce
-  asocia, deci OCR-ul nu se aplică acolo.
-- **Teste noi**: `OcrCaptureTest` (`bestCandidateLine` — text normal, gol, linii sub prag, spații
-  la margini) — toate trec local. Restul (`createOcrCaptureUri`/`recognizeText`/`isCameraAvailable`)
-  Android-dependente, netestabile JVM fără Robolectric — consecvent cu `scanMedicationBarcode`
-  însuși (deja netestat direct, doar logica pură din `ScanBarcode.kt` are teste).
-- **Testat pe device de user** — funcțional, dar a scos la iveală o limitare reală a căutării
-  Nomenclator (vezi mai jos, „Fallback fuzzy la căutare”).
+Implementat complet (poză via `ACTION_IMAGE_CAPTURE`, fără CameraX + `com.google.mlkit:text-recognition`,
+rezultatul alimenta căutarea Nomenclator existentă — vezi istoricul git, commit `eb92ceb`, pentru
+detaliile tehnice complete) și **testat live pe device de user** — funcțional ca mecanism (a dus
+direct la găsirea bug-ului de căutare fuzzy de mai jos), dar cu **rată de succes prea scăzută în
+practică** la identificarea corectă a medicamentului din poză, la aprecierea userului după
+testare reală. Decizie: **eliminat complet** la această etapă — rămân doar cele două metode de
+identificare cu fiabilitate confirmată: scanare cod (Faza 2b-i) + introducere manuală de text
+(căutare Nomenclator, acum cu fallback fuzzy, vezi mai jos). Cod șters: `ui/treatments/OcrCapture.kt`
++ testul lui, `AddTreatmentViewModel.onOcrTextRecognized`/`ocrFailed`, butonul din
+`AddTreatmentScreen`, dependența `com.google.mlkit:text-recognition`, cache-path-ul `ocr_captures`
+din `FileProvider`. **Notă pt. teză**: un rezultat negativ documentat (OCR simplu, fără
+crop/enhance, insuficient de fiabil pe text de cutie de medicament) — motivează concret de ce
+arhitectura stabilă a proiectului prevede oricum OCR doar ca element dintr-o cascadă mai largă
+(Viziune→OCR→cod 2D, Faza 3+), nu ca mecanism de sine stătător. Nu exclude o reîncercare ulterioară
+cu o abordare mai robustă (ex. `GmsDocumentScanning` cu crop/enhance, sau OCR ca *narrowing* în
+cascada Fazei 3, nu ca sursă unică de decizie).
 
 ### Căutare Nomenclator — fallback fuzzy (Levenshtein) (implementat — 2026-09-10)
 
@@ -543,13 +523,14 @@ de mai jos).
 - **Faza 2a — Import Nomenclator + căutare/asociere:** ✅ **complet implementată, mergeuită pe
   `main` (PR #10)**, migrările `0008`/`0009` rulate — vezi secțiunea 7.
 - **Faza 2b-i — Scanare GS1 DataMatrix + catalog `gtin_mappings`:** ✅ **implementată, testată
-  funcțional pe device** (bug de parser găsit + fixat live), **necomisă încă** (branch
-  `feature/faza2b-i-gs1-scan`) — de rulat manual migrările `0010`+`0011` (în ordine), de marcat
-  userul contribuitor de încredere, de testat push+pull către catalogul partajat, apoi
-  commit+push+PR+merge — vezi secțiunea 7 pentru detalii complete.
-- **Faza 2b-ii — OCR fallback:** ✅ **implementată** (vezi secțiunea 7), **neinstalată/netestată pe
-  device** (telefonul s-a deconectat la finalul sesiunii) — pe același branch, de testat live
-  sesiunea viitoare împreună cu restul Fazei 2b-i, apoi commit+push+PR+merge.
+  funcțional pe device** (bug de parser găsit + fixat live) + **cautare fuzzy Nomenclator** (bug
+  găsit prin testare live, fixat) — **PR #11 deschis** (`feature/faza2b-i-gs1-scan` → `main`), încă
+  nemergeuit — de rulat manual migrările `0010`+`0011`+`0012` (în ordine), de marcat userul
+  contribuitor de încredere, de testat push+pull către catalogul partajat, apoi merge — vezi
+  secțiunea 7 pentru detalii complete.
+- **Faza 2b-ii — OCR fallback:** ❌ **implementată, testată live, apoi ELIMINATĂ** — rată de succes
+  prea scăzută în practică (vezi secțiunea 7). Rămân doar scanare cod + introducere manuală
+  (cu fallback fuzzy) ca metode de identificare la această etapă.
 - **Faza 3 — Viziune:** feed CameraX, **YOLO-seg** (LiteRT/ONNX), detecție multi-obiect pe cadru de ansamblu, **contururi gri** (detectat/neidentificat).
 - **Faza 4 — Recunoaștere & enrollment:** model de **embeddings** (metric learning), galerie nearest-neighbor, enrollment multi-view + top-k candidați, **colorare contur** după statusul dozei.
 - **Faza 5 — Tracking & AR:** ByteTrack + netezire, ancorare dinamică a panoului de info, buton show/hide; ancore ARCore pentru scanare progresivă.
