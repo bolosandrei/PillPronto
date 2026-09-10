@@ -8,21 +8,19 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.foundation.clickable
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.InputChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -41,6 +39,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -48,18 +48,30 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.pillpronto.R
 import com.pillpronto.core.ui.components.BackTopAppBar
 import com.pillpronto.core.ui.components.DatePickerDialogBox
-import com.pillpronto.domain.model.NomenclatureEntry
+import com.pillpronto.core.ui.components.NomenclatureSuggestions
+import com.pillpronto.core.ui.theme.DoseDueNow
+import com.pillpronto.core.ui.theme.DoseMissed
+import com.pillpronto.domain.model.NEAR_EXPIRY_DAYS_THRESHOLD
+import java.time.LocalDate
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
-
-// Fereastra vizibila (glisanta) pt. lista de sugestii din Nomenclator — arata ~3 randuri o data,
-// restul (poate depasi 20-30 dupa deduplicare) se vad prin scroll, nu sunt taiate. Inaltime fixa,
-// nu wrap-content: lista sta imbricata intr-un Column deja scrollabil (formularul intreg), un
-// LazyColumn cu inaltime nemarginita acolo ar arunca la runtime ("infinite height").
-private val SUGGESTIONS_HEIGHT = 168.dp
+import java.time.temporal.ChronoUnit
 
 private val HM = DateTimeFormatter.ofPattern("HH:mm")
 private val DMY = DateTimeFormatter.ofPattern("dd.MM.yyyy")
+
+/** Culoare de avertizare pt. data expirarii — null (culoare implicita de text) daca expirarea e
+ * departe, portocaliu sub pragul de "aproape expirat", rosu daca deja trecuta. Acelasi prag ca
+ * ExpiryAlertWorker (NEAR_EXPIRY_DAYS_THRESHOLD), ca afisarea si alerta sa nu diverga. Nu-i
+ * `private` — reutilizata si de TreatmentDetailScreen.kt (acelasi pachet). */
+fun expiryWarningColor(expiryDate: LocalDate): Color? {
+    val daysUntil = ChronoUnit.DAYS.between(LocalDate.now(), expiryDate)
+    return when {
+        daysUntil < 0 -> DoseMissed
+        daysUntil <= NEAR_EXPIRY_DAYS_THRESHOLD -> DoseDueNow
+        else -> null
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -70,6 +82,7 @@ fun AddTreatmentScreen(
     vm: AddTreatmentViewModel = hiltViewModel()
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
+    val context = LocalContext.current
     LaunchedEffect(state.saved) { if (state.saved) onDone(state.deleted) }
 
     var showTimePicker by remember { mutableStateOf(false) }
@@ -92,7 +105,43 @@ fun AddTreatmentScreen(
             Modifier.fillMaxSize().padding(padding).padding(innerPadding).padding(16.dp).verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            OutlinedTextField(state.name, vm::onName, label = { Text(stringResource(R.string.add_treatment_name_label)) }, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(
+                state.name, vm::onName,
+                label = { Text(stringResource(R.string.add_treatment_name_label)) },
+                trailingIcon = {
+                    IconButton(onClick = { scanMedicationBarcode(context, vm::onBarcodeScanned) }) {
+                        Icon(Icons.Filled.QrCodeScanner, contentDescription = stringResource(R.string.add_treatment_scan_button))
+                    }
+                },
+                modifier = Modifier.fillMaxWidth()
+            )
+            if (state.pendingGtin != null) {
+                Text(
+                    stringResource(R.string.add_treatment_scan_pending_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.tertiary
+                )
+            }
+            if (state.scanUnrecognized) {
+                Text(
+                    stringResource(R.string.add_treatment_scan_unrecognized),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
+            state.expiryDate?.let { expiry ->
+                val warningColor = expiryWarningColor(expiry)
+                val textRes = if (warningColor == DoseMissed) {
+                    R.string.add_treatment_expiry_date_expired
+                } else {
+                    R.string.add_treatment_expiry_date
+                }
+                Text(
+                    stringResource(textRes, DMY.format(expiry)),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = warningColor ?: MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
             if (state.suggestions.isNotEmpty()) {
                 NomenclatureSuggestions(
                     suggestions = state.suggestions,
@@ -162,11 +211,15 @@ fun AddTreatmentScreen(
                 }
             }
 
-            OutlinedButton(onClick = { showStartPicker = true }, modifier = Modifier.fillMaxWidth()) {
-                Text(stringResource(R.string.common_start_label, state.startDate.format(DMY)))
-            }
-            OutlinedButton(onClick = { showEndPicker = true }, modifier = Modifier.fillMaxWidth()) {
-                Text(stringResource(R.string.common_end_label, state.endDate?.format(DMY) ?: stringResource(R.string.common_no_end_date)))
+            // Un tratament "la nevoie" (PRN) n-are orar fix, deci nici o perioada de
+            // inceput/sfarsit nu are sens — userul il inregistreaza oricand, din lista de tratamente.
+            if (!state.asNeeded) {
+                OutlinedButton(onClick = { showStartPicker = true }, modifier = Modifier.fillMaxWidth()) {
+                    Text(stringResource(R.string.common_start_label, state.startDate.format(DMY)))
+                }
+                OutlinedButton(onClick = { showEndPicker = true }, modifier = Modifier.fillMaxWidth()) {
+                    Text(stringResource(R.string.common_end_label, state.endDate?.format(DMY) ?: stringResource(R.string.common_no_end_date)))
+                }
             }
 
             OutlinedTextField(
@@ -253,30 +306,6 @@ fun AddTreatmentScreen(
             },
             dismissButton = { TextButton(onClick = { editingSlotTime = null }) { Text(stringResource(R.string.common_cancel)) } }
         )
-    }
-}
-
-/** Sugestii din Nomenclatorul ANMDMR pt. numele curent tastat (Faza 2a) — pur asistiv: alegerea
- * uneia pre-completeaza nume+dozaj, dar campurile raman complet editabile (medicamente din afara
- * Nomenclatorului RO, compuse etc. raman introductibile liber, ca inainte). */
-@Composable
-private fun NomenclatureSuggestions(suggestions: List<NomenclatureEntry>, onPick: (NomenclatureEntry) -> Unit) {
-    LazyColumn(
-        modifier = Modifier.fillMaxWidth().heightIn(max = SUGGESTIONS_HEIGHT),
-        verticalArrangement = Arrangement.spacedBy(4.dp)
-    ) {
-        items(suggestions, key = { it.codCim }) { entry ->
-            Card(Modifier.fillMaxWidth().clickable { onPick(entry) }) {
-                Column(Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
-                    Text(entry.denumireComerciala, style = MaterialTheme.typography.bodyMedium)
-                    Text(
-                        stringResource(R.string.add_treatment_nomenclature_suggestion_detail, entry.dci, entry.concentratie, entry.formaFarmaceutica),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-        }
     }
 }
 

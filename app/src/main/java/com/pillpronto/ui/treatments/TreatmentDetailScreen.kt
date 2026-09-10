@@ -34,6 +34,7 @@ import java.time.format.DateTimeFormatter
 
 private val DMY_HM = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm")
 private val HM = DateTimeFormatter.ofPattern("HH:mm")
+private val DMY = DateTimeFormatter.ofPattern("dd.MM.yyyy")
 
 @Composable
 fun TreatmentDetailScreen(
@@ -82,6 +83,20 @@ fun TreatmentDetailScreen(
                     stringResource(R.string.treatment_detail_instructions, t.instructiuni),
                     Modifier.padding(top = 4.dp),
                     style = MaterialTheme.typography.bodySmall
+                )
+            }
+            t.expiryDate?.let { expiry ->
+                val warningColor = expiryWarningColor(expiry)
+                val textRes = if (warningColor == DoseMissed) {
+                    R.string.treatment_detail_expiry_expired
+                } else {
+                    R.string.treatment_detail_expiry
+                }
+                Text(
+                    stringResource(textRes, DMY.format(expiry)),
+                    Modifier.padding(top = 4.dp),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = warningColor ?: MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
             slotBreakdown(t)?.let {

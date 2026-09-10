@@ -25,7 +25,9 @@ class MappersTest {
             formaFarmaceutica = "COMPR. FILM.",
             cantitate = "2 comprimate",
             indicatie = "infecție respiratorie",
-            instructiuni = "cu mâncare"
+            instructiuni = "cu mâncare",
+            codCim = "W43451001",
+            expiryDate = LocalDate.of(2027, 6, 30)
         )
         val restored = original.toEntity("test-patient").toDomain()
         assertEquals(original.medicationName, restored.medicationName)
@@ -37,6 +39,21 @@ class MappersTest {
         assertEquals(original.cantitate, restored.cantitate)
         assertEquals(original.indicatie, restored.indicatie)
         assertEquals(original.instructiuni, restored.instructiuni)
+        assertEquals(original.codCim, restored.codCim)
+        assertEquals(original.expiryDate, restored.expiryDate)
+    }
+
+    @Test
+    fun `Treatment fara expiryDate ramane null dupa round-trip`() {
+        val original = Treatment(
+            medicationName = "Nurofen",
+            dosage = "400 mg",
+            schedule = listOf(DoseSlot(LocalTime.of(8, 0))),
+            startDate = LocalDate.of(2026, 1, 1)
+        )
+        val restored = original.toEntity("test-patient").toDomain()
+
+        assertEquals(null, restored.expiryDate)
     }
 
     @Test

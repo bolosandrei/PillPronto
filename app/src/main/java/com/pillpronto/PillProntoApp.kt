@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
 import com.pillpronto.data.notification.CaregiverAlertNotifier
+import com.pillpronto.data.notification.ExpiryAlertNotifier
 import com.pillpronto.data.reminder.ReminderScheduler
 import com.pillpronto.data.work.MaintenanceScheduler
 import dagger.hilt.android.HiltAndroidApp
@@ -14,6 +15,7 @@ class PillProntoApp : Application(), Configuration.Provider {
 
     @Inject lateinit var reminderScheduler: ReminderScheduler
     @Inject lateinit var caregiverAlertNotifier: CaregiverAlertNotifier
+    @Inject lateinit var expiryAlertNotifier: ExpiryAlertNotifier
     @Inject lateinit var maintenanceScheduler: MaintenanceScheduler
     @Inject lateinit var workerFactory: HiltWorkerFactory
 
@@ -24,8 +26,12 @@ class PillProntoApp : Application(), Configuration.Provider {
         super.onCreate()
         reminderScheduler.createNotificationChannel()
         caregiverAlertNotifier.createNotificationChannel()
+        expiryAlertNotifier.createNotificationChannel()
         maintenanceScheduler.schedulePeriodic()
         maintenanceScheduler.scheduleSyncOnStartup()
         maintenanceScheduler.scheduleNomenclatureImport()
+        maintenanceScheduler.scheduleGtinMappingSeedImport()
+        maintenanceScheduler.scheduleGtinCatalogSync()
+        maintenanceScheduler.scheduleExpiryAlerts()
     }
 }

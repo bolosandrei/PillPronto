@@ -9,5 +9,6 @@ data class ProfileDto(
     val id: String,
     val role: String,
     @SerialName("clinician_type") val clinicianType: String? = null,
-    @SerialName("display_name") val displayName: String? = null
+    @SerialName("display_name") val displayName: String? = null,
+    @SerialName("is_trusted_contributor") val isTrustedContributor: Boolean = false
 )

@@ -53,6 +53,11 @@
     <string name="add_treatment_title_edit">Editează tratament</string>
     <string name="add_treatment_title_new">Adaugă tratament</string>
     <string name="add_treatment_name_label">Medicament</string>
+    <string name="add_treatment_scan_button">Scanează codul de pe cutie</string>
+    <string name="add_treatment_scan_pending_hint">Cod scanat necunoscut — alege medicamentul din sugestiile de mai jos ca să-l reții pentru data viitoare</string>
+    <string name="add_treatment_scan_unrecognized">Codul scanat nu a putut fi citit — încearcă din nou sau introdu manual</string>
+    <string name="add_treatment_expiry_date">Expiră: %1$s</string>
+    <string name="add_treatment_expiry_date_expired">Expirat: %1$s</string>
     <string name="add_treatment_dosage_label">Dozaj (ex. 500 mg)</string>
     <string name="add_treatment_as_needed_title">La nevoie (fără orar fix)</string>
     <string name="add_treatment_as_needed_desc">Fără remindere; înregistrezi o doză oricând, din lista de tratamente.</string>
@@ -77,6 +82,8 @@
     <string name="treatment_detail_form">Formă: %1$s</string>
     <string name="treatment_detail_indication">Pentru: %1$s</string>
     <string name="treatment_detail_instructions">Instrucțiuni: %1$s</string>
+    <string name="treatment_detail_expiry">Expiră: %1$s</string>
+    <string name="treatment_detail_expiry_expired">Expirat: %1$s</string>
     <string name="treatment_detail_history_taken_detail">%1$s · Luat %2$s</string>
     <string name="add_treatment_times_hint">Atinge o oră ca să-i setezi o cantitate proprie (ex. cantitate diferită dimineața față de seara)</string>
     <string name="add_treatment_slot_quantity_title">Cantitate la %1$s</string>
@@ -136,6 +143,17 @@
     <string name="account_manage_professional_access_button">Gestionează accesul Medic/Farmacist</string>
     <string name="account_my_patients_button">Pacienții mei</string>
     <string name="account_unverified_badge">Cont neverificat — date auto-declarate</string>
+    <string name="account_associate_gtin_button">Asociere coduri (GTIN)</string>
+
+    <string name="associate_gtin_title">Asociere coduri (GTIN)</string>
+    <string name="associate_gtin_hint">Scanează codul de pe o cutie, apoi alege medicamentul corect — maparea rămâne reținută pentru toate scanările viitoare ale aceluiași cod.</string>
+    <string name="associate_gtin_scan_button">Scanează codul de pe cutie</string>
+    <string name="associate_gtin_scanned_code">Cod scanat: %1$s</string>
+    <string name="associate_gtin_already_mapped">Deja asociat cu: %1$s</string>
+    <string name="associate_gtin_saved">Salvat local: %1$s</string>
+    <string name="associate_gtin_saved_shared">Salvat și trimis în catalogul comun: %1$s</string>
+    <string name="associate_gtin_search_label">Caută medicamentul</string>
+    <string name="associate_gtin_reset_button">Scanează următorul</string>
 
     <!-- Ecranul de onboarding (alegere rol, dupa primul cont creat) -->
     <string name="onboarding_title">Ce fel de cont ai?</string>
@@ -191,6 +209,14 @@
     <string name="caregiver_alerts_channel_desc">Notificări când un pacient legat ratează o doză</string>
     <string name="caregiver_alert_missed_dose_title">%1$s a ratat o doză</string>
     <string name="caregiver_alert_missed_dose_text">Verifică ecranul „Pacienții mei” pentru detalii.</string>
+
+    <!-- Faza 2b-i (extensie): alerte de expirare tratament -->
+    <string name="expiry_alerts_channel_name">Alerte expirare medicamente</string>
+    <string name="expiry_alerts_channel_desc">Notificări când un tratament se apropie de expirare sau a expirat</string>
+    <string name="expiry_alert_near_title">%1$s expiră în curând</string>
+    <string name="expiry_alert_near_text">Data expirării: %1$s</string>
+    <string name="expiry_alert_expired_title">%1$s a expirat</string>
+    <string name="expiry_alert_expired_text">Verifică tratamentul — cutia scanată a expirat.</string>
 
     <!-- Notificari de reminder -->
     <string name="reminder_channel_name">Remindere medicație</string>

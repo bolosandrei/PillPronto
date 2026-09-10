@@ -22,7 +22,8 @@ class ProfileRepositoryImpl @Inject constructor(
         return Profile(
             userId = dto.id,
             role = dto.toAccountRole(),
-            displayName = dto.displayName
+            displayName = dto.displayName,
+            isTrustedContributor = dto.isTrustedContributor
         )
     }
 

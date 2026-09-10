@@ -25,5 +25,8 @@ data class TreatmentDto(
     val cantitate: String = "",
     val indicatie: String = "",
     val instructiuni: String = "",
+    // --- campuri optionale (Faza 2b-i) ---
+    @SerialName("cod_cim") val codCim: String = "", // migrarea 0010
+    @SerialName("expiry_date") val expiryDate: String? = null, // migrarea 0012
     @SerialName("updated_at") val updatedAt: String
 )

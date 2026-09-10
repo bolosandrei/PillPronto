@@ -33,8 +33,9 @@ din `auth-kt`), JDK 17, Gradle KTS + version catalog (`gradle/libs.versions.toml
 - `core/ui/theme/` — temă + **culori status doză** (`DoseTaken` verde, `DoseDueNow` portocaliu, `DoseMissed` roșu, `DoseUnknown` gri) — reutilizabile la conturul AR (Faza 3–4).
 - `core/ui/components/` — `DatePickerDialogBox`, `BackTopAppBar` (reutilizate pe mai multe ecrane).
 - `core/permissions/` — `Permissions` (verificare/navigare setări alarme exacte).
-- `domain/model/` — `Treatment`, `DoseLog`, `DoseStatus`, `DoseItem`, `AdherenceStats`, `AccountRole`, `AuthSessionState`, `Profile`, `PatientLink`, `LinkRole`, `LinkedTreatment`, `LinkedDoseLog`.
-- `domain/repository/` — interfețe (`TreatmentRepository`, `DoseRepository`, `AuthRepository`, `ProfileRepository`, `LinkRepository`, `LinkedPatientDataRepository`, `PatientProfileIdProvider`, `ReminderSync`).
+- `domain/model/` — `Treatment`, `DoseLog`, `DoseStatus`, `DoseItem`, `AdherenceStats`, `AccountRole`, `AuthSessionState`, `Profile`, `PatientLink`, `LinkRole`, `LinkedTreatment`, `LinkedDoseLog`, `NomenclatureEntry`.
+- `domain/gs1/` — `Gs1Parser`, `Gs1DecodedData` (parser GS1 DataMatrix, Faza 2b-i, fără dependențe Android).
+- `domain/repository/` — interfețe (`TreatmentRepository`, `DoseRepository`, `AuthRepository`, `ProfileRepository`, `LinkRepository`, `LinkedPatientDataRepository`, `PatientProfileIdProvider`, `ReminderSync`, `NomenclatureRepository`, `GtinMappingRepository`).
 - `domain/usecase/` — use-cases (vezi listele pe fază mai jos).
 - `data/local/` — Room: `entity/`, `dao/`, `PillProntoDatabase`, `LocalPatientProfileProvider`.
 - `data/mapper/` — `Mappers.kt` (entity ↔ domain).
@@ -55,7 +56,7 @@ din `auth-kt`), JDK 17, Gradle KTS + version catalog (`gradle/libs.versions.toml
 - ViewModels `@HiltViewModel`, expun `StateFlow`; UI colectează cu `collectAsStateWithLifecycle`. Pentru evenimente „one-shot" (navigare declanșată de ViewModel, nu derivată din stare comparată în UI) — `Flow` dintr-un `Channel(CONFLATED)`, expus separat de `state`; vezi lecția din secțiunea 7 despre cursa onboarding→bounce-back.
 - Reminderele sunt legate de **`doseId`** (nu de oră generică). Sursa de adevăr pentru aderență = `DoseLog` din Room (local) / `dose_logs` (remote, doar status final, vezi Faza 1.5c).
 - Toate datele de sănătate rămân **on-device by default** (fără cloud pentru loguri) — cerință GDPR. Sincronizarea cu Supabase (Faza 1.5c+) e strict **opțională**, condiționată de autentificare, și trimite doar date proprii ale Pacientului cu statusuri finale de doză.
-- **La orice modificare de schemă Room** (câmp nou într-o entitate etc.) **trebuie incrementat `version` din `@Database`** (`PillProntoDatabase.kt`, actual `version = 4`). `fallbackToDestructiveMigration()` gestionează diferența dintre versiuni (șterge și recreează local — acceptabil pre-release), dar Room aruncă `IllegalStateException` la pornire dacă schema s-a schimbat și versiunea a rămas aceeași.
+- **La orice modificare de schemă Room** (câmp nou într-o entitate etc.) **trebuie incrementat `version` din `@Database`** (`PillProntoDatabase.kt`, actual `version = 7`). `fallbackToDestructiveMigration()` gestionează diferența dintre versiuni (șterge și recreează local — acceptabil pre-release), dar Room aruncă `IllegalStateException` la pornire dacă schema s-a schimbat și versiunea a rămas aceeași.
 - **La orice modificare de schemă Postgres**: fișier nou `supabase/migrations/000N_*.sql`, numerotat secvențial, **rulat manual de utilizator** în Supabase Dashboard (SQL Editor), în ordine — Claude Code CLI scrie migrarea, nu o execută.
 - Teste: JUnit + `kotlinx-coroutines-test` + **Turbine** (testare `Flow`/evenimente). Domeniul e testabil pur (java.time). Fake-uri de repo/dao în `app/src/test/java/com/pillpronto/util/`.
   Instrumentate (`app/src/androidTest/`): Room DAO pe bază in-memory + un test Compose de fum
@@ -279,9 +280,8 @@ acest proiect: recursivitatea RLS și cursele de UI din Compose nu se prind stat
 
 ### Faza 2a — Identificare: import Nomenclator + căutare/asociere (implementat — 2026-09-09)
 
-**⚠️ Necomis încă** — pe branch `feature/faza2a-nomenclator-followups`, compilat + toate testele
-(unitare + instrumentate) trec + instalat pe device, dar nu commis/push-uit; testarea notificărilor
-(vezi mai jos) e în curs, întinsă pe o noapte, sesiunea s-a închis înainte de commit intenționat.
+✅ **Mergeuit pe `main`** (PR #10, 2026-09-10) — testat unitar+instrumentat, testat live pe device
+(notificări confirmate OK peste noapte), migrările `0008`/`0009` rulate manual de utilizator.
 
 - **Import Nomenclator ANMDMR**: descărcat + parsat direct (`scripts/convert-nomenclator.ps1` —
   xlsx e zip, `sharedStrings.xml`+`sheet1.xml` parsate ca XML .NET, fără nicio librărie externă)
@@ -335,10 +335,159 @@ acest proiect: recursivitatea RLS și cursele de UI din Compose nu se prind stat
 - **Teste noi**: `NomenclatureImporterTest`, `NomenclatureDaoTest` (instrumentat, FTS diacritic-insensitive
   confirmat pe SQLite real), `SearchNomenclatureUseCaseTest`, `DoseActionWindowTest`,
   `LogDoseUseCaseTest`, `GenerateDosesUseCaseTest`, `MappersTest` extins — toate trec.
-- **În testare la închiderea sesiunii**: utilizator a adăugat un tratament cu 3 doze/zi diferite
-  pentru ziua următoare, așteaptă să observe comportamentul notificărilor (reminder-ele +
-  butoanele Confirmă/Omite din notificare, inclusiv respectarea ferestrei de 60 min) peste noapte —
-  **neconfirmat încă**. De reluat sesiunea viitoare cu rezultatul, apoi commit + push + PR.
+- **Testare notificări confirmată**: reminder cu buton Confirmă din notificare testat peste noapte,
+  funcțional (inclusiv fereastra de acțiune).
+
+### Faza 2b-i — Scanare GS1 DataMatrix + catalog `gtin_mappings` (implementat — 2026-09-10)
+
+**⚠️ Necomis încă** — pe branch `feature/faza2b-i-gs1-scan` (mai multe commit-uri locale), compilat
++ toate testele unitare trec local (`testDebugUnitTest` + `assembleDebug`), instalat repetat pe
+device. Testele instrumentate rămân de rulat de utilizator. Migrările `0010`/`0011` **ne-rulate**.
+
+- **Scanare**: reutilizat 100% mecanismul de `GmsBarcodeScanning` (Play Services Code Scanner) deja
+  folosit pt. codul QR de invitație (1.5d) — `ui/treatments/ScanBarcode.kt::scanMedicationBarcode`,
+  suportă `FORMAT_DATA_MATRIX` (cutii UE, mandatat FMD) + formate liniare EAN-13/EAN-8/UPC-A
+  (fallback). **Nicio dependență Gradle nouă, niciun `CAMERA` nou în manifest, fără CameraX**
+  (rezervat Fazei 3 — feed continuu, caz de utilizare diferit de un scan single-shot).
+- **`domain/gs1/Gs1Parser.kt`** (domain pur, fără dependențe Android): parsează payload-ul GS1
+  DataMatrix după Application Identifiers — AI `01` GTIN (14 cifre fix), `17` expirare YYMMDD
+  (fix), `10` lot (variabil ≤20), `21` serial (variabil ≤20), cele 4 mandatate FMD. **Documentat cu
+  surse oficiale** (Regulamentul Delegat (UE) 2016/161 + ghidul GS1 Healthcare de implementare
+  FMD — vezi `eu2016161`/`gs1fmd2016` în `Lucrare_Disertatie/thesis.bib`, secțiunea "Partea III"):
+  codul GS1 DataMatrix (serializare/trasabilitate) e obligatoriu **doar** pe medicamentele Rx
+  (+ excepții Anexa I/II), spre deosebire de codul de bare comercial (EAN-13), obligatoriu pe toate
+  — confirmă că `extractGtin`/`ScanBarcode.kt` (formate liniare ca fallback) modelează corect
+  ambele cazuri reale. Confirmă și decizia deja stabilă: EMVS rămâne restricționat la actori
+  autorizați din lanțul de distribuție, aplicația NU îl interoghează.
+  - **Bug real găsit + fixat la testarea pe device**: primul test a eșuat — codul era corect
+    DataMatrix (`format=16`), dar payload-ul are un caracter FNC1/GS literal (`0x1D`) **înaintea**
+    primului AI (Play Services Code Scanner nu-l elimină el însuși), pe care parserul nu-l
+    anticipa. Fix: `Gs1Parser.parse()` elimină un eventual prefix GS înainte de a parsa. Confirmat
+    cu 2 payload-uri reale capturate prin logging temporar (`adb logcat`) de pe cutii fizice,
+    păstrate ca teste de regresie în `Gs1ParserTest` (GTIN e dată de produs public, nu personală).
+    Retestat pe device după fix — **confirmat funcțional** de utilizator (scan → recunoaștere OK).
+- **`ui/gtinmapping/AssociateGtinScreen`+`ViewModel`** — ecran dedicat (buton „Asociere coduri
+  (GTIN)" în tab-ul Cont, **vizibil DOAR pt. contribuitori de încredere** —
+  `state.profile?.isTrustedContributor == true`, gating adăugat după ce userul a semnalat că
+  butonul apărea și pe un cont netrusted): scan → caută în Nomenclator → alege → salvat → gata pt.
+  următorul, **fără să creeze un tratament** (spre deosebire de fluxul din `AddTreatmentScreen`,
+  disponibil tuturor). `NomenclatureSuggestions` extras din `AddTreatmentScreen.kt` în
+  `core/ui/components/NomenclatureSuggestionsList.kt` (acum reutilizat din 2 ecrane).
+- **Tabel local `gtin_mappings`** (`PillProntoDatabase`, NU `NomenclatureDatabase` — acolo s-ar
+  pierde la orice reimport al Nomenclatorului): GTIN scanat → Cod CIM, construit progresiv — la un
+  scan cu GTIN necunoscut, userul alege manual din sugestii, iar acea alegere „învață" maparea.
+  **Seed static livrat în APK** (`assets/gtin_mappings_seed.tsv`, gol deocamdată) +
+  `GtinMappingSeedImporter`: flag VERSIONAT în SharedPreferences (nu `count()>0` — tabelul mai
+  crește organic din confirmările userilor) + insert cu `IGNORE` (nu suprascrie niciodată).
+- **Extindere — catalog partajat în Supabase** (decizie luată după ce userul a întrebat despre un
+  rol de „admin"/contribuitor, discuție despre PHARMACIST auto-declarat vs. încredere reală):
+  `gtin_mappings` **nu mai e strict local** — există acum și un tabel Supabase omonim, **primul
+  tabel cu adevărat public din schema proiectului** (toate celelalte sunt scopate pe rând propriu
+  sau lanț `patient_profile_id`/`links`). SELECT deschis `anon`+`authenticated` (date de produs
+  public, nu de sănătate — păstrează „aplicația funcționează fără login"). Scriere **doar** prin
+  funcția `SECURITY DEFINER` `contribute_gtin_mapping` (pattern identic `claim_link`, migrarea
+  0007) — verifică `profiles.is_trusted_contributor` (coloană nouă, **NU** un rol nou, un
+  capability-flag ortogonal la `AccountRole`, setat manual de dezvoltator direct în Supabase, NU
+  prin auto-declarare — evită exact problema PHARMACIST-ului neverificat). `GtinCatalogSyncManager`
+  trage (`pull`) tot tabelul, necondiționat, pt. toți userii (spre deosebire de `SyncManager`
+  existent, strict `AccountRole.PATIENT`) — `REPLACE` peste o ghicire locală neconfirmată.
+  `ContributeGtinMappingUseCase` (folosit acum de `AssociateGtinViewModel` în loc de
+  `ConfirmGtinMappingUseCase` direct) confirmă local **întotdeauna** + propagă la catalogul comun
+  **doar** dacă userul e contribuitor de încredere — best-effort, eșec de rețea nu anulează local.
+  Migrarea `supabase/migrations/0011_gtin_mappings_catalog.sql` (nouă, de rulat manual, după 0010).
+- **`Treatment.codCim`** (câmp nou, opțional, separat de `gtin_mappings`): trasabilitate la
+  intrarea Nomenclator exactă aleasă — **acesta se sincronizează** (tratamentele deja se
+  sincronizează) → migrarea `0010_treatment_cod_cim.sql`.
+- **Schema Room**: `PillProntoDatabase` v6→v7 (`GtinMappingEntity` + `TreatmentEntity.codCim`).
+- **Teste noi**: `Gs1ParserTest` (inclusiv 2 payload-uri reale de pe device), `ScanBarcodeTest`,
+  `LookupTreatmentByGtinUseCaseTest`, `ConfirmGtinMappingUseCaseTest`, `ContributeGtinMappingUseCaseTest`,
+  `GtinCatalogSyncManagerTest`, `GtinMappingSeedImporterTest`, `AssociateGtinViewModelTest`,
+  `MappersTest` extins, `GtinMappingDaoTest` (instrumentat, extins: `upsertAll`/`insertSeedBatch`)
+  — toate unitare trec local; instrumentat de rulat pe device.
+  **Nu există `AddTreatmentViewModelTest`** — blocaj arhitectural preexistent, nu introdus acum:
+  `AddTreatmentViewModel` depinde de `ReminderCoordinator` (clasă concretă, nu interfață), care la
+  rândul lui construiește `ReminderScheduler` cu un `Context` Android real (`AlarmManager`) chiar în
+  constructor — imposibil de instanțiat într-un test JVM pur fără Robolectric/Mockito (niciuna
+  configurată în proiect, convenția fiind fake-uri scrise de mână pe interfețe).
+- **Extindere — dată expirare la scanare + alerte** (cercetare GS1/FMD → `Treatment.expiryDate`
+  nou, din AI `17` al codului DataMatrix, `ScanBarcode.kt::extractGtin` → `extractScannedBarcode`
+  (întoarce `ScannedBarcode(gtin, expiryDate)`, ambele ecrane de scanare actualizate)): afișare
+  colorată (`DoseDueNow`/`DoseMissed`, prag `NEAR_EXPIRY_DAYS_THRESHOLD = 14` zile, definit în
+  `domain/model/Treatment.kt`, reutilizat identic de UI și de alertă — o singură sursă de adevăr)
+  în `AddTreatmentScreen` + `TreatmentDetailScreen`. **Alertă locală periodică** (nu doar afișare
+  pasivă): `ExpiryAlertWorker` (12h) + `ExpiryAlertChecker` (logică pură, deduplicare pe cheie
+  compusă `treatmentId:expiryDate:stage` — o rescanare cu altă expirare capătă automat propriile
+  alerte, fără reset explicit) + `ExpiryAlertNotifier` (canal propriu) — toate mirror 1:1 pe
+  `CaregiverAlertWorker`/`MissedDoseChecker`/`CaregiverAlertNotifier` deja existente. Se
+  sincronizează (`expiryDate`, ca `codCim`) → migrarea `0012_treatment_expiry_date.sql`. Schema
+  Room v7→v8.
+- **De făcut sesiunea viitoare**: userul rulează manual migrările `0010`, `0011`, `0012` (în
+  ordine), se marchează contribuitor de încredere (SQL direct: `update profiles set
+  is_trusted_contributor = true where id = '<uid>'`), testează pe device: confirmarea unei mapări
+  + verificare apariție rând în `gtin_mappings` (Supabase Table Editor) + pull pe alt cont/device;
+  scanarea unei cutii cu dată de expirare (culoare corectă în `AddTreatmentScreen`/
+  `TreatmentDetailScreen`). Fallback fuzzy la căutare deja testat live (vezi mai jos; OCR a fost
+  eliminat). De investigat separat: crash-ul `NavigationSmokeTest`. Apoi commit + push + PR + merge.
+
+### Faza 2b-ii — OCR fallback: implementat, testat, ELIMINAT (2026-09-10)
+
+Implementat complet (poză via `ACTION_IMAGE_CAPTURE`, fără CameraX + `com.google.mlkit:text-recognition`,
+rezultatul alimenta căutarea Nomenclator existentă — vezi istoricul git, commit `eb92ceb`, pentru
+detaliile tehnice complete) și **testat live pe device de user** — funcțional ca mecanism (a dus
+direct la găsirea bug-ului de căutare fuzzy de mai jos), dar cu **rată de succes prea scăzută în
+practică** la identificarea corectă a medicamentului din poză, la aprecierea userului după
+testare reală. Decizie: **eliminat complet** la această etapă — rămân doar cele două metode de
+identificare cu fiabilitate confirmată: scanare cod (Faza 2b-i) + introducere manuală de text
+(căutare Nomenclator, acum cu fallback fuzzy, vezi mai jos). Cod șters: `ui/treatments/OcrCapture.kt`
++ testul lui, `AddTreatmentViewModel.onOcrTextRecognized`/`ocrFailed`, butonul din
+`AddTreatmentScreen`, dependența `com.google.mlkit:text-recognition`, cache-path-ul `ocr_captures`
+din `FileProvider`. **Notă pt. teză**: un rezultat negativ documentat (OCR simplu, fără
+crop/enhance, insuficient de fiabil pe text de cutie de medicament) — motivează concret de ce
+arhitectura stabilă a proiectului prevede oricum OCR doar ca element dintr-o cascadă mai largă
+(Viziune→OCR→cod 2D, Faza 3+), nu ca mecanism de sine stătător. Nu exclude o reîncercare ulterioară
+cu o abordare mai robustă (ex. `GmsDocumentScanning` cu crop/enhance, sau OCR ca *narrowing* în
+cascada Fazei 3, nu ca sursă unică de decizie).
+
+### Căutare Nomenclator — fallback fuzzy (Levenshtein) (implementat — 2026-09-10)
+
+- **Bug real găsit prin testarea OCR-ului pe device**: OCR a citit "Algocalnin" în loc de
+  "Algocalmin" (o literă confundată, tipic OCR: m/n, l/1, O/0) — căutarea Nomenclator (FTS4,
+  potrivire de **prefix exact**) nu găsea NIMIC, pentru că "algocalmin" nu începe literal cu
+  "algocalnin" (diverg la caracterul 8). Aceeași căutare deservește și tastarea manuală din
+  `AddTreatmentScreen`, deci fix-ul ajută ambele fluxuri, nu doar OCR-ul.
+- **`domain/util/Levenshtein.kt`** (pur, fără dependențe Android) — distanța Levenshtein clasică
+  (DP, 2 rânduri).
+- **`NomenclatureRepositoryImpl.search()`** — fallback în 2 pași, STRICT când căutarea exactă
+  întoarce 0 rezultate (comportamentul existent, cu rezultate, rămâne neschimbat): (1) adună
+  candidați printr-un prefix SCURT (~4 caractere din primul token, mai tolerant decât prefixul
+  complet) — tot prin FTS4 existent, nu scanare completă a celor 32.500+ rânduri; (2) rangă
+  candidații după distanța Levenshtein față de **primul cuvânt** din query, comparat cu **primul
+  cuvânt** din `denumireComerciala` (nu șirul întreg, care conține și dozajul, ex. "500mg" — bug
+  găsit și fixat chiar în timpul implementării: comparat cu șirul întreg, un query scurt de un
+  cuvânt avea mereu distanță mare, doar din diferența de lungime). Prag proporțional cu lungimea
+  (~30%, minim 1).
+- **Limitare cunoscută, acceptată**: dacă OCR greșește chiar în primele caractere, fallback-ul tot
+  nu găsește nimic (prefixul scurt de candidați cere primele caractere corecte) — acoperă cazul
+  realist raportat (greșeală la mijlocul/sfârșitul cuvântului), nu orice greșeală posibilă. O
+  scanare completă a Nomenclatorului ar elimina și limitarea asta, dar cu cost de performanță
+  nejustificat pt. cazul comun.
+- **Bug de tooling găsit + fixat separat, la rularea testelor instrumentate**: testele noi
+  (`GtinMappingDaoTest` extins, `NomenclatureRepositoryImplTest` nou) foloseau nume de test în
+  backtick cu spații (convenția din testele unitare) — la împachetarea DEX (`minSdk=26`), D8
+  respinge clasele lambda generate de `runTest {}` care conțin spații în nume ("Space characters
+  in SimpleName... not allowed prior to DEX version 040"). Afectează DOAR testele instrumentate
+  (`androidTest`, DEX-compilate), nu cele unitare (JVM pur, niciodată DEX-compilate) — fix:
+  redenumite fără spații (camelCase/underscore, ca `NomenclatureDaoTest` deja existent). Găsit prin
+  rulare reală `connectedDebugAndroidTest` de pe acest device — toate cele 10 teste
+  (`GtinMappingDaoTest` + `NomenclatureRepositoryImplTest`) trec acum, inclusiv scenariul exact
+  raportat ("Algocalnin" → găsește "Algocalmin").
+- **Notă separată, nelegată de munca curentă**: `connectedDebugAndroidTest` pe TOATĂ suita a
+  crăpat la `NavigationSmokeTest` (`MainActivity`, eroare Hilt — "component was not created,
+  check HiltAndroidRule") — **neinvestigat, posibil preexistent** (nu s-a atins acest fișier azi).
+  De verificat separat, altă sesiune.
+- **Teste noi**: `LevenshteinDistanceTest` (unitar), `NomenclatureRepositoryImplTest` (instrumentat,
+  Room+FTS4 reale — singurul mod de a testa fallback-ul, nu poate fi simulat cu un fake) — toate
+  trec, verificate live pe device.
 
 ---
 
@@ -371,14 +520,17 @@ acest proiect: recursivitatea RLS și cursele de UI din Compose nu se prind stat
     adversariale** — vezi `docs/user-management-plan.md` secțiunea 8, neatinse încă.
   - **Sau trecem direct la Faza 2** (identificare — Nomenclator ANMDMR + scanare) — Faza 1.5 e
     considerată suficient de matură funcțional, 1.5f/1.5g sunt hardening, nu blocante.
-- **Faza 2a — Import Nomenclator + căutare/asociere:** ✅ **implementată** (vezi secțiunea 7),
-  **necomisă încă** (branch `feature/faza2a-nomenclator-followups`) — testare notificări în curs
-  peste noapte, de reluat sesiunea viitoare cu rezultatul, apoi commit+push+PR+merge, apoi rulate
-  manual de utilizator migrările `0008`/`0009`.
-- **Faza 2b — Scanare + OCR** (următorul pas, după 2a): scanare **DataMatrix/barcode** (ML Kit) +
-  OCR, extragere GTIN (parser GS1), legare scanare → tratament, tabel local `gtin_mappings`
-  (construit progresiv din confirmările userului — posibilă contribuție originală de teză, dat
-  fiind că nu există mapare publică GTIN→Cod CIM, confirmat la 2a).
+- **Faza 2a — Import Nomenclator + căutare/asociere:** ✅ **complet implementată, mergeuită pe
+  `main` (PR #10)**, migrările `0008`/`0009` rulate — vezi secțiunea 7.
+- **Faza 2b-i — Scanare GS1 DataMatrix + catalog `gtin_mappings`:** ✅ **implementată, testată
+  funcțional pe device** (bug de parser găsit + fixat live) + **cautare fuzzy Nomenclator** (bug
+  găsit prin testare live, fixat) — **PR #11 deschis** (`feature/faza2b-i-gs1-scan` → `main`), încă
+  nemergeuit — de rulat manual migrările `0010`+`0011`+`0012` (în ordine), de marcat userul
+  contribuitor de încredere, de testat push+pull către catalogul partajat, apoi merge — vezi
+  secțiunea 7 pentru detalii complete.
+- **Faza 2b-ii — OCR fallback:** ❌ **implementată, testată live, apoi ELIMINATĂ** — rată de succes
+  prea scăzută în practică (vezi secțiunea 7). Rămân doar scanare cod + introducere manuală
+  (cu fallback fuzzy) ca metode de identificare la această etapă.
 - **Faza 3 — Viziune:** feed CameraX, **YOLO-seg** (LiteRT/ONNX), detecție multi-obiect pe cadru de ansamblu, **contururi gri** (detectat/neidentificat).
 - **Faza 4 — Recunoaștere & enrollment:** model de **embeddings** (metric learning), galerie nearest-neighbor, enrollment multi-view + top-k candidați, **colorare contur** după statusul dozei.
 - **Faza 5 — Tracking & AR:** ByteTrack + netezire, ancorare dinamică a panoului de info, buton show/hide; ancore ARCore pentru scanare progresivă.

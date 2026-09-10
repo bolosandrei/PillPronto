@@ -65,4 +65,42 @@ class MaintenanceScheduler @Inject constructor(
             request
         )
     }
+
+    /** Import seed gtin_mappings (Faza 2b-i), o singura data per versiune — vezi GtinMappingSeedImporter. */
+    fun scheduleGtinMappingSeedImport() {
+        val request = OneTimeWorkRequestBuilder<GtinMappingSeedImportWorker>().build()
+        WorkManager.getInstance(context).enqueueUniqueWork(
+            GtinMappingSeedImportWorker.STARTUP_UNIQUE_NAME,
+            ExistingWorkPolicy.KEEP,
+            request
+        )
+    }
+
+    /** Pull catalog partajat gtin_mappings — neconditionat, pt. toti userii (vezi GtinCatalogSyncManager). */
+    fun scheduleGtinCatalogSync() {
+        val request = PeriodicWorkRequestBuilder<GtinCatalogSyncWorker>(30, TimeUnit.MINUTES).build()
+        WorkManager.getInstance(context).enqueueUniquePeriodicWork(
+            GtinCatalogSyncWorker.UNIQUE_NAME,
+            ExistingPeriodicWorkPolicy.KEEP,
+            request
+        )
+
+        val startupRequest = OneTimeWorkRequestBuilder<GtinCatalogSyncWorker>().build()
+        WorkManager.getInstance(context).enqueueUniqueWork(
+            GtinCatalogSyncWorker.STARTUP_UNIQUE_NAME,
+            ExistingWorkPolicy.REPLACE,
+            startupRequest
+        )
+    }
+
+    /** Alerte expirare tratamente active — nu are nevoie de cadenta 6h/30min a celorlalti
+     * workeri, expirarea nu se schimba brusc. */
+    fun scheduleExpiryAlerts() {
+        val request = PeriodicWorkRequestBuilder<ExpiryAlertWorker>(12, TimeUnit.HOURS).build()
+        WorkManager.getInstance(context).enqueueUniquePeriodicWork(
+            ExpiryAlertWorker.UNIQUE_NAME,
+            ExistingPeriodicWorkPolicy.KEEP,
+            request
+        )
+    }
 }

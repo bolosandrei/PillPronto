@@ -11,4 +11,12 @@ class FakeNomenclatureRepository : NomenclatureRepository {
         lastQuery = query
         return results
     }
+
+    var byCodCim: Map<String, NomenclatureEntry> = emptyMap()
+    var lastCodCimQuery: String? = null
+
+    override suspend fun getByCodCim(codCim: String): NomenclatureEntry? {
+        lastCodCimQuery = codCim
+        return byCodCim[codCim]
+    }
 }
