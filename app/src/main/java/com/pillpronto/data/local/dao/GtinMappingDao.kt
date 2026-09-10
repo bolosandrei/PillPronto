@@ -15,4 +15,10 @@ interface GtinMappingDao {
     // asociere gresita anterioara) — ultima confirmare a userului castiga.
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(entity: GtinMappingEntity)
+
+    // IGNORE, nu REPLACE: seed-ul livrat cu aplicatia (GtinMappingSeedImporter) NU trebuie sa
+    // poata suprascrie niciodata o mapare deja existenta — nici a userului, nici a unui import
+    // anterior — doar sa completeze golurile.
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertSeedBatch(entities: List<GtinMappingEntity>)
 }

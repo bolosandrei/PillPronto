@@ -9,6 +9,7 @@ sealed class Route(val path: String) {
     data object Account : Route("account")
     data object Onboarding : Route("onboarding")
     data object ManageAccess : Route("manage_access")
+    data object AssociateGtin : Route("associate_gtin")
     data object ManageProfessionalAccess : Route("manage_professional_access")
     data object MyPatients : Route("my_patients?prefillCode={prefillCode}") {
         const val ARG_PREFILL_CODE = "prefillCode"

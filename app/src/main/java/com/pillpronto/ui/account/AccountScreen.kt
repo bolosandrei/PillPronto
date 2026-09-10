@@ -44,6 +44,7 @@ fun AccountScreen(
     onManageAccess: () -> Unit,
     onManageProfessionalAccess: () -> Unit,
     onMyPatients: () -> Unit,
+    onAssociateGtin: () -> Unit,
     vm: AccountViewModel = hiltViewModel()
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
@@ -75,6 +76,12 @@ fun AccountScreen(
         Modifier.fillMaxSize().padding(padding).padding(16.dp).verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
+        // Unealta locala (Faza 2b-i), independenta de cont — vizibila indiferent de starea de
+        // autentificare, spre deosebire de butoanele legate de conturi Supabase de mai jos.
+        OutlinedButton(onClick = onAssociateGtin, modifier = Modifier.fillMaxWidth()) {
+            Text(stringResource(R.string.account_associate_gtin_button))
+        }
+
         when (val session = state.sessionState) {
             is AuthSessionState.Loading -> LoadingIndicator()
             is AuthSessionState.Unauthenticated ->

@@ -59,4 +59,23 @@ class GtinMappingDaoTest {
         assertEquals("W99999999", found?.codCim)
         assertEquals(2000L, found?.confirmedAt)
     }
+
+    @Test
+    fun `insertSeedBatch nu suprascrie o mapare deja existenta`() = runTest {
+        dao.upsert(GtinMappingEntity(gtin = "05901234123457", codCim = "W43451001", confirmedAt = 1000L))
+
+        dao.insertSeedBatch(listOf(GtinMappingEntity(gtin = "05901234123457", codCim = "W99999999", confirmedAt = 0L)))
+
+        val found = dao.findByGtin("05901234123457")
+        assertEquals("W43451001", found?.codCim)
+        assertEquals(1000L, found?.confirmedAt)
+    }
+
+    @Test
+    fun `insertSeedBatch completeaza un gtin nou`() = runTest {
+        dao.insertSeedBatch(listOf(GtinMappingEntity(gtin = "05901234123457", codCim = "W43451001", confirmedAt = 0L)))
+
+        val found = dao.findByGtin("05901234123457")
+        assertEquals("W43451001", found?.codCim)
+    }
 }

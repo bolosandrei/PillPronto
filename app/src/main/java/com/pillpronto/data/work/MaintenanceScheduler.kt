@@ -65,4 +65,14 @@ class MaintenanceScheduler @Inject constructor(
             request
         )
     }
+
+    /** Import seed gtin_mappings (Faza 2b-i), o singura data per versiune — vezi GtinMappingSeedImporter. */
+    fun scheduleGtinMappingSeedImport() {
+        val request = OneTimeWorkRequestBuilder<GtinMappingSeedImportWorker>().build()
+        WorkManager.getInstance(context).enqueueUniqueWork(
+            GtinMappingSeedImportWorker.STARTUP_UNIQUE_NAME,
+            ExistingWorkPolicy.KEEP,
+            request
+        )
+    }
 }

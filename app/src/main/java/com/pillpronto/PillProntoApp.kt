@@ -27,5 +27,6 @@ class PillProntoApp : Application(), Configuration.Provider {
         maintenanceScheduler.schedulePeriodic()
         maintenanceScheduler.scheduleSyncOnStartup()
         maintenanceScheduler.scheduleNomenclatureImport()
+        maintenanceScheduler.scheduleGtinMappingSeedImport()
     }
 }

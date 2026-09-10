@@ -139,6 +139,16 @@
     <string name="account_manage_professional_access_button">Gestionează accesul Medic/Farmacist</string>
     <string name="account_my_patients_button">Pacienții mei</string>
     <string name="account_unverified_badge">Cont neverificat — date auto-declarate</string>
+    <string name="account_associate_gtin_button">Asociere coduri (GTIN)</string>
+
+    <string name="associate_gtin_title">Asociere coduri (GTIN)</string>
+    <string name="associate_gtin_hint">Scanează codul de pe o cutie, apoi alege medicamentul corect — maparea rămâne reținută pentru toate scanările viitoare ale aceluiași cod.</string>
+    <string name="associate_gtin_scan_button">Scanează codul de pe cutie</string>
+    <string name="associate_gtin_scanned_code">Cod scanat: %1$s</string>
+    <string name="associate_gtin_already_mapped">Deja asociat cu: %1$s</string>
+    <string name="associate_gtin_saved">Salvat: %1$s</string>
+    <string name="associate_gtin_search_label">Caută medicamentul</string>
+    <string name="associate_gtin_reset_button">Scanează următorul</string>
 
     <!-- Ecranul de onboarding (alegere rol, dupa primul cont creat) -->
     <string name="onboarding_title">Ce fel de cont ai?</string>

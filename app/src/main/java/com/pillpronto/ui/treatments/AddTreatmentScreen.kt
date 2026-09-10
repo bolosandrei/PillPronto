@@ -8,10 +8,7 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -21,7 +18,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -51,15 +47,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.pillpronto.R
 import com.pillpronto.core.ui.components.BackTopAppBar
 import com.pillpronto.core.ui.components.DatePickerDialogBox
-import com.pillpronto.domain.model.NomenclatureEntry
+import com.pillpronto.core.ui.components.NomenclatureSuggestions
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
-
-// Fereastra vizibila (glisanta) pt. lista de sugestii din Nomenclator — arata ~3 randuri o data,
-// restul (poate depasi 20-30 dupa deduplicare) se vad prin scroll, nu sunt taiate. Inaltime fixa,
-// nu wrap-content: lista sta imbricata intr-un Column deja scrollabil (formularul intreg), un
-// LazyColumn cu inaltime nemarginita acolo ar arunca la runtime ("infinite height").
-private val SUGGESTIONS_HEIGHT = 168.dp
 
 private val HM = DateTimeFormatter.ofPattern("HH:mm")
 private val DMY = DateTimeFormatter.ofPattern("dd.MM.yyyy")
@@ -280,30 +270,6 @@ fun AddTreatmentScreen(
             },
             dismissButton = { TextButton(onClick = { editingSlotTime = null }) { Text(stringResource(R.string.common_cancel)) } }
         )
-    }
-}
-
-/** Sugestii din Nomenclatorul ANMDMR pt. numele curent tastat (Faza 2a) — pur asistiv: alegerea
- * uneia pre-completeaza nume+dozaj, dar campurile raman complet editabile (medicamente din afara
- * Nomenclatorului RO, compuse etc. raman introductibile liber, ca inainte). */
-@Composable
-private fun NomenclatureSuggestions(suggestions: List<NomenclatureEntry>, onPick: (NomenclatureEntry) -> Unit) {
-    LazyColumn(
-        modifier = Modifier.fillMaxWidth().heightIn(max = SUGGESTIONS_HEIGHT),
-        verticalArrangement = Arrangement.spacedBy(4.dp)
-    ) {
-        items(suggestions, key = { it.codCim }) { entry ->
-            Card(Modifier.fillMaxWidth().clickable { onPick(entry) }) {
-                Column(Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
-                    Text(entry.denumireComerciala, style = MaterialTheme.typography.bodyMedium)
-                    Text(
-                        stringResource(R.string.add_treatment_nomenclature_suggestion_detail, entry.dci, entry.concentratie, entry.formaFarmaceutica),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-        }
     }
 }
 
