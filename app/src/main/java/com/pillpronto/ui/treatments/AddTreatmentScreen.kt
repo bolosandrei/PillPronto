@@ -243,11 +243,15 @@ fun AddTreatmentScreen(
                 }
             }
 
-            OutlinedButton(onClick = { showStartPicker = true }, modifier = Modifier.fillMaxWidth()) {
-                Text(stringResource(R.string.common_start_label, state.startDate.format(DMY)))
-            }
-            OutlinedButton(onClick = { showEndPicker = true }, modifier = Modifier.fillMaxWidth()) {
-                Text(stringResource(R.string.common_end_label, state.endDate?.format(DMY) ?: stringResource(R.string.common_no_end_date)))
+            // Un tratament "la nevoie" (PRN) n-are orar fix, deci nici o perioada de
+            // inceput/sfarsit nu are sens — userul il inregistreaza oricand, din lista de tratamente.
+            if (!state.asNeeded) {
+                OutlinedButton(onClick = { showStartPicker = true }, modifier = Modifier.fillMaxWidth()) {
+                    Text(stringResource(R.string.common_start_label, state.startDate.format(DMY)))
+                }
+                OutlinedButton(onClick = { showEndPicker = true }, modifier = Modifier.fillMaxWidth()) {
+                    Text(stringResource(R.string.common_end_label, state.endDate?.format(DMY) ?: stringResource(R.string.common_no_end_date)))
+                }
             }
 
             OutlinedTextField(

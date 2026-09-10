@@ -58,7 +58,7 @@
     <string name="add_treatment_scan_unrecognized">Codul scanat nu a putut fi citit — încearcă din nou sau introdu manual</string>
     <string name="add_treatment_expiry_date">Expiră: %1$s</string>
     <string name="add_treatment_expiry_date_expired">Expirat: %1$s</string>
-    <string name="add_treatment_ocr_button">Nu găsesc cod — citesc textul de pe cutie</string>
+    <string name="add_treatment_ocr_button">Identifică medicamentul din textul din imagine</string>
     <string name="add_treatment_ocr_failed">Nu am putut citi text pe cutie — încearcă din nou sau introdu manual</string>
     <string name="add_treatment_dosage_label">Dozaj (ex. 500 mg)</string>
     <string name="add_treatment_as_needed_title">La nevoie (fără orar fix)</string>
