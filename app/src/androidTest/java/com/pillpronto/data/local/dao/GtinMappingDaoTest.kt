@@ -34,13 +34,18 @@ class GtinMappingDaoTest {
         db.close()
     }
 
+    // Nume de test FARA spatii (camelCase/underscore, ca NomenclatureDaoTest) — nu backtick cu
+    // spatii ca in testele unitare: aici genereaza o clasa lambda (runTest {}) cu spatii in nume,
+    // respinsa de D8 la impachetarea DEX (minSdk=26 < versiunea DEX care permite asta). Gasit prin
+    // rulare reala connectedDebugAndroidTest, nu doar teoretic.
+
     @Test
-    fun `findByGtin pe tabel gol intoarce null`() = runTest {
+    fun findByGtin_emptyTable_returnsNull() = runTest {
         assertNull(dao.findByGtin("05901234123457"))
     }
 
     @Test
-    fun `upsert si findByGtin fac round-trip`() = runTest {
+    fun upsertAndFindByGtin_roundTrip() = runTest {
         dao.upsert(GtinMappingEntity(gtin = "05901234123457", codCim = "W43451001", confirmedAt = 1000L))
 
         val found = dao.findByGtin("05901234123457")
@@ -50,7 +55,7 @@ class GtinMappingDaoTest {
     }
 
     @Test
-    fun `upsert pe acelasi gtin inlocuieste maparea fara sa duplice randul`() = runTest {
+    fun upsert_sameGtin_replacesWithoutDuplicating() = runTest {
         dao.upsert(GtinMappingEntity(gtin = "05901234123457", codCim = "W43451001", confirmedAt = 1000L))
         dao.upsert(GtinMappingEntity(gtin = "05901234123457", codCim = "W99999999", confirmedAt = 2000L))
 
@@ -61,7 +66,7 @@ class GtinMappingDaoTest {
     }
 
     @Test
-    fun `insertSeedBatch nu suprascrie o mapare deja existenta`() = runTest {
+    fun insertSeedBatch_doesNotOverwriteExisting() = runTest {
         dao.upsert(GtinMappingEntity(gtin = "05901234123457", codCim = "W43451001", confirmedAt = 1000L))
 
         dao.insertSeedBatch(listOf(GtinMappingEntity(gtin = "05901234123457", codCim = "W99999999", confirmedAt = 0L)))
@@ -72,7 +77,7 @@ class GtinMappingDaoTest {
     }
 
     @Test
-    fun `insertSeedBatch completeaza un gtin nou`() = runTest {
+    fun insertSeedBatch_fillsNewGtin() = runTest {
         dao.insertSeedBatch(listOf(GtinMappingEntity(gtin = "05901234123457", codCim = "W43451001", confirmedAt = 0L)))
 
         val found = dao.findByGtin("05901234123457")
@@ -80,7 +85,7 @@ class GtinMappingDaoTest {
     }
 
     @Test
-    fun `upsertAll suprascrie o ghicire locala cu catalogul partajat`() = runTest {
+    fun upsertAll_overwritesLocalGuessWithSharedCatalog() = runTest {
         dao.upsert(GtinMappingEntity(gtin = "05901234123457", codCim = "W_GRESIT", confirmedAt = 1000L))
 
         dao.upsertAll(listOf(GtinMappingEntity(gtin = "05901234123457", codCim = "W_CORECT", confirmedAt = 2000L)))

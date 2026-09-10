@@ -426,14 +426,14 @@ device. Testele instrumentate rămân de rulat de utilizator. Migrările `0010`/
   is_trusted_contributor = true where id = '<uid>'`), testează pe device: confirmarea unei mapări
   + verificare apariție rând în `gtin_mappings` (Supabase Table Editor) + pull pe alt cont/device;
   scanarea unei cutii cu dată de expirare (culoare corectă în `AddTreatmentScreen`/
-  `TreatmentDetailScreen`); testarea OCR fallback (vezi mai jos, Faza 2b-ii). Apoi commit + push +
-  PR + merge.
+  `TreatmentDetailScreen`). OCR + fallback fuzzy deja testate live (vezi mai jos). De investigat
+  separat: crash-ul `NavigationSmokeTest`. Apoi commit + push + PR + merge.
 
 ### Faza 2b-ii — OCR fallback pentru cutii fără cod lizibil (implementat — 2026-09-10)
 
-**⚠️ Necomis încă**, pe același branch `feature/faza2b-i-gs1-scan`, aceeași sesiune. Compilat +
-toate testele unitare trec local. **Neinstalat pe device** — telefonul s-a deconectat la finalul
-sesiunii, rămâne de testat live sesiunea viitoare.
+Pe branch `feature/faza2b-i-gs1-scan`, aceeași sesiune. Compilat + teste unitare trec local +
+**testat live pe device de user** — funcțional (a dus direct la găsirea bug-ului de căutare fuzzy
+de mai jos).
 
 - Scop clarificat explicit cu userul (discuție despre cascada Viziune→OCR→cod 2D): **doar**
   fallback pt. cutii cu cod absent/deteriorat dar text lizibil pe ambalaj — NU recunoaștere de
@@ -465,10 +465,49 @@ sesiunii, rămâne de testat live sesiunea viitoare.
   la margini) — toate trec local. Restul (`createOcrCaptureUri`/`recognizeText`/`isCameraAvailable`)
   Android-dependente, netestabile JVM fără Robolectric — consecvent cu `scanMedicationBarcode`
   însuși (deja netestat direct, doar logica pură din `ScanBarcode.kt` are teste).
-- **De testat manual pe device, sesiunea viitoare**: apasă butonul nou din "Adaugă tratament" →
-  fă o poză unei cutii → verifică că textul recunoscut apare în câmpul de căutare → alege o
-  sugestie Nomenclator. Testează și cazul "text ilizibil" (poză neclară) → verifică hint-ul de
-  eșec.
+- **Testat pe device de user** — funcțional, dar a scos la iveală o limitare reală a căutării
+  Nomenclator (vezi mai jos, „Fallback fuzzy la căutare”).
+
+### Căutare Nomenclator — fallback fuzzy (Levenshtein) (implementat — 2026-09-10)
+
+- **Bug real găsit prin testarea OCR-ului pe device**: OCR a citit "Algocalnin" în loc de
+  "Algocalmin" (o literă confundată, tipic OCR: m/n, l/1, O/0) — căutarea Nomenclator (FTS4,
+  potrivire de **prefix exact**) nu găsea NIMIC, pentru că "algocalmin" nu începe literal cu
+  "algocalnin" (diverg la caracterul 8). Aceeași căutare deservește și tastarea manuală din
+  `AddTreatmentScreen`, deci fix-ul ajută ambele fluxuri, nu doar OCR-ul.
+- **`domain/util/Levenshtein.kt`** (pur, fără dependențe Android) — distanța Levenshtein clasică
+  (DP, 2 rânduri).
+- **`NomenclatureRepositoryImpl.search()`** — fallback în 2 pași, STRICT când căutarea exactă
+  întoarce 0 rezultate (comportamentul existent, cu rezultate, rămâne neschimbat): (1) adună
+  candidați printr-un prefix SCURT (~4 caractere din primul token, mai tolerant decât prefixul
+  complet) — tot prin FTS4 existent, nu scanare completă a celor 32.500+ rânduri; (2) rangă
+  candidații după distanța Levenshtein față de **primul cuvânt** din query, comparat cu **primul
+  cuvânt** din `denumireComerciala` (nu șirul întreg, care conține și dozajul, ex. "500mg" — bug
+  găsit și fixat chiar în timpul implementării: comparat cu șirul întreg, un query scurt de un
+  cuvânt avea mereu distanță mare, doar din diferența de lungime). Prag proporțional cu lungimea
+  (~30%, minim 1).
+- **Limitare cunoscută, acceptată**: dacă OCR greșește chiar în primele caractere, fallback-ul tot
+  nu găsește nimic (prefixul scurt de candidați cere primele caractere corecte) — acoperă cazul
+  realist raportat (greșeală la mijlocul/sfârșitul cuvântului), nu orice greșeală posibilă. O
+  scanare completă a Nomenclatorului ar elimina și limitarea asta, dar cu cost de performanță
+  nejustificat pt. cazul comun.
+- **Bug de tooling găsit + fixat separat, la rularea testelor instrumentate**: testele noi
+  (`GtinMappingDaoTest` extins, `NomenclatureRepositoryImplTest` nou) foloseau nume de test în
+  backtick cu spații (convenția din testele unitare) — la împachetarea DEX (`minSdk=26`), D8
+  respinge clasele lambda generate de `runTest {}` care conțin spații în nume ("Space characters
+  in SimpleName... not allowed prior to DEX version 040"). Afectează DOAR testele instrumentate
+  (`androidTest`, DEX-compilate), nu cele unitare (JVM pur, niciodată DEX-compilate) — fix:
+  redenumite fără spații (camelCase/underscore, ca `NomenclatureDaoTest` deja existent). Găsit prin
+  rulare reală `connectedDebugAndroidTest` de pe acest device — toate cele 10 teste
+  (`GtinMappingDaoTest` + `NomenclatureRepositoryImplTest`) trec acum, inclusiv scenariul exact
+  raportat ("Algocalnin" → găsește "Algocalmin").
+- **Notă separată, nelegată de munca curentă**: `connectedDebugAndroidTest` pe TOATĂ suita a
+  crăpat la `NavigationSmokeTest` (`MainActivity`, eroare Hilt — "component was not created,
+  check HiltAndroidRule") — **neinvestigat, posibil preexistent** (nu s-a atins acest fișier azi).
+  De verificat separat, altă sesiune.
+- **Teste noi**: `LevenshteinDistanceTest` (unitar), `NomenclatureRepositoryImplTest` (instrumentat,
+  Room+FTS4 reale — singurul mod de a testa fallback-ul, nu poate fi simulat cu un fake) — toate
+  trec, verificate live pe device.
 
 ---
 
