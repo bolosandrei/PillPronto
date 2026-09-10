@@ -146,7 +146,8 @@
     <string name="associate_gtin_scan_button">Scanează codul de pe cutie</string>
     <string name="associate_gtin_scanned_code">Cod scanat: %1$s</string>
     <string name="associate_gtin_already_mapped">Deja asociat cu: %1$s</string>
-    <string name="associate_gtin_saved">Salvat: %1$s</string>
+    <string name="associate_gtin_saved">Salvat local: %1$s</string>
+    <string name="associate_gtin_saved_shared">Salvat și trimis în catalogul comun: %1$s</string>
     <string name="associate_gtin_search_label">Caută medicamentul</string>
     <string name="associate_gtin_reset_button">Scanează următorul</string>
 

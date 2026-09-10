@@ -3,7 +3,7 @@ package com.pillpronto.ui.gtinmapping
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.pillpronto.domain.model.NomenclatureEntry
-import com.pillpronto.domain.usecase.ConfirmGtinMappingUseCase
+import com.pillpronto.domain.usecase.ContributeGtinMappingUseCase
 import com.pillpronto.domain.usecase.LookupTreatmentByGtinUseCase
 import com.pillpronto.domain.usecase.SearchNomenclatureUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -30,7 +30,10 @@ data class AssociateGtinUiState(
     // Cod citit dar neparsabil (format nesuportat / payload GS1 fara niciun camp cunoscut).
     val scanUnrecognized: Boolean = false,
     // Feedback dupa ultima confirmare — mesaj vizibil "Salvat: X", gata pt. urmatorul scan.
-    val lastSaved: NomenclatureEntry? = null
+    val lastSaved: NomenclatureEntry? = null,
+    // true daca ultima confirmare a fost propagata si in catalogul comun (userul curent e
+    // contribuitor de incredere autentificat) — vezi ContributeGtinMappingUseCase.
+    val lastSavedToSharedCatalog: Boolean = false
 )
 
 /** Ecran dedicat pt. construirea rapida a tabelului `gtin_mappings` (Faza 2b-i) — scan -> cauta ->
@@ -42,7 +45,7 @@ data class AssociateGtinUiState(
 class AssociateGtinViewModel @Inject constructor(
     private val searchNomenclature: SearchNomenclatureUseCase,
     private val lookupTreatmentByGtin: LookupTreatmentByGtinUseCase,
-    private val confirmGtinMapping: ConfirmGtinMappingUseCase
+    private val contributeGtinMapping: ContributeGtinMappingUseCase
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(AssociateGtinUiState())
@@ -60,7 +63,7 @@ class AssociateGtinViewModel @Inject constructor(
         }
         _state.update {
             it.copy(
-                scannedGtin = gtin, scanUnrecognized = false, lastSaved = null,
+                scannedGtin = gtin, scanUnrecognized = false, lastSaved = null, lastSavedToSharedCatalog = false,
                 query = "", suggestions = emptyList(), existingMatch = null
             )
         }
@@ -85,15 +88,19 @@ class AssociateGtinViewModel @Inject constructor(
         }
     }
 
-    /** Confirma maparea scannedGtin -> entry.codCim si o invata (ConfirmGtinMappingUseCase) —
-     * data viitoare acelasi GTIN va fi recunoscut direct, in orice ecran de scanare. */
+    /** Confirma maparea scannedGtin -> entry.codCim (local, intotdeauna) si o propaga in catalogul
+     * comun daca userul e contribuitor de incredere (ContributeGtinMappingUseCase) — data viitoare
+     * acelasi GTIN va fi recunoscut direct, local si (pt. contribuitori) pt. toti userii. */
     fun onSuggestionPicked(entry: NomenclatureEntry) {
         val gtin = _state.value.scannedGtin ?: return
         searchJob?.cancel()
         viewModelScope.launch {
-            confirmGtinMapping(gtin, entry.codCim)
+            val sharedCatalog = contributeGtinMapping(gtin, entry.codCim)
             _state.update {
-                it.copy(lastSaved = entry, existingMatch = entry, query = "", suggestions = emptyList())
+                it.copy(
+                    lastSaved = entry, existingMatch = entry, query = "", suggestions = emptyList(),
+                    lastSavedToSharedCatalog = sharedCatalog
+                )
             }
         }
     }

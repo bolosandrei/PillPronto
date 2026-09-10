@@ -1,11 +1,16 @@
 package com.pillpronto.ui.gtinmapping
 
+import com.pillpronto.domain.model.AuthSessionState
 import com.pillpronto.domain.model.NomenclatureEntry
 import com.pillpronto.domain.usecase.ConfirmGtinMappingUseCase
+import com.pillpronto.domain.usecase.ContributeGtinMappingUseCase
 import com.pillpronto.domain.usecase.LookupTreatmentByGtinUseCase
 import com.pillpronto.domain.usecase.SearchNomenclatureUseCase
+import com.pillpronto.util.FakeAuthRepository
+import com.pillpronto.util.FakeGtinCatalogRemoteDataSource
 import com.pillpronto.util.FakeGtinMappingRepository
 import com.pillpronto.util.FakeNomenclatureRepository
+import com.pillpronto.util.FakeProfileRepository
 import com.pillpronto.util.MainDispatcherRule
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -22,10 +27,18 @@ class AssociateGtinViewModelTest {
 
     private val nomenclatureRepository = FakeNomenclatureRepository()
     private val gtinMappingRepository = FakeGtinMappingRepository()
+    private val authRepository = FakeAuthRepository()
+    private val profileRepository = FakeProfileRepository()
+    private val gtinCatalogRemoteDataSource = FakeGtinCatalogRemoteDataSource()
     private val vm = AssociateGtinViewModel(
         searchNomenclature = SearchNomenclatureUseCase(nomenclatureRepository),
         lookupTreatmentByGtin = LookupTreatmentByGtinUseCase(gtinMappingRepository, nomenclatureRepository),
-        confirmGtinMapping = ConfirmGtinMappingUseCase(gtinMappingRepository)
+        contributeGtinMapping = ContributeGtinMappingUseCase(
+            confirmGtinMapping = ConfirmGtinMappingUseCase(gtinMappingRepository),
+            authRepository = authRepository,
+            profileRepository = profileRepository,
+            remoteDataSource = gtinCatalogRemoteDataSource
+        )
     )
 
     private fun sampleEntry(codCim: String = "W43451001") = NomenclatureEntry(
@@ -87,6 +100,28 @@ class AssociateGtinViewModelTest {
         assertEquals("W43451001", gtinMappingRepository.mappings["05901234123457"])
         assertEquals("ASPIRINA 500mg", vm.state.value.lastSaved?.denumireComerciala)
         assertEquals("ASPIRINA 500mg", vm.state.value.existingMatch?.denumireComerciala)
+    }
+
+    @Test
+    fun `alegerea unei sugestii de catre un user neautentificat nu marcheaza contributia in catalogul comun`() = runTest {
+        vm.onBarcodeScanned("05901234123457")
+
+        vm.onSuggestionPicked(sampleEntry())
+
+        assertFalse(vm.state.value.lastSavedToSharedCatalog)
+    }
+
+    @Test
+    fun `alegerea unei sugestii de catre un contribuitor de incredere marcheaza contributia`() = runTest {
+        authRepository.emit(AuthSessionState.Authenticated("user-1"))
+        profileRepository.profiles["user-1"] = com.pillpronto.domain.model.Profile(
+            "user-1", com.pillpronto.domain.model.AccountRole.PHARMACIST, "Test", isTrustedContributor = true
+        )
+        vm.onBarcodeScanned("05901234123457")
+
+        vm.onSuggestionPicked(sampleEntry())
+
+        assertTrue(vm.state.value.lastSavedToSharedCatalog)
     }
 
     @Test

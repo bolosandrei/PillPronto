@@ -78,4 +78,14 @@ class GtinMappingDaoTest {
         val found = dao.findByGtin("05901234123457")
         assertEquals("W43451001", found?.codCim)
     }
+
+    @Test
+    fun `upsertAll suprascrie o ghicire locala cu catalogul partajat`() = runTest {
+        dao.upsert(GtinMappingEntity(gtin = "05901234123457", codCim = "W_GRESIT", confirmedAt = 1000L))
+
+        dao.upsertAll(listOf(GtinMappingEntity(gtin = "05901234123457", codCim = "W_CORECT", confirmedAt = 2000L)))
+
+        val found = dao.findByGtin("05901234123457")
+        assertEquals("W_CORECT", found?.codCim)
+    }
 }

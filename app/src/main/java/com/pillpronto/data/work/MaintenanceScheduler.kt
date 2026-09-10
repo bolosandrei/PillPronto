@@ -75,4 +75,21 @@ class MaintenanceScheduler @Inject constructor(
             request
         )
     }
+
+    /** Pull catalog partajat gtin_mappings — neconditionat, pt. toti userii (vezi GtinCatalogSyncManager). */
+    fun scheduleGtinCatalogSync() {
+        val request = PeriodicWorkRequestBuilder<GtinCatalogSyncWorker>(30, TimeUnit.MINUTES).build()
+        WorkManager.getInstance(context).enqueueUniquePeriodicWork(
+            GtinCatalogSyncWorker.UNIQUE_NAME,
+            ExistingPeriodicWorkPolicy.KEEP,
+            request
+        )
+
+        val startupRequest = OneTimeWorkRequestBuilder<GtinCatalogSyncWorker>().build()
+        WorkManager.getInstance(context).enqueueUniqueWork(
+            GtinCatalogSyncWorker.STARTUP_UNIQUE_NAME,
+            ExistingWorkPolicy.REPLACE,
+            startupRequest
+        )
+    }
 }

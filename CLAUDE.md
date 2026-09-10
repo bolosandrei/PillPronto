@@ -338,11 +338,11 @@ acest proiect: recursivitatea RLS și cursele de UI din Compose nu se prind stat
 - **Testare notificări confirmată**: reminder cu buton Confirmă din notificare testat peste noapte,
   funcțional (inclusiv fereastra de acțiune).
 
-### Faza 2b-i — Scanare GS1 DataMatrix + tabel local `gtin_mappings` (implementat — 2026-09-10)
+### Faza 2b-i — Scanare GS1 DataMatrix + catalog `gtin_mappings` (implementat — 2026-09-10)
 
-**⚠️ Necomis încă** — pe branch `feature/faza2b-i-gs1-scan`, compilat + toate testele unitare trec,
-instalare pe device + testele instrumentate rămân de rulat de utilizator (nu am `adb` disponibil în
-acest mediu).
+**⚠️ Necomis încă** — pe branch `feature/faza2b-i-gs1-scan` (mai multe commit-uri locale), compilat
++ toate testele unitare trec local (`testDebugUnitTest` + `assembleDebug`), instalat repetat pe
+device. Testele instrumentate rămân de rulat de utilizator. Migrările `0010`/`0011` **ne-rulate**.
 
 - **Scanare**: reutilizat 100% mecanismul de `GmsBarcodeScanning` (Play Services Code Scanner) deja
   folosit pt. codul QR de invitație (1.5d) — `ui/treatments/ScanBarcode.kt::scanMedicationBarcode`,
@@ -351,38 +351,62 @@ acest mediu).
   (rezervat Fazei 3 — feed continuu, caz de utilizare diferit de un scan single-shot).
 - **`domain/gs1/Gs1Parser.kt`** (domain pur, fără dependențe Android): parsează payload-ul GS1
   DataMatrix după Application Identifiers — AI `01` GTIN (14 cifre fix), `17` expirare YYMMDD
-  (fix), `10` lot (variabil ≤20), `21` serial (variabil ≤20), cele 4 mandatate FMD. La AI
-  necunoscut, parserul se oprește în siguranță (păstrează ce a extras deja) — singurul comportament
-  corect fără tabelul complet al tuturor AI-urilor GS1 posibile.
+  (fix), `10` lot (variabil ≤20), `21` serial (variabil ≤20), cele 4 mandatate FMD.
+  - **Bug real găsit + fixat la testarea pe device**: primul test a eșuat — codul era corect
+    DataMatrix (`format=16`), dar payload-ul are un caracter FNC1/GS literal (`0x1D`) **înaintea**
+    primului AI (Play Services Code Scanner nu-l elimină el însuși), pe care parserul nu-l
+    anticipa. Fix: `Gs1Parser.parse()` elimină un eventual prefix GS înainte de a parsa. Confirmat
+    cu 2 payload-uri reale capturate prin logging temporar (`adb logcat`) de pe cutii fizice,
+    păstrate ca teste de regresie în `Gs1ParserTest` (GTIN e dată de produs public, nu personală).
+    Retestat pe device după fix — **confirmat funcțional** de utilizator (scan → recunoaștere OK).
+- **`ui/gtinmapping/AssociateGtinScreen`+`ViewModel`** — ecran dedicat (buton „Asociere coduri
+  (GTIN)" în tab-ul Cont, vizibil indiferent de autentificare): scan → caută în Nomenclator →
+  alege → salvat → gata pt. următorul, **fără să creeze un tratament** (spre deosebire de fluxul
+  din `AddTreatmentScreen`). `NomenclatureSuggestions` extras din `AddTreatmentScreen.kt` în
+  `core/ui/components/NomenclatureSuggestionsList.kt` (acum reutilizat din 2 ecrane).
 - **Tabel local `gtin_mappings`** (`PillProntoDatabase`, NU `NomenclatureDatabase` — acolo s-ar
-  pierde la orice reimport al Nomenclatorului): GTIN scanat → Cod CIM confirmat de user, construit
-  progresiv — la un scan cu GTIN necunoscut, userul alege manual din sugestiile Nomenclator
-  (fluxul de căutare deja existent din 2a), iar acea alegere „învață" maparea pt. data viitoare.
-  **Strict local, fără sincronizare Supabase** (decizie explicită — specifică exemplarului fizic
-  scanat pe acel device, nu date de sănătate portabile). Potențială contribuție originală de teză,
-  dat fiind că nu există mapare publică GTIN→Cod CIM.
-- **`Treatment.codCim`** (câmp nou, opțional): trasabilitate la intrarea Nomenclator exactă aleasă
-  (manual sau prin scan reușit) — spre deosebire de `gtin_mappings`, **acesta se sincronizează**
-  (tratamentele deja se sincronizează) → migrarea Supabase `0010_treatment_cod_cim.sql`.
-- **Schema**: `PillProntoDatabase` v6→v7 (`GtinMappingEntity` + `TreatmentEntity.codCim`).
-  `supabase/migrations/0010_treatment_cod_cim.sql` (nouă, de rulat manual de utilizator, după 0009).
-- **Teste noi**: `Gs1ParserTest` (separator GS prezent/absent, GTIN trunchiat, AI necunoscut, pivot
-  de secol, `DD=00`), `ScanBarcodeTest` (`extractGtin` pe toate formatele), `LookupTreatmentByGtinUseCaseTest`,
-  `ConfirmGtinMappingUseCaseTest`, `MappersTest` extins (round-trip `codCim`), `GtinMappingDaoTest`
-  (instrumentat, Room in-memory) — toate unitare trec local; instrumentat de rulat pe device.
+  pierde la orice reimport al Nomenclatorului): GTIN scanat → Cod CIM, construit progresiv — la un
+  scan cu GTIN necunoscut, userul alege manual din sugestii, iar acea alegere „învață" maparea.
+  **Seed static livrat în APK** (`assets/gtin_mappings_seed.tsv`, gol deocamdată) +
+  `GtinMappingSeedImporter`: flag VERSIONAT în SharedPreferences (nu `count()>0` — tabelul mai
+  crește organic din confirmările userilor) + insert cu `IGNORE` (nu suprascrie niciodată).
+- **Extindere — catalog partajat în Supabase** (decizie luată după ce userul a întrebat despre un
+  rol de „admin"/contribuitor, discuție despre PHARMACIST auto-declarat vs. încredere reală):
+  `gtin_mappings` **nu mai e strict local** — există acum și un tabel Supabase omonim, **primul
+  tabel cu adevărat public din schema proiectului** (toate celelalte sunt scopate pe rând propriu
+  sau lanț `patient_profile_id`/`links`). SELECT deschis `anon`+`authenticated` (date de produs
+  public, nu de sănătate — păstrează „aplicația funcționează fără login"). Scriere **doar** prin
+  funcția `SECURITY DEFINER` `contribute_gtin_mapping` (pattern identic `claim_link`, migrarea
+  0007) — verifică `profiles.is_trusted_contributor` (coloană nouă, **NU** un rol nou, un
+  capability-flag ortogonal la `AccountRole`, setat manual de dezvoltator direct în Supabase, NU
+  prin auto-declarare — evită exact problema PHARMACIST-ului neverificat). `GtinCatalogSyncManager`
+  trage (`pull`) tot tabelul, necondiționat, pt. toți userii (spre deosebire de `SyncManager`
+  existent, strict `AccountRole.PATIENT`) — `REPLACE` peste o ghicire locală neconfirmată.
+  `ContributeGtinMappingUseCase` (folosit acum de `AssociateGtinViewModel` în loc de
+  `ConfirmGtinMappingUseCase` direct) confirmă local **întotdeauna** + propagă la catalogul comun
+  **doar** dacă userul e contribuitor de încredere — best-effort, eșec de rețea nu anulează local.
+  Migrarea `supabase/migrations/0011_gtin_mappings_catalog.sql` (nouă, de rulat manual, după 0010).
+- **`Treatment.codCim`** (câmp nou, opțional, separat de `gtin_mappings`): trasabilitate la
+  intrarea Nomenclator exactă aleasă — **acesta se sincronizează** (tratamentele deja se
+  sincronizează) → migrarea `0010_treatment_cod_cim.sql`.
+- **Schema Room**: `PillProntoDatabase` v6→v7 (`GtinMappingEntity` + `TreatmentEntity.codCim`).
+- **Teste noi**: `Gs1ParserTest` (inclusiv 2 payload-uri reale de pe device), `ScanBarcodeTest`,
+  `LookupTreatmentByGtinUseCaseTest`, `ConfirmGtinMappingUseCaseTest`, `ContributeGtinMappingUseCaseTest`,
+  `GtinCatalogSyncManagerTest`, `GtinMappingSeedImporterTest`, `AssociateGtinViewModelTest`,
+  `MappersTest` extins, `GtinMappingDaoTest` (instrumentat, extins: `upsertAll`/`insertSeedBatch`)
+  — toate unitare trec local; instrumentat de rulat pe device.
   **Nu există `AddTreatmentViewModelTest`** — blocaj arhitectural preexistent, nu introdus acum:
   `AddTreatmentViewModel` depinde de `ReminderCoordinator` (clasă concretă, nu interfață), care la
   rândul lui construiește `ReminderScheduler` cu un `Context` Android real (`AlarmManager`) chiar în
   constructor — imposibil de instanțiat într-un test JVM pur fără Robolectric/Mockito (niciuna
-  configurată în proiect, convenția fiind fake-uri scrise de mână pe interfețe). Logica nouă propriu-zisă
-  e acoperită la nivel de use-case (`LookupTreatmentByGtinUseCaseTest`/`ConfirmGtinMappingUseCaseTest`);
-  verificarea integrării în ViewModel rămâne pe testarea manuală pe device.
+  configurată în proiect, convenția fiind fake-uri scrise de mână pe interfețe).
 - **Faza 2b-ii** (următorul pas, separat intenționat): OCR ca fallback pt. cutii fără cod lizibil —
   vezi secțiunea 8b.
-- **De testat manual pe device** (userul, la reluarea sesiunii): scanează o cutie reală cu
-  DataMatrix (GTIN necunoscut) → alege din sugestii → salvează; scanează **aceeași cutie din nou**
-  → verifică hit imediat (pre-completare automată, fără pasul manual); testează și un cod liniar
-  (EAN-13) dacă disponibil. Apoi: rulează manual migrarea `0010`, commit + push + PR + merge.
+- **De făcut sesiunea viitoare**: userul rulează manual migrările `0010` și `0011` (în ordine), se
+  marchează contribuitor de încredere (SQL direct: `update profiles set is_trusted_contributor =
+  true where id = '<uid>'`), testează pe device confirmarea unei mapări + verifică apariția
+  rândului în `gtin_mappings` (Supabase Table Editor) + verifică pull-ul pe alt cont/device. Apoi
+  commit + push + PR + merge.
 
 ---
 
@@ -417,10 +441,11 @@ acest mediu).
     considerată suficient de matură funcțional, 1.5f/1.5g sunt hardening, nu blocante.
 - **Faza 2a — Import Nomenclator + căutare/asociere:** ✅ **complet implementată, mergeuită pe
   `main` (PR #10)**, migrările `0008`/`0009` rulate — vezi secțiunea 7.
-- **Faza 2b-i — Scanare GS1 DataMatrix + `gtin_mappings`:** ✅ **implementată** (vezi secțiunea 7),
-  **necomisă încă** (branch `feature/faza2b-i-gs1-scan`) — de testat manual pe device (scan +
-  re-scan aceeași cutie, cod liniar EAN-13), apoi commit+push+PR+merge, apoi rulată manual migrarea
-  `0010`.
+- **Faza 2b-i — Scanare GS1 DataMatrix + catalog `gtin_mappings`:** ✅ **implementată, testată
+  funcțional pe device** (bug de parser găsit + fixat live), **necomisă încă** (branch
+  `feature/faza2b-i-gs1-scan`) — de rulat manual migrările `0010`+`0011` (în ordine), de marcat
+  userul contribuitor de încredere, de testat push+pull către catalogul partajat, apoi
+  commit+push+PR+merge — vezi secțiunea 7 pentru detalii complete.
 - **Faza 2b-ii — OCR fallback** (următorul pas, după 2b-i): OCR (ML Kit Text Recognition) pt.
   cutii fără cod lizibil/DataMatrix absent — alimentează câmpul de căutare Nomenclator existent cu
   textul recunoscut, nu duplică UI-ul de sugestii.

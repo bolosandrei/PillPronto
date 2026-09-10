@@ -71,8 +71,13 @@ fun AssociateGtinScreen(
                 )
 
                 if (state.lastSaved != null) {
+                    val savedTextRes = if (state.lastSavedToSharedCatalog) {
+                        R.string.associate_gtin_saved_shared
+                    } else {
+                        R.string.associate_gtin_saved
+                    }
                     Text(
-                        stringResource(R.string.associate_gtin_saved, state.lastSaved!!.denumireComerciala),
+                        stringResource(savedTextRes, state.lastSaved!!.denumireComerciala),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.primary
                     )

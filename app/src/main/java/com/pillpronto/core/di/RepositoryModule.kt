@@ -11,6 +11,8 @@ import com.pillpronto.data.repository.LinkedPatientDataRepositoryImpl
 import com.pillpronto.data.repository.NomenclatureRepositoryImpl
 import com.pillpronto.data.repository.ProfileRepositoryImpl
 import com.pillpronto.data.repository.TreatmentRepositoryImpl
+import com.pillpronto.data.sync.GtinCatalogRemoteDataSource
+import com.pillpronto.data.sync.SupabaseGtinCatalogDataSource
 import com.pillpronto.data.sync.SupabaseSyncDataSource
 import com.pillpronto.data.sync.SyncRemoteDataSource
 import com.pillpronto.domain.repository.AuthRepository
@@ -75,4 +77,8 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindGtinMappingRepository(impl: GtinMappingRepositoryImpl): GtinMappingRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindGtinCatalogRemoteDataSource(impl: SupabaseGtinCatalogDataSource): GtinCatalogRemoteDataSource
 }
