@@ -27,6 +27,8 @@ data class DoseLogEntity(
     val status: String,            // DoseStatus name
     val takenAt: String?,          // ISO LocalDateTime sau null
     val isAsNeeded: Boolean = false, // doza PRN logata ad-hoc — exclusa din PDC/MPR
+    // Snapshot la generare (Faza 2a) — NU legata live de Treatment, vezi domain/model/DoseLog.kt.
+    val cantitate: String = "",
     // --- sync Room <-> Supabase (Faza 1.5c, vezi data/sync/SyncManager.kt) ---
     // Doar dozele cu status final (TAKEN/MISSED/SKIPPED) se sincronizeaza — PENDING e stare de
     // programare locala, nu istoric de aderenta. `dirty` porneste false la creare (nimic de

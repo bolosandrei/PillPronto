@@ -23,9 +23,19 @@ class GenerateDosesUseCase @Inject constructor(
         val doses = buildList {
             var day = start
             while (!day.isAfter(end)) {
-                for (time in treatment.times) {
-                    val at = LocalDateTime.of(day, time)
-                    if (at.isAfter(now)) add(DoseLog(treatmentId = treatment.id, scheduledAt = at))
+                for (slot in treatment.schedule) {
+                    val at = LocalDateTime.of(day, slot.time)
+                    if (at.isAfter(now)) {
+                        add(
+                            DoseLog(
+                                treatmentId = treatment.id,
+                                scheduledAt = at,
+                                // Sloturi fara cantitate proprie mostenesc cantitatea generala a
+                                // tratamentului — userul n-o repeta la fiecare ora daca e aceeasi peste tot.
+                                cantitate = slot.cantitate.ifBlank { treatment.cantitate }
+                            )
+                        )
+                    }
                 }
                 day = day.plusDays(1)
             }

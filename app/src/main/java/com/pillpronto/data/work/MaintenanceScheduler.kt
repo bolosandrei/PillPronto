@@ -53,4 +53,16 @@ class MaintenanceScheduler @Inject constructor(
             request
         )
     }
+
+    /** Import Nomenclator ANMDMR (Faza 2a), o singura data — vezi NomenclatureImporter. KEEP, nu
+     * REPLACE (spre deosebire de sync): primul import (~32.500 randuri) poate dura cateva secunde;
+     * un restart rapid de proces nu trebuie sa anuleze un import deja in desfasurare. */
+    fun scheduleNomenclatureImport() {
+        val request = OneTimeWorkRequestBuilder<NomenclatureImportWorker>().build()
+        WorkManager.getInstance(context).enqueueUniqueWork(
+            NomenclatureImportWorker.STARTUP_UNIQUE_NAME,
+            ExistingWorkPolicy.KEEP,
+            request
+        )
+    }
 }

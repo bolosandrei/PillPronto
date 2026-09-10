@@ -99,6 +99,19 @@ private fun TreatmentSection(linked: LinkedTreatment, doses: List<LinkedDoseLog>
             Text(t.medicationName, style = MaterialTheme.typography.titleMedium)
             Text(scheduleSummary(t), style = MaterialTheme.typography.bodyMedium)
             Text(dateRangeSummary(t), style = MaterialTheme.typography.bodySmall)
+            if (t.cantitate.isNotBlank()) {
+                Text(stringResource(R.string.treatment_detail_quantity, t.cantitate), style = MaterialTheme.typography.bodySmall)
+            }
+            if (t.formaFarmaceutica.isNotBlank()) {
+                Text(stringResource(R.string.treatment_detail_form, t.formaFarmaceutica), style = MaterialTheme.typography.bodySmall)
+            }
+            if (t.indicatie.isNotBlank()) {
+                Text(stringResource(R.string.treatment_detail_indication, t.indicatie), style = MaterialTheme.typography.bodySmall)
+            }
+            if (t.instructiuni.isNotBlank()) {
+                Text(stringResource(R.string.treatment_detail_instructions, t.instructiuni), style = MaterialTheme.typography.bodySmall)
+            }
+            slotBreakdown(t)?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
 
             if (doses.isNotEmpty()) {
                 HorizontalDivider(Modifier.padding(vertical = 8.dp))
@@ -115,6 +128,16 @@ private fun scheduleSummary(t: Treatment): String = stringResource(
     if (t.asNeeded) stringResource(R.string.common_as_needed) else t.times.joinToString(", ") { it.format(HM) }
 )
 
+/** Doar cand cel putin un slot are cantitate proprie — vezi TreatmentDetailScreen (pattern
+ * identic, aplicat si aici pt. citirea Apartinator/Medic/Farmacist). */
+@Composable
+private fun slotBreakdown(t: Treatment): String? {
+    val withCantitate = t.schedule.filter { it.cantitate.isNotBlank() }
+    if (withCantitate.isEmpty()) return null
+    val parts = withCantitate.joinToString(" · ") { "${it.time.format(HM)} → ${it.cantitate}" }
+    return stringResource(R.string.treatment_detail_schedule_breakdown, parts)
+}
+
 @Composable
 private fun dateRangeSummary(t: Treatment): String {
     val start = stringResource(R.string.common_start_label, t.startDate.format(DMY))
@@ -128,12 +151,25 @@ private fun DoseRow(dose: LinkedDoseLog) {
         Modifier.fillMaxWidth().padding(vertical = 4.dp),
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        Text(dose.log.scheduledAt.format(DMY_HM), style = MaterialTheme.typography.bodySmall)
+        Text(doseRowLabel(dose), style = MaterialTheme.typography.bodySmall)
         when (dose.log.status) {
             DoseStatus.TAKEN -> Text(stringResource(R.string.dose_status_taken), color = DoseTaken)
             DoseStatus.MISSED -> Text(stringResource(R.string.dose_status_missed), color = DoseMissed)
             DoseStatus.SKIPPED -> Text(stringResource(R.string.dose_status_skipped), textDecoration = TextDecoration.LineThrough)
             DoseStatus.PENDING -> Text(stringResource(R.string.dose_status_pending))
         }
+    }
+}
+
+/** TAKEN cu takenAt cunoscut: arata ora reala, nu doar ora programata — vezi TreatmentDetailScreen
+ * (pattern identic, aplicat si aici pt. citirea Apartinator/Medic/Farmacist). */
+@Composable
+private fun doseRowLabel(dose: LinkedDoseLog): String {
+    val scheduled = dose.log.scheduledAt.format(DMY_HM)
+    val takenAt = dose.log.takenAt
+    return if (dose.log.status == DoseStatus.TAKEN && takenAt != null) {
+        stringResource(R.string.treatment_detail_history_taken_detail, scheduled, takenAt.format(HM))
+    } else {
+        scheduled
     }
 }

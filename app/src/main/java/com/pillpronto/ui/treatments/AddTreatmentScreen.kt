@@ -8,14 +8,19 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.foundation.clickable
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.InputChip
@@ -43,8 +48,15 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.pillpronto.R
 import com.pillpronto.core.ui.components.BackTopAppBar
 import com.pillpronto.core.ui.components.DatePickerDialogBox
+import com.pillpronto.domain.model.NomenclatureEntry
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
+
+// Fereastra vizibila (glisanta) pt. lista de sugestii din Nomenclator — arata ~3 randuri o data,
+// restul (poate depasi 20-30 dupa deduplicare) se vad prin scroll, nu sunt taiate. Inaltime fixa,
+// nu wrap-content: lista sta imbricata intr-un Column deja scrollabil (formularul intreg), un
+// LazyColumn cu inaltime nemarginita acolo ar arunca la runtime ("infinite height").
+private val SUGGESTIONS_HEIGHT = 168.dp
 
 private val HM = DateTimeFormatter.ofPattern("HH:mm")
 private val DMY = DateTimeFormatter.ofPattern("dd.MM.yyyy")
@@ -64,6 +76,9 @@ fun AddTreatmentScreen(
     var showStartPicker by remember { mutableStateOf(false) }
     var showEndPicker by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
+    // Slotul de ora al carui dialog de cantitate proprie e deschis (null = niciunul) — vezi
+    // sectiunea "Ore de administrare" mai jos.
+    var editingSlotTime by remember { mutableStateOf<LocalTime?>(null) }
 
     Scaffold(
         topBar = {
@@ -78,7 +93,26 @@ fun AddTreatmentScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             OutlinedTextField(state.name, vm::onName, label = { Text(stringResource(R.string.add_treatment_name_label)) }, modifier = Modifier.fillMaxWidth())
+            if (state.suggestions.isNotEmpty()) {
+                NomenclatureSuggestions(
+                    suggestions = state.suggestions,
+                    onPick = vm::onSuggestionPicked
+                )
+            }
             OutlinedTextField(state.dosage, vm::onDosage, label = { Text(stringResource(R.string.add_treatment_dosage_label)) }, modifier = Modifier.fillMaxWidth())
+
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    state.cantitate, vm::onCantitate,
+                    label = { Text(stringResource(R.string.add_treatment_quantity_label)) },
+                    modifier = Modifier.weight(1f)
+                )
+                OutlinedTextField(
+                    state.formaFarmaceutica, vm::onFormaFarmaceutica,
+                    label = { Text(stringResource(R.string.add_treatment_form_label)) },
+                    modifier = Modifier.weight(1f)
+                )
+            }
 
             Row(
                 Modifier.fillMaxWidth(),
@@ -97,13 +131,31 @@ fun AddTreatmentScreen(
 
             if (!state.asNeeded) {
                 Text(stringResource(R.string.add_treatment_times_title), style = MaterialTheme.typography.titleSmall)
+                Text(
+                    stringResource(R.string.add_treatment_times_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    state.times.forEach { time ->
+                    state.schedule.forEach { slot ->
                         InputChip(
                             selected = false,
-                            onClick = { vm.removeTime(time) },
-                            label = { Text(time.format(HM)) },
-                            trailingIcon = { Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.add_treatment_remove_time_content_desc)) }
+                            // Tap pe corpul chip-ului -> editeaza cantitatea proprie a slotului;
+                            // stergerea slotului e doar prin iconita X (trailingIcon), separat.
+                            onClick = { editingSlotTime = slot.time },
+                            label = {
+                                Text(
+                                    if (slot.cantitate.isNotBlank()) "${slot.time.format(HM)} · ${slot.cantitate}"
+                                    else slot.time.format(HM)
+                                )
+                            },
+                            trailingIcon = {
+                                Icon(
+                                    Icons.Filled.Close,
+                                    contentDescription = stringResource(R.string.add_treatment_remove_time_content_desc),
+                                    modifier = Modifier.clickable { vm.removeTime(slot.time) }
+                                )
+                            }
                         )
                     }
                     AssistChip(onClick = { showTimePicker = true }, label = { Text(stringResource(R.string.add_treatment_add_time)) })
@@ -116,6 +168,18 @@ fun AddTreatmentScreen(
             OutlinedButton(onClick = { showEndPicker = true }, modifier = Modifier.fillMaxWidth()) {
                 Text(stringResource(R.string.common_end_label, state.endDate?.format(DMY) ?: stringResource(R.string.common_no_end_date)))
             }
+
+            OutlinedTextField(
+                state.indicatie, vm::onIndicatie,
+                label = { Text(stringResource(R.string.add_treatment_indication_label)) },
+                modifier = Modifier.fillMaxWidth()
+            )
+            OutlinedTextField(
+                state.instructiuni, vm::onInstructiuni,
+                label = { Text(stringResource(R.string.add_treatment_instructions_label)) },
+                minLines = 2,
+                modifier = Modifier.fillMaxWidth()
+            )
 
             state.error?.let { Text(errorMessage(it), color = MaterialTheme.colorScheme.error) }
 
@@ -166,6 +230,53 @@ fun AddTreatmentScreen(
             confirmButton = { TextButton(onClick = { showDeleteConfirm = false; vm.delete() }) { Text(stringResource(R.string.common_delete)) } },
             dismissButton = { TextButton(onClick = { showDeleteConfirm = false }) { Text(stringResource(R.string.common_cancel)) } }
         )
+    }
+
+    editingSlotTime?.let { time ->
+        val currentCantitate = state.schedule.firstOrNull { it.time == time }?.cantitate.orEmpty()
+        var input by remember(time) { mutableStateOf(currentCantitate) }
+        AlertDialog(
+            onDismissRequest = { editingSlotTime = null },
+            title = { Text(stringResource(R.string.add_treatment_slot_quantity_title, time.format(HM))) },
+            text = {
+                OutlinedTextField(
+                    input, { input = it },
+                    label = { Text(stringResource(R.string.add_treatment_quantity_label)) },
+                    placeholder = { Text(stringResource(R.string.add_treatment_slot_quantity_hint)) },
+                    modifier = Modifier.fillMaxWidth()
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { vm.onSlotCantitate(time, input); editingSlotTime = null }) {
+                    Text(stringResource(R.string.common_save))
+                }
+            },
+            dismissButton = { TextButton(onClick = { editingSlotTime = null }) { Text(stringResource(R.string.common_cancel)) } }
+        )
+    }
+}
+
+/** Sugestii din Nomenclatorul ANMDMR pt. numele curent tastat (Faza 2a) — pur asistiv: alegerea
+ * uneia pre-completeaza nume+dozaj, dar campurile raman complet editabile (medicamente din afara
+ * Nomenclatorului RO, compuse etc. raman introductibile liber, ca inainte). */
+@Composable
+private fun NomenclatureSuggestions(suggestions: List<NomenclatureEntry>, onPick: (NomenclatureEntry) -> Unit) {
+    LazyColumn(
+        modifier = Modifier.fillMaxWidth().heightIn(max = SUGGESTIONS_HEIGHT),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        items(suggestions, key = { it.codCim }) { entry ->
+            Card(Modifier.fillMaxWidth().clickable { onPick(entry) }) {
+                Column(Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
+                    Text(entry.denumireComerciala, style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        stringResource(R.string.add_treatment_nomenclature_suggestion_detail, entry.dci, entry.concentratie, entry.formaFarmaceutica),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
     }
 }
 

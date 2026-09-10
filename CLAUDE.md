@@ -277,6 +277,69 @@ acest proiect: recursivitatea RLS și cursele de UI din Compose nu se prind stat
 7. **Notă de debugging device**: pe telefonul de test al utilizatorului (MIUI/HyperOS), `Log.d` nu
    ajunge în logcat by default — doar `Log.e`/`Log.w`.
 
+### Faza 2a — Identificare: import Nomenclator + căutare/asociere (implementat — 2026-09-09)
+
+**⚠️ Necomis încă** — pe branch `feature/faza2a-nomenclator-followups`, compilat + toate testele
+(unitare + instrumentate) trec + instalat pe device, dar nu commis/push-uit; testarea notificărilor
+(vezi mai jos) e în curs, întinsă pe o noapte, sesiunea s-a închis înainte de commit intenționat.
+
+- **Import Nomenclator ANMDMR**: descărcat + parsat direct (`scripts/convert-nomenclator.ps1` —
+  xlsx e zip, `sharedStrings.xml`+`sheet1.xml` parsate ca XML .NET, fără nicio librărie externă)
+  → `app/src/main/assets/nomenclator.tsv.gz` (32.517 rânduri, 20 coloane). **Găsire confirmată, nu
+  doar risc teoretic**: Nomenclatorul public NU are coloană GTIN — identifică prin `Cod CIM`, nu
+  cod de bare. Decizie: identificarea se face prin **potrivire text** (nume/DCI/concentrație), nu
+  lookup GTIN direct; scanarea de coduri (Faza 2b) va construi propria mapare GTIN→CIM local, pe
+  măsură ce userii confirmă potriviri.
+  - **Gotcha AGP găsit la testare**: un asset `.gz` e **decomprimat automat** de Android Gradle
+    Plugin la împachetare, cu extensia scoasă (`nomenclator.tsv.gz` → `nomenclator.tsv` în APK) —
+    codul citește direct, fără `GZIPInputStream` (altfel `FileNotFoundException`, cauza reală
+    ascunsă până la inspectarea conținutului APK-ului cu `unzip -l`).
+  - `NomenclatureDatabase` (Room, separată de `PillProntoDatabase` — date de referință statice, nu
+    de sănătate) + tabel normal + **FTS4** (`remove_diacritics=2`) — import batched într-o singură
+    tranzacție (`withTransaction`, altfel un import întrerupt la mijloc rămâne "aparent complet"
+    pentru totdeauna). `@Insert(onConflict = IGNORE)` — **date reale ANMDMR conțin Cod CIM
+    duplicat** (calitate discutabilă a sursei, găsit la primul import pe device:
+    `UNIQUE constraint failed`).
+  - Căutare integrată în `AddTreatmentScreen` (minim 3 caractere, listă derulabilă înălțime fixă
+    nu top-5 tăiat) — **deduplicare pe produs** (nume+DCI+concentrație+formă): Nomenclatorul are un
+    rând per **ambalaj**, nu per medicament — fără dedup, aceeași "AUGMENTIN 500mg/125mg" apărea de
+    5 ori identic (cutii diferite), imposibil de diferențiat vizual, irelevant pentru scopul de aici.
+- **4 câmpuri noi pe tratament** (inspirate din Medisafe/MyTherapy, cercetate live): `formaFarmaceutica`
+  (pre-completată din Nomenclator), `cantitate` (separată de `dosage`/concentrație — "2 comprimate"
+  vs. "500mg"), `indicatie` (motivul tratamentului — se leagă de decizia academică nerezolvată
+  „boală cronică vs. polimedicație"), `instructiuni` (text liber). Toate opționale.
+- **Bug-uri reale găsite la testarea pe device, fixate în aceeași sesiune**:
+  1. Fereastra de acțiune lipsea — o doză se putea confirma/omite oricând, indiferent cât de departe
+     de ora programată. Fix: `isDoseActionable` (±60 min), aplicat atât în `LogDoseUseCase`
+     (protejează și acțiunile din notificare) cât și în UI (`TodayScreen` ascunde butoanele în
+     afara ferestrei). `MarkOverdueDosesUseCase` declanșat acum și la fiecare intrare pe „Azi", nu
+     doar din workerul periodic de 6h.
+  2. Istoricul arăta mereu ora **programată**, niciodată ora **reală** la care a fost luată doza
+     (`DoseLog.takenAt` exista deja, doar UI-ul nu-l folosea). Fix: `TreatmentDetailScreen`/
+     `PatientDetailScreen` arată „programat HH:mm · Luat HH:mm" pentru dozele TAKEN.
+  3. Cantitate unică per tratament — nu putea modela „Nolpaza dimineața 1 comprimat, seara 2
+     comprimate, la amiază nimic". Verificat explicit înainte de a alege soluția: PDC/MPR
+     (`AdherenceCalculator.compute`) se calculează agregat pe zi la nivel de doză, nu per
+     tratament — alegerea de model nu afectează corectitudinea academică. Model ales (nu split în
+     tratamente separate): `Treatment.times: List<LocalTime>` → `schedule: List<DoseSlot>`
+     (oră + cantitate proprie opțională), `times` rămâne proprietate **derivată** (cod care doar
+     citește orele nu s-a rupt — doar 5 situri reale de construcție `Treatment(...)` în tot codul).
+     `DoseLog` capătă propriul `cantitate`, **snapshot la generare** (`GenerateDosesUseCase`) — NU
+     legat live de tratament, spre deosebire de `medicationName`/`dosage` (inconsecvență
+     preexistentă, notată în cod, nereparată acum). Stocare: `TreatmentEntity.slotCantitateCsv`
+     (separator `;`, nu `,` — cantitate poate conține virgulă zecimală), aliniat pozițional cu
+     `timesCsv`.
+- **Schema**: `PillProntoDatabase` v4→v5 (cele 4 câmpuri) →v6 (`slotCantitateCsv`+`DoseLog.cantitate`).
+  `supabase/migrations/0008_treatment_extra_fields.sql` + `0009_dose_slot_cantitate.sql` (noi, de
+  rulat manual de utilizator, după 0001-0007).
+- **Teste noi**: `NomenclatureImporterTest`, `NomenclatureDaoTest` (instrumentat, FTS diacritic-insensitive
+  confirmat pe SQLite real), `SearchNomenclatureUseCaseTest`, `DoseActionWindowTest`,
+  `LogDoseUseCaseTest`, `GenerateDosesUseCaseTest`, `MappersTest` extins — toate trec.
+- **În testare la închiderea sesiunii**: utilizator a adăugat un tratament cu 3 doze/zi diferite
+  pentru ziua următoare, așteaptă să observe comportamentul notificărilor (reminder-ele +
+  butoanele Confirmă/Omite din notificare, inclusiv respectarea ferestrei de 60 min) peste noapte —
+  **neconfirmat încă**. De reluat sesiunea viitoare cu rezultatul, apoi commit + push + PR.
+
 ---
 
 ## 8. CE URMEAZĂ — TODO
@@ -308,7 +371,14 @@ acest proiect: recursivitatea RLS și cursele de UI din Compose nu se prind stat
     adversariale** — vezi `docs/user-management-plan.md` secțiunea 8, neatinse încă.
   - **Sau trecem direct la Faza 2** (identificare — Nomenclator ANMDMR + scanare) — Faza 1.5 e
     considerată suficient de matură funcțional, 1.5f/1.5g sunt hardening, nu blocante.
-- **Faza 2 — Identificare:** import Nomenclator ANMDMR (bază locală), scanare **DataMatrix/barcode** (ML Kit) + OCR, legare scanare → tratament. Investigare mapare **GTIN→cod CIM**.
+- **Faza 2a — Import Nomenclator + căutare/asociere:** ✅ **implementată** (vezi secțiunea 7),
+  **necomisă încă** (branch `feature/faza2a-nomenclator-followups`) — testare notificări în curs
+  peste noapte, de reluat sesiunea viitoare cu rezultatul, apoi commit+push+PR+merge, apoi rulate
+  manual de utilizator migrările `0008`/`0009`.
+- **Faza 2b — Scanare + OCR** (următorul pas, după 2a): scanare **DataMatrix/barcode** (ML Kit) +
+  OCR, extragere GTIN (parser GS1), legare scanare → tratament, tabel local `gtin_mappings`
+  (construit progresiv din confirmările userului — posibilă contribuție originală de teză, dat
+  fiind că nu există mapare publică GTIN→Cod CIM, confirmat la 2a).
 - **Faza 3 — Viziune:** feed CameraX, **YOLO-seg** (LiteRT/ONNX), detecție multi-obiect pe cadru de ansamblu, **contururi gri** (detectat/neidentificat).
 - **Faza 4 — Recunoaștere & enrollment:** model de **embeddings** (metric learning), galerie nearest-neighbor, enrollment multi-view + top-k candidați, **colorare contur** după statusul dozei.
 - **Faza 5 — Tracking & AR:** ByteTrack + netezire, ancorare dinamică a panoului de info, buton show/hide; ancore ARCore pentru scanare progresivă.

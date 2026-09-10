@@ -26,5 +26,6 @@ class PillProntoApp : Application(), Configuration.Provider {
         caregiverAlertNotifier.createNotificationChannel()
         maintenanceScheduler.schedulePeriodic()
         maintenanceScheduler.scheduleSyncOnStartup()
+        maintenanceScheduler.scheduleNomenclatureImport()
     }
 }

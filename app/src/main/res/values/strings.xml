@@ -68,6 +68,20 @@
     <string name="add_treatment_error_end_before_start">Data de final nu poate fi înainte de start</string>
     <string name="add_treatment_error_save_failed">Eroare la salvare</string>
     <string name="add_treatment_error_delete_failed">Eroare la ștergere</string>
+    <string name="add_treatment_nomenclature_suggestion_detail">%1$s · %2$s · %3$s</string>
+    <string name="add_treatment_quantity_label">Cantitate (ex. 2 comprimate)</string>
+    <string name="add_treatment_form_label">Formă (ex. comprimat)</string>
+    <string name="add_treatment_indication_label">Pentru ce (opțional)</string>
+    <string name="add_treatment_instructions_label">Instrucțiuni (opțional, ex. cu mâncare)</string>
+    <string name="treatment_detail_quantity">Cantitate: %1$s</string>
+    <string name="treatment_detail_form">Formă: %1$s</string>
+    <string name="treatment_detail_indication">Pentru: %1$s</string>
+    <string name="treatment_detail_instructions">Instrucțiuni: %1$s</string>
+    <string name="treatment_detail_history_taken_detail">%1$s · Luat %2$s</string>
+    <string name="add_treatment_times_hint">Atinge o oră ca să-i setezi o cantitate proprie (ex. cantitate diferită dimineața față de seara)</string>
+    <string name="add_treatment_slot_quantity_title">Cantitate la %1$s</string>
+    <string name="add_treatment_slot_quantity_hint">Implicit: cantitatea generală de mai sus</string>
+    <string name="treatment_detail_schedule_breakdown">Program: %1$s</string>
 
     <!-- Ecranul de detaliu tratament -->
     <string name="treatment_detail_loading">Se încarcă…</string>

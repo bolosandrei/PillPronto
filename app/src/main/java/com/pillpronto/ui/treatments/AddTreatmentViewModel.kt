@@ -4,13 +4,18 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.pillpronto.data.reminder.ReminderCoordinator
+import com.pillpronto.domain.model.DoseSlot
+import com.pillpronto.domain.model.NomenclatureEntry
 import com.pillpronto.domain.model.Treatment
 import com.pillpronto.domain.usecase.AddTreatmentUseCase
 import com.pillpronto.domain.usecase.DeleteTreatmentUseCase
 import com.pillpronto.domain.usecase.EditTreatmentUseCase
 import com.pillpronto.domain.usecase.GetTreatmentUseCase
+import com.pillpronto.domain.usecase.SearchNomenclatureUseCase
 import com.pillpronto.ui.navigation.Route
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
@@ -18,6 +23,14 @@ import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.LocalTime
 import javax.inject.Inject
+
+// Debounce pt. cautarea in Nomenclator la fiecare tastare — evita o interogare FTS la fiecare
+// litera introdusa.
+private const val SEARCH_DEBOUNCE_MS = 300L
+
+// Sub acest prag cautarea FTS e prea larga (potriviri prea multe, prea putin relevante) — asteptam
+// cel putin atatea caractere inainte sa interogam.
+private const val MIN_SEARCH_QUERY_LENGTH = 3
 
 // Plafon de bun-simt pentru numele medicamentului (evita input absurd de lung in UI/notificari).
 const val MAX_MEDICATION_NAME_LENGTH = 200
@@ -32,11 +45,21 @@ data class AddTreatmentUiState(
     val isEditing: Boolean = false,
     val name: String = "",
     val dosage: String = "",
-    val times: List<LocalTime> = listOf(LocalTime.of(8, 0), LocalTime.of(20, 0)),
+    // Ora + cantitate proprie opt. per slot (Faza 2a) — ex. "Nolpaza dimineata 1 compr., seara 2
+    // compr.". Un slot fara cantitate proprie mosteneste `cantitate` la generare (GenerateDosesUseCase).
+    val schedule: List<DoseSlot> = listOf(DoseSlot(LocalTime.of(8, 0)), DoseSlot(LocalTime.of(20, 0))),
     val startDate: LocalDate = LocalDate.now(),
     val endDate: LocalDate? = null,
     val asNeeded: Boolean = false,
+    // Campuri optionale (Faza 2a) — vezi domain/model/Treatment.kt pentru detalii.
+    val formaFarmaceutica: String = "",
+    val cantitate: String = "",
+    val indicatie: String = "",
+    val instructiuni: String = "",
     val error: AddTreatmentError? = null,
+    // Sugestii din Nomenclatorul ANMDMR pt. numele curent tastat (Faza 2a) — pur asistiv, NU
+    // obligatoriu: campurile raman complet editabile pt. medicamente din afara Nomenclatorului.
+    val suggestions: List<NomenclatureEntry> = emptyList(),
     val saved: Boolean = false,
     // Distinct de "saved": la stergere, tratamentul nu mai exista — navigarea trebuie sa
     // sara peste ecranul de detaliu (daca a fost punctul de intrare), nu doar sa faca un pas inapoi.
@@ -50,13 +73,16 @@ class AddTreatmentViewModel @Inject constructor(
     private val editTreatment: EditTreatmentUseCase,
     private val getTreatment: GetTreatmentUseCase,
     private val deleteTreatment: DeleteTreatmentUseCase,
-    private val reminderCoordinator: ReminderCoordinator
+    private val reminderCoordinator: ReminderCoordinator,
+    private val searchNomenclature: SearchNomenclatureUseCase
 ) : ViewModel() {
 
     private val treatmentId: Long = savedStateHandle.get<Long>(Route.AddEditTreatment.ARG) ?: -1L
 
     private val _state = MutableStateFlow(AddTreatmentUiState())
     val state = _state.asStateFlow()
+
+    private var searchJob: Job? = null
 
     init {
         if (treatmentId > 0) {
@@ -67,10 +93,14 @@ class AddTreatmentViewModel @Inject constructor(
                             isEditing = true,
                             name = t.medicationName,
                             dosage = t.dosage,
-                            times = t.times,
+                            schedule = t.schedule,
                             startDate = t.startDate,
                             endDate = t.endDate,
-                            asNeeded = t.asNeeded
+                            asNeeded = t.asNeeded,
+                            formaFarmaceutica = t.formaFarmaceutica,
+                            cantitate = t.cantitate,
+                            indicatie = t.indicatie,
+                            instructiuni = t.instructiuni
                         )
                     }
                 }
@@ -78,17 +108,58 @@ class AddTreatmentViewModel @Inject constructor(
         }
     }
 
-    fun onName(v: String) = _state.update { it.copy(name = v) }
+    fun onName(v: String) {
+        _state.update { it.copy(name = v) }
+        searchJob?.cancel()
+        if (v.trim().length < MIN_SEARCH_QUERY_LENGTH) {
+            _state.update { it.copy(suggestions = emptyList()) }
+            return
+        }
+        searchJob = viewModelScope.launch {
+            delay(SEARCH_DEBOUNCE_MS)
+            val results = searchNomenclature(v)
+            // Raspunsul poate ajunge dupa ce userul a mai tastat/sters — verificam ca inca
+            // corespunde textului curent inainte sa actualizam sugestiile.
+            if (_state.value.name == v) _state.update { it.copy(suggestions = results) }
+        }
+    }
+
+    /** Pre-completeaza nume+dozaj+forma din intrarea aleasa, dar campurile raman complet
+     * editabile — nu blocheaza introducerea libera pt. medicamente din afara Nomenclatorului. */
+    fun onSuggestionPicked(entry: NomenclatureEntry) {
+        searchJob?.cancel()
+        _state.update { s ->
+            s.copy(
+                name = entry.denumireComerciala,
+                dosage = entry.concentratie.ifBlank { s.dosage },
+                formaFarmaceutica = entry.formaFarmaceutica.ifBlank { s.formaFarmaceutica },
+                suggestions = emptyList()
+            )
+        }
+    }
+
+    fun dismissSuggestions() = _state.update { it.copy(suggestions = emptyList()) }
+
     fun onDosage(v: String) = _state.update { it.copy(dosage = v) }
+    fun onFormaFarmaceutica(v: String) = _state.update { it.copy(formaFarmaceutica = v) }
+    fun onCantitate(v: String) = _state.update { it.copy(cantitate = v) }
+    fun onIndicatie(v: String) = _state.update { it.copy(indicatie = v) }
+    fun onInstructiuni(v: String) = _state.update { it.copy(instructiuni = v) }
     fun onStartDate(d: LocalDate) = _state.update { it.copy(startDate = d) }
     fun onEndDate(d: LocalDate?) = _state.update { it.copy(endDate = d) }
     fun onAsNeededToggle(v: Boolean) = _state.update { it.copy(asNeeded = v) }
 
     fun addTime(time: LocalTime) = _state.update { s ->
-        if (s.times.contains(time)) s else s.copy(times = (s.times + time).sorted())
+        if (s.schedule.any { it.time == time }) s
+        else s.copy(schedule = (s.schedule + DoseSlot(time)).sortedBy { it.time })
     }
 
-    fun removeTime(time: LocalTime) = _state.update { it.copy(times = it.times - time) }
+    fun removeTime(time: LocalTime) = _state.update { it.copy(schedule = it.schedule.filter { slot -> slot.time != time }) }
+
+    /** Cantitatea proprie a unui slot — goala inseamna "mosteneste `cantitate` (cea generala)". */
+    fun onSlotCantitate(time: LocalTime, cantitate: String) = _state.update { s ->
+        s.copy(schedule = s.schedule.map { if (it.time == time) it.copy(cantitate = cantitate) else it })
+    }
 
     fun save() {
         val s = _state.value
@@ -98,7 +169,7 @@ class AddTreatmentViewModel @Inject constructor(
             _state.update { it.copy(error = AddTreatmentError.NAME_TOO_LONG) }
             return
         }
-        if (!s.asNeeded && s.times.isEmpty()) {
+        if (!s.asNeeded && s.schedule.isEmpty()) {
             _state.update { it.copy(error = AddTreatmentError.NO_TIMES) }; return
         }
         if (s.endDate != null && s.endDate.isBefore(s.startDate)) {
@@ -111,10 +182,14 @@ class AddTreatmentViewModel @Inject constructor(
                     id = if (s.isEditing) treatmentId else 0L,
                     medicationName = name,
                     dosage = s.dosage.trim().ifBlank { "1 doză" },
-                    times = if (s.asNeeded) emptyList() else s.times,
+                    schedule = if (s.asNeeded) emptyList() else s.schedule,
                     startDate = s.startDate,
                     endDate = s.endDate,
-                    asNeeded = s.asNeeded
+                    asNeeded = s.asNeeded,
+                    formaFarmaceutica = s.formaFarmaceutica.trim(),
+                    cantitate = s.cantitate.trim(),
+                    indicatie = s.indicatie.trim(),
+                    instructiuni = s.instructiuni.trim()
                 )
                 if (s.isEditing) {
                     reminderCoordinator.cancelFutureFor(treatmentId)

@@ -156,10 +156,15 @@ private fun TreatmentEntity.toDto(patientProfileId: String) = TreatmentDto(
     medicationName = medicationName,
     dosage = dosage,
     timesCsv = timesCsv,
+    slotCantitateCsv = slotCantitateCsv,
     startDate = startDate,
     endDate = endDate,
     active = active,
     asNeeded = asNeeded,
+    formaFarmaceutica = formaFarmaceutica,
+    cantitate = cantitate,
+    indicatie = indicatie,
+    instructiuni = instructiuni,
     updatedAt = updatedAt.toIsoInstant()
 )
 
@@ -169,10 +174,15 @@ private fun TreatmentDto.toEntity(localId: Long, patientProfileId: String) = Tre
     medicationName = medicationName,
     dosage = dosage,
     timesCsv = timesCsv,
+    slotCantitateCsv = slotCantitateCsv,
     startDate = startDate,
     endDate = endDate,
     active = active,
     asNeeded = asNeeded,
+    formaFarmaceutica = formaFarmaceutica,
+    cantitate = cantitate,
+    indicatie = indicatie,
+    instructiuni = instructiuni,
     remoteId = id,
     updatedAt = updatedAt.isoInstantToEpochMillis(),
     dirty = false
@@ -185,6 +195,7 @@ private fun DoseSyncView.toDto() = DoseLogDto(
     status = dose.status,
     takenAt = dose.takenAt,
     isAsNeeded = dose.isAsNeeded,
+    cantitate = dose.cantitate,
     updatedAt = dose.updatedAt.toIsoInstant()
 )
 
@@ -196,6 +207,7 @@ private fun DoseLogDto.toEntity(localId: Long, localTreatmentId: Long, patientPr
     status = status,
     takenAt = takenAt,
     isAsNeeded = isAsNeeded,
+    cantitate = cantitate,
     remoteId = id,
     updatedAt = updatedAt.isoInstantToEpochMillis(),
     dirty = false

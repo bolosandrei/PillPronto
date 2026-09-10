@@ -15,9 +15,15 @@ data class TreatmentDto(
     @SerialName("medication_name") val medicationName: String,
     val dosage: String,
     @SerialName("times_csv") val timesCsv: String,
+    @SerialName("slot_cantitate_csv") val slotCantitateCsv: String = "",
     @SerialName("start_date") val startDate: String,
     @SerialName("end_date") val endDate: String? = null,
     val active: Boolean,
     @SerialName("as_needed") val asNeeded: Boolean,
+    // --- campuri optionale (Faza 2a, migrarea 0008) ---
+    @SerialName("forma_farmaceutica") val formaFarmaceutica: String = "",
+    val cantitate: String = "",
+    val indicatie: String = "",
+    val instructiuni: String = "",
     @SerialName("updated_at") val updatedAt: String
 )

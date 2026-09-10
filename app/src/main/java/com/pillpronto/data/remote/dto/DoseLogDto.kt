@@ -18,5 +18,6 @@ data class DoseLogDto(
     val status: String,
     @SerialName("taken_at") val takenAt: String? = null,
     @SerialName("is_as_needed") val isAsNeeded: Boolean,
+    val cantitate: String = "",
     @SerialName("updated_at") val updatedAt: String
 )

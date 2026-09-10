@@ -1,5 +1,6 @@
 package com.pillpronto.data.repository
 
+import com.pillpronto.data.mapper.decodeSchedule
 import com.pillpronto.data.remote.dto.DoseLogDto
 import com.pillpronto.data.remote.dto.TreatmentDto
 import com.pillpronto.data.sync.SyncRemoteDataSource
@@ -12,11 +13,7 @@ import com.pillpronto.domain.model.Treatment
 import com.pillpronto.domain.repository.LinkedPatientDataRepository
 import java.time.LocalDate
 import java.time.LocalDateTime
-import java.time.LocalTime
-import java.time.format.DateTimeFormatter
 import javax.inject.Inject
-
-private val TIME_FMT: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
 
 class LinkedPatientDataRepositoryImpl @Inject constructor(
     private val remoteDataSource: SyncRemoteDataSource
@@ -36,11 +33,15 @@ class LinkedPatientDataRepositoryImpl @Inject constructor(
     private fun TreatmentDto.toDomain(): Treatment = Treatment(
         medicationName = medicationName,
         dosage = dosage,
-        times = timesCsv.split(",").filter { it.isNotBlank() }.map { LocalTime.parse(it, TIME_FMT) },
+        schedule = decodeSchedule(timesCsv, slotCantitateCsv),
         startDate = LocalDate.parse(startDate),
         endDate = endDate?.let { LocalDate.parse(it) },
         active = active,
-        asNeeded = asNeeded
+        asNeeded = asNeeded,
+        formaFarmaceutica = formaFarmaceutica,
+        cantitate = cantitate,
+        indicatie = indicatie,
+        instructiuni = instructiuni
     )
 
     private fun DoseLogDto.toDomain(): DoseLog = DoseLog(
@@ -48,6 +49,7 @@ class LinkedPatientDataRepositoryImpl @Inject constructor(
         scheduledAt = LocalDateTime.parse(scheduledAt),
         status = DoseStatus.valueOf(status),
         takenAt = takenAt?.let { LocalDateTime.parse(it) },
-        isAsNeeded = isAsNeeded
+        isAsNeeded = isAsNeeded,
+        cantitate = cantitate
     )
 }
