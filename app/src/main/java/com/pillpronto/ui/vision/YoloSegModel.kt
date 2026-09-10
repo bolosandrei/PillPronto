@@ -3,7 +3,6 @@ package com.pillpronto.ui.vision
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
-import android.util.Log
 import com.google.ai.edge.litert.Accelerator
 import com.google.ai.edge.litert.CompiledModel
 import com.pillpronto.domain.vision.COCO_LABELS
@@ -13,7 +12,6 @@ import com.pillpronto.domain.vision.LetterboxMapper
 import com.pillpronto.domain.vision.YoloOutputDecoder
 import kotlin.math.min
 
-private const val TAG = "YoloSegModel"
 private const val MODEL_ASSET_NAME = "yolo11n_seg.tflite"
 private const val MODEL_INPUT_SIZE = 640
 private const val NUM_ANCHORS = 8400 // (80x80)+(40x40)+(20x20) grid-uri, standard YOLO la input 640
@@ -42,30 +40,20 @@ class YoloSegModel(context: Context) : AutoCloseable {
         CompiledModel.Options(Accelerator.CPU)
     )
 
-    private var loggedOutputShape = false
-
     fun detect(bitmap: Bitmap): List<Detection> {
         val (inputBitmap, letterboxInfo) = letterbox(bitmap)
 
         val inputBuffers = model.createInputBuffers()
         val outputBuffers = model.createOutputBuffers()
 
-        inputBuffers[0].writeFloat(bitmapToNormalizedFloatArray(inputBitmap))
+        inputBuffers[0].writeFloat(bitmapToNchwFloatArray(inputBitmap))
         model.run(inputBuffers, outputBuffers)
         val rawOutput = outputBuffers[0].readFloat()
 
-        if (!loggedOutputShape) {
-            // De verificat o singura data, empiric: 116*8400=974400 pt. 80 clase COCO + 4 cutie.
-            // Daca exportul difera, marimea aici confirma channel count-ul real.
-            Log.w(TAG, "Detection output tensor size=${rawOutput.size} (asteptat 116*$NUM_ANCHORS=${116 * NUM_ANCHORS})")
-            loggedOutputShape = true
-        }
-
-        val numClasses = COCO_LABELS.size
         val modelSpaceDetections = YoloOutputDecoder.decode(
             raw = rawOutput,
             numAnchors = NUM_ANCHORS,
-            numClasses = numClasses,
+            numClasses = COCO_LABELS.size,
             labels = COCO_LABELS
         )
         return LetterboxMapper.mapToOriginalImage(modelSpaceDetections, letterboxInfo)
@@ -103,18 +91,23 @@ class YoloSegModel(context: Context) : AutoCloseable {
         return padded to info
     }
 
-    /** NHWC, RGB, normalizat [0,1] — layout standard de input pt. exportul TFLite float32
-     * Ultralytics (`img / 255.0`). */
-    private fun bitmapToNormalizedFloatArray(bitmap: Bitmap): FloatArray {
+    /** NCHW (planuri separate R/G/B, NU interleaved per pixel), normalizat [0,1] — layout REAL al
+     * acestui export (confirmat empiric, 2026-09-11: `interpreter.get_input_details()` a aratat
+     * `shape=[1,3,640,640]`, NU `[1,640,640,3]` cum presupune convenția TFLite "standard" — quirk
+     * al exportului `onnx2tf` folosit de Ultralytics, care poate păstra layout-ul NCHW nativ
+     * PyTorch. Bug real găsit prin comparație cu Ultralytics rulând pe ACEEAȘI imagine (Colab):
+     * încredere >0.85 acolo vs. <0.01 cu preprocesarea NHWC inițială — vezi CLAUDE.md. */
+    private fun bitmapToNchwFloatArray(bitmap: Bitmap): FloatArray {
         val pixels = IntArray(MODEL_INPUT_SIZE * MODEL_INPUT_SIZE)
         bitmap.getPixels(pixels, 0, MODEL_INPUT_SIZE, 0, 0, MODEL_INPUT_SIZE, MODEL_INPUT_SIZE)
 
-        val floatArray = FloatArray(pixels.size * 3)
+        val planeSize = MODEL_INPUT_SIZE * MODEL_INPUT_SIZE
+        val floatArray = FloatArray(planeSize * 3)
         for (i in pixels.indices) {
             val pixel = pixels[i]
-            floatArray[i * 3] = ((pixel shr 16) and 0xFF) / 255f
-            floatArray[i * 3 + 1] = ((pixel shr 8) and 0xFF) / 255f
-            floatArray[i * 3 + 2] = (pixel and 0xFF) / 255f
+            floatArray[i] = ((pixel shr 16) and 0xFF) / 255f // plan R
+            floatArray[planeSize + i] = ((pixel shr 8) and 0xFF) / 255f // plan G
+            floatArray[planeSize * 2 + i] = (pixel and 0xFF) / 255f // plan B
         }
         return floatArray
     }

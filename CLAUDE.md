@@ -557,18 +557,14 @@ exactă de segmentare, la această etapă.
   scrie partea Android — toate trec.
 - **`ui/vision/YoloSegModel.kt`** — glue Android (Context/Bitmap/LiteRT), documentat ca excepție
   de la separarea strictă ui/domain (precedent `ScanBarcode.kt`/`GoogleSignInHelper.kt`, secțiunea
-  4): încarcă modelul din assets (`yolo11n_seg.tflite`, nume fix), letterbox-resize la 640×640,
-  normalizare NHWC RGB [0,1], `model.run()`, decodare + un `Log.w` o singură dată cu dimensiunea
-  reală a tensorului de ieșire (verificare empirică a presupunerii `[1,116,8400]` = 4 cutie + 80
-  clase COCO, layout posibil să difere ușor între exporturi Ultralytics).
+  4): încarcă modelul din assets (`yolo11n_seg.tflite`, nume fix, **comis în repo** — 11.8MB, la
+  fel ca `nomenclator.tsv.gz`/`gtin_mappings_seed.tsv`, altfel o clonă curată n-ar avea feature-ul
+  funcțional fără pasul manual de export), letterbox-resize la 640×640, `model.run()`, decodare.
 - **`ui/vision/DetectionOverlay.kt`** — `Canvas` Compose, dreptunghiuri gri (culoarea `DoseUnknown`
   din temă — exact reutilizarea anticipată în secțiunea 3 pt. AR) + etichetă (clasă COCO +
   confidence, util pt. validare vizuală pe un ecran oricum "experimental"). Mapare cu formulă
-  **crop-to-fill** (`scale = max(...)`) — presupune că `CameraXViewfinder` umple ecranul prin crop
-  (ca vechiul `PreviewView.FILL_CENTER`); API-ul Compose nou dedicat acestui scop
-  (`CoordinateTransformer` din `androidx.camera.compose`) nu avea documentație publică suficient de
-  completă la research pt. o folosire sigură — **de confirmat empiric pe device** (dacă e de fapt
-  letterbox, o singură schimbare: `min` în loc de `max`).
+  **crop-to-fill** (`scale = max(...)`) — **confirmată corectă empiric pe device** (dreptunghiurile
+  se aliniază corect cu obiectele reale).
 - **`ui/vision/CameraPreview.kt`** — extins cu un al doilea use case `ImageAnalysis` opțional
   (`RGBA_8888` + `imageProxy.toBitmap()`, evită conversia manuală YUV; `STRATEGY_KEEP_ONLY_LATEST`
   = backpressure automat, fără throttling manual), legat alături de `Preview` în același
@@ -578,23 +574,47 @@ exactă de segmentare, la această etapă.
   nu există încă în assets) + `Executor` dedicat pt. analiza de frame-uri (NU main thread —
   `CompiledModel.run()` e blocant). Rotește bitmap-ul cu `imageInfo.rotationDegrees` înainte de
   inferență (`ImageAnalysis` nu pre-rotește bufferul).
-- **Limitare reală de mediu, găsită live la research/testare (2026-09-11)**: exportul Ultralytics
-  la LiteRT **nu rulează pe Windows nativ** — `AssertionError: LiteRT export only supported on
-  Linux x86 and macOS`, restricție hard-codată în unealta de export (fișierul `.tflite` rezultat
-  rulează normal pe orice platformă, inclusiv Android — doar procesul de export cere Linux/macOS).
-  `scripts/export-yolo-seg-model.py` documentează 2 alternative (Google Colab, recomandat — zero
-  instalare locală; WSL2 local). Utilizatorul a ales WSL2 — instalarea unei distribuții reale
-  (Ubuntu, mediul avea doar `docker-desktop`, minimal/nepotrivit) cere setup interactiv de
-  user/parolă la primul run, **nefezabil din acest mediu Claude Code** — pas lăsat manual
-  utilizatorului, într-un terminal propriu.
-- **De făcut, rămas la utilizator**: instalează Ubuntu via WSL2 (`wsl --install -d Ubuntu`, într-un
-  terminal Windows propriu, NU prin Claude), apoi rulează în terminalul Ubuntu: venv + `pip install
-  ultralytics` + `python scripts/export-yolo-seg-model.py` (cale proiect montată la
-  `/mnt/b/Facultate/Master/Disertatie/PillPronto App`) → copiază `.tflite`-ul rezultat ca
-  `app/src/main/assets/yolo11n_seg.tflite` (nume exact). Apoi testare live pe device: din ecranul
-  „Scanare vizuală" (deja pe main din 3a-i) — verifică apariția dreptunghiurilor gri + etichete
-  peste obiecte reale, aliniere corectă (confirmă/infirmă ipoteza crop-to-fill), performanță
-  vizuală, intrare/ieșire repetată pe ecran.
+- **Limitare reală de mediu, găsită live (2026-09-11)**: exportul Ultralytics la LiteRT **nu
+  rulează pe Windows nativ** — `AssertionError: LiteRT export only supported on Linux x86 and
+  macOS`, restricție hard-codată în unealta de export (fișierul `.tflite` rezultat rulează normal
+  pe orice platformă, inclusiv Android — doar procesul de export cere Linux/macOS). Utilizatorul a
+  folosit **Google Colab** (zero instalare locală) — funcțional, `.tflite` exportat cu succes.
+  `scripts/export-yolo-seg-model.py` documentează ambele alternative (Colab + WSL2, dacă cineva
+  preferă local pe viitor).
+- **Bug real găsit + fixat prin testare live pe device (2026-09-11) — cel mai semnificativ din
+  această fază**: prima rulare pe device arăta feed-ul de cameră, dar NICIO detecție, niciodată,
+  indiferent de obiect. Diagnosticat prin logging temporar iterativ direct pe device (scor maxim
+  brut per frame, min/max global pe tensor, max per canal din cele 116, salvare pe disk +
+  inspecție vizuală a imaginii preprocesate) — toate arătau o imagine de intrare vizual perfect
+  corectă (letterbox, rotație, culori), dar scoruri de clasă mereu aproape de zero (niciodată
+  peste prag). **Root cause găsit prin comparație directă cu Ultralytics** (rulat în Colab pe
+  ACEEAȘI imagine extrasă de pe device, `adb pull` + `SendUserFile`): Ultralytics obținea
+  încredere >0.85 pe acea imagine, deci modelul + imaginea erau amândouă corecte — bug-ul era
+  exclusiv în codul de preprocesare Kotlin. Confirmat citind direct din codul sursă Ultralytics
+  (`nn/modules/head.py`, `Segment._inference`) că ordinea canalelor tensorului de ieșire e
+  `[cutie(4), scoruri clasă(80, sigmoid deja aplicat la export), coeficienți mască(32)]` — exact ce
+  implementasem — deci decodarea (`YoloOutputDecoder`) era corectă de la bun început. Bug-ul real:
+  `interpreter.get_input_details()` (rulat de user în Colab, pe fișierul `.tflite` real) a arătat
+  `shape=[1, 3, 640, 640]` — **input NCHW (planuri R/G/B separate), NU NHWC (`[1,640,640,3]`,
+  RGB interleaved per pixel) cum presupusese `bitmapToNormalizedFloatArray`** — quirk al
+  exportului `onnx2tf` folosit de Ultralytics pt. TFLite, care poate păstra layout-ul nativ
+  PyTorch (NCHW) în loc de convenția TF "standard" (NHWC). Array-ul avea dimensiunea corectă
+  (1228800 floats), deci nu arunca nicio eroare — doar conținutul era complet amestecat spațial
+  pentru rețea. Fix: `bitmapToNchwFloatArray` (redenumită), scrie 3 planuri separate (tot R, apoi
+  tot G, apoi tot B) în loc de interleaved per pixel. **Retestat pe device — confirmat funcțional**:
+  dreptunghiuri gri + etichetă corectă pe obiecte uzuale (COCO). Pe cutia de medicamente NU apare
+  nimic — **comportament AȘTEPTAT, nu bug**: COCO (clasele acestui model generic) nu are o clasă
+  „cutie de medicamente" — exact motivul pt. care Faza 4 (embeddings + enrollment) există, acest
+  model preantrenat era doar pt. validarea pipeline-ului tehnic, nu pt. recunoaștere reală.
+  **Lecție reținută, adăugată la convenția de debugging a proiectului**: la un model ML "care
+  rulează dar nu produce rezultate corecte" (nu crapă, doar iese greșit), comparația directă cu
+  rularea de referință a bibliotecii originale (Ultralytics/PyTorch) pe EXACT aceeași imagine
+  extrasă din pipeline e mult mai eficientă decât ghicitul succesiv de ipoteze — a confirmat rapid
+  că problema era 100% în preprocesarea Kotlin, nu în model/imagine, înainte de a găsi bug-ul exact.
+- **PR #13 deschis** (`feature/faza3a-ii-litert-detect` → `main`), **nemergeuit încă** — la cererea
+  userului, merge doar cu feature-uri complete/testate confirmat pe device (acest caz), nu
+  automat. De văzut la sesiunea viitoare dacă se dă merge sau se continuă direct cu 3a-iii pe
+  acest branch.
 
 ---
 
@@ -639,10 +659,10 @@ exactă de segmentare, la această etapă.
   (cu fallback fuzzy) ca metode de identificare la această etapă.
 - **Faza 3a-i — CameraX feed live + permisiune:** ✅ **complet implementată, mergeuită pe `main`**
   (PR #12) — vezi secțiunea 7.
-- **Faza 3a-ii — model LiteRT (YOLO-seg) + decodare cutii + overlay:** ✅ **implementată, build+teste
-  trec** — pe branch `feature/faza3a-ii-litert-detect`, necomisă/nemergeuită încă push/PR. De testat
-  live pe device (blocat pe exportul `.tflite`, rămas la utilizator — vezi secțiunea 7). Faza
-  3a-iii (măști de segmentare) — viitor, plan mode separat.
+- **Faza 3a-ii — model LiteRT (YOLO-seg) + decodare cutii + overlay:** ✅ **implementată, testată
+  live pe device, confirmată funcțională** (bug real NCHW vs. NHWC găsit + fixat — vezi secțiunea
+  7) — **PR #13 deschis**, nemergeuit încă (merge doar la cerere explicită). Faza 3a-iii (măști de
+  segmentare) — viitor, plan mode separat.
 - **Faza 3 (restul) — Viziune:** detecție/segmentare multi-obiect pe cadru de ansamblu (după 3a-ii).
 - **Faza 4 — Recunoaștere & enrollment:** model de **embeddings** (metric learning), galerie nearest-neighbor, enrollment multi-view + top-k candidați, **colorare contur** după statusul dozei.
 - **Faza 5 — Tracking & AR:** ByteTrack + netezire, ancorare dinamică a panoului de info, buton show/hide; ancore ARCore pentru scanare progresivă.
