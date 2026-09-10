@@ -23,7 +23,10 @@ data class Treatment(
     val formaFarmaceutica: String = "",  // ex. "comprimat" — pre-completata din Nomenclator daca userul alege o sugestie
     val cantitate: String = "",          // ex. "2 comprimate" — implicit, folosit cand un slot din schedule nu are cantitate proprie
     val indicatie: String = "",          // motivul tratamentului, ex. "hipertensiune"
-    val instructiuni: String = ""        // ex. "cu mancare"
+    val instructiuni: String = "",       // ex. "cu mancare"
+    // Cod CIM din Nomenclatorul ANMDMR ales pt. acest tratament — manual (cautare text) sau prin
+    // scanare GS1 DataMatrix (Faza 2b-i). Gol daca tratamentul nu a fost asociat cu nicio intrare.
+    val codCim: String = ""
 ) {
     /** Derivat din `schedule` — pentru codul care doar CITESTE orele (validare, afisare), fara sa
      * aiba nevoie de cantitatea per slot. Nu e parametru de constructor — orice loc care

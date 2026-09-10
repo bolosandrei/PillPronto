@@ -33,6 +33,9 @@ class NomenclatureRepositoryImpl @Inject constructor(
         return ordered.distinctBy { Triple(it.denumireComerciala, it.concentratie, it.formaFarmaceutica) }
     }
 
+    override suspend fun getByCodCim(codCim: String): NomenclatureEntry? =
+        dao.getByCodCims(listOf(codCim)).firstOrNull()?.toDomain()
+
     /** Fiecare token din query devine o cautare de prefix ("aspir" -> "aspir*"), tokenurile se
      * combina implicit prin AND in FTS4 — userul poate scrie "aspir 500" si gaseste potriviri
      * care contin ambele prefixe, indiferent de ordine. */

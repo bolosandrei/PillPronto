@@ -16,6 +16,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.foundation.clickable
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
@@ -23,6 +24,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.InputChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -41,6 +43,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -70,6 +73,7 @@ fun AddTreatmentScreen(
     vm: AddTreatmentViewModel = hiltViewModel()
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
+    val context = LocalContext.current
     LaunchedEffect(state.saved) { if (state.saved) onDone(state.deleted) }
 
     var showTimePicker by remember { mutableStateOf(false) }
@@ -92,7 +96,30 @@ fun AddTreatmentScreen(
             Modifier.fillMaxSize().padding(padding).padding(innerPadding).padding(16.dp).verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            OutlinedTextField(state.name, vm::onName, label = { Text(stringResource(R.string.add_treatment_name_label)) }, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(
+                state.name, vm::onName,
+                label = { Text(stringResource(R.string.add_treatment_name_label)) },
+                trailingIcon = {
+                    IconButton(onClick = { scanMedicationBarcode(context, vm::onBarcodeScanned) }) {
+                        Icon(Icons.Filled.QrCodeScanner, contentDescription = stringResource(R.string.add_treatment_scan_button))
+                    }
+                },
+                modifier = Modifier.fillMaxWidth()
+            )
+            if (state.pendingGtin != null) {
+                Text(
+                    stringResource(R.string.add_treatment_scan_pending_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.tertiary
+                )
+            }
+            if (state.scanUnrecognized) {
+                Text(
+                    stringResource(R.string.add_treatment_scan_unrecognized),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
             if (state.suggestions.isNotEmpty()) {
                 NomenclatureSuggestions(
                     suggestions = state.suggestions,

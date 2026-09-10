@@ -26,6 +26,10 @@ data class TreatmentEntity(
     val cantitate: String = "",
     val indicatie: String = "",
     val instructiuni: String = "",
+    // Cod CIM din Nomenclatorul ANMDMR ales pt. acest tratament (manual sau prin scanare GS1
+    // DataMatrix, Faza 2b-i) — trasabilitate, NU e folosit la afisare (numele/dozajul raman
+    // sursa de adevar). Gol daca tratamentul nu a fost asociat cu nicio intrare din Nomenclator.
+    val codCim: String = "",
     // --- sync Room <-> Supabase (Faza 1.5c, vezi data/sync/SyncManager.kt) ---
     val remoteId: String,          // UUID stabil, generat client-side o singura data la creare
     val updatedAt: Long,           // epoch millis, actualizat la fiecare scriere locala

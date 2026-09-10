@@ -53,6 +53,9 @@
     <string name="add_treatment_title_edit">Editează tratament</string>
     <string name="add_treatment_title_new">Adaugă tratament</string>
     <string name="add_treatment_name_label">Medicament</string>
+    <string name="add_treatment_scan_button">Scanează codul de pe cutie</string>
+    <string name="add_treatment_scan_pending_hint">Cod scanat necunoscut — alege medicamentul din sugestiile de mai jos ca să-l reții pentru data viitoare</string>
+    <string name="add_treatment_scan_unrecognized">Codul scanat nu a putut fi citit — încearcă din nou sau introdu manual</string>
     <string name="add_treatment_dosage_label">Dozaj (ex. 500 mg)</string>
     <string name="add_treatment_as_needed_title">La nevoie (fără orar fix)</string>
     <string name="add_treatment_as_needed_desc">Fără remindere; înregistrezi o doză oricând, din lista de tratamente.</string>

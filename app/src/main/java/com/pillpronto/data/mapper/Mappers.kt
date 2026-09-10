@@ -64,6 +64,7 @@ fun Treatment.toEntity(
         cantitate = cantitate,
         indicatie = indicatie,
         instructiuni = instructiuni,
+        codCim = codCim,
         remoteId = remoteId,
         updatedAt = updatedAt,
         dirty = dirty
@@ -82,7 +83,8 @@ fun TreatmentEntity.toDomain(): Treatment = Treatment(
     formaFarmaceutica = formaFarmaceutica,
     cantitate = cantitate,
     indicatie = indicatie,
-    instructiuni = instructiuni
+    instructiuni = instructiuni,
+    codCim = codCim
 )
 
 // --- DoseLog ---

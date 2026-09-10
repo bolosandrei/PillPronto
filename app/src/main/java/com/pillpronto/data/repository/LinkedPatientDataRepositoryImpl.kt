@@ -41,7 +41,8 @@ class LinkedPatientDataRepositoryImpl @Inject constructor(
         formaFarmaceutica = formaFarmaceutica,
         cantitate = cantitate,
         indicatie = indicatie,
-        instructiuni = instructiuni
+        instructiuni = instructiuni,
+        codCim = codCim
     )
 
     private fun DoseLogDto.toDomain(): DoseLog = DoseLog(

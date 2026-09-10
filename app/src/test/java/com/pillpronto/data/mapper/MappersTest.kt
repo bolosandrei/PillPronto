@@ -25,7 +25,8 @@ class MappersTest {
             formaFarmaceutica = "COMPR. FILM.",
             cantitate = "2 comprimate",
             indicatie = "infecție respiratorie",
-            instructiuni = "cu mâncare"
+            instructiuni = "cu mâncare",
+            codCim = "W43451001"
         )
         val restored = original.toEntity("test-patient").toDomain()
         assertEquals(original.medicationName, restored.medicationName)
@@ -37,6 +38,7 @@ class MappersTest {
         assertEquals(original.cantitate, restored.cantitate)
         assertEquals(original.indicatie, restored.indicatie)
         assertEquals(original.instructiuni, restored.instructiuni)
+        assertEquals(original.codCim, restored.codCim)
     }
 
     @Test

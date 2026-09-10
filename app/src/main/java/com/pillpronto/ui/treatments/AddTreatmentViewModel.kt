@@ -8,9 +8,11 @@ import com.pillpronto.domain.model.DoseSlot
 import com.pillpronto.domain.model.NomenclatureEntry
 import com.pillpronto.domain.model.Treatment
 import com.pillpronto.domain.usecase.AddTreatmentUseCase
+import com.pillpronto.domain.usecase.ConfirmGtinMappingUseCase
 import com.pillpronto.domain.usecase.DeleteTreatmentUseCase
 import com.pillpronto.domain.usecase.EditTreatmentUseCase
 import com.pillpronto.domain.usecase.GetTreatmentUseCase
+import com.pillpronto.domain.usecase.LookupTreatmentByGtinUseCase
 import com.pillpronto.domain.usecase.SearchNomenclatureUseCase
 import com.pillpronto.ui.navigation.Route
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -56,6 +58,16 @@ data class AddTreatmentUiState(
     val cantitate: String = "",
     val indicatie: String = "",
     val instructiuni: String = "",
+    // Cod CIM al intrarii Nomenclator asociate (manual sau prin scan reusit, Faza 2b-i) —
+    // trasabilitate, vezi Treatment.codCim.
+    val codCim: String = "",
+    // GTIN scanat care n-are inca o mapare in gtin_mappings — asteapta alegerea manuala a userului
+    // din sugestii, moment in care se invata maparea (vezi onSuggestionPicked). null = niciun scan
+    // in asteptare.
+    val pendingGtin: String? = null,
+    // Ultimul scan citit dar neparsabil (format nesuportat / payload GS1 fara niciun camp
+    // cunoscut) — informativ, nu blocheaza salvarea.
+    val scanUnrecognized: Boolean = false,
     val error: AddTreatmentError? = null,
     // Sugestii din Nomenclatorul ANMDMR pt. numele curent tastat (Faza 2a) — pur asistiv, NU
     // obligatoriu: campurile raman complet editabile pt. medicamente din afara Nomenclatorului.
@@ -74,7 +86,9 @@ class AddTreatmentViewModel @Inject constructor(
     private val getTreatment: GetTreatmentUseCase,
     private val deleteTreatment: DeleteTreatmentUseCase,
     private val reminderCoordinator: ReminderCoordinator,
-    private val searchNomenclature: SearchNomenclatureUseCase
+    private val searchNomenclature: SearchNomenclatureUseCase,
+    private val lookupTreatmentByGtin: LookupTreatmentByGtinUseCase,
+    private val confirmGtinMapping: ConfirmGtinMappingUseCase
 ) : ViewModel() {
 
     private val treatmentId: Long = savedStateHandle.get<Long>(Route.AddEditTreatment.ARG) ?: -1L
@@ -100,7 +114,8 @@ class AddTreatmentViewModel @Inject constructor(
                             formaFarmaceutica = t.formaFarmaceutica,
                             cantitate = t.cantitate,
                             indicatie = t.indicatie,
-                            instructiuni = t.instructiuni
+                            instructiuni = t.instructiuni,
+                            codCim = t.codCim
                         )
                     }
                 }
@@ -124,17 +139,47 @@ class AddTreatmentViewModel @Inject constructor(
         }
     }
 
-    /** Pre-completeaza nume+dozaj+forma din intrarea aleasa, dar campurile raman complet
+    /** Pre-completeaza nume+dozaj+forma+codCim din intrarea aleasa, dar campurile raman complet
      * editabile — nu blocheaza introducerea libera pt. medicamente din afara Nomenclatorului. */
-    fun onSuggestionPicked(entry: NomenclatureEntry) {
+    private fun applySuggestion(entry: NomenclatureEntry) {
         searchJob?.cancel()
         _state.update { s ->
             s.copy(
                 name = entry.denumireComerciala,
                 dosage = entry.concentratie.ifBlank { s.dosage },
                 formaFarmaceutica = entry.formaFarmaceutica.ifBlank { s.formaFarmaceutica },
+                codCim = entry.codCim,
                 suggestions = emptyList()
             )
+        }
+    }
+
+    /** Alegere manuala a unei sugestii — daca exista un GTIN scanat "in asteptare" (scan anterior
+     * necunoscut), acum invatam maparea: data viitoare acelasi GTIN va fi recunoscut direct. */
+    fun onSuggestionPicked(entry: NomenclatureEntry) {
+        applySuggestion(entry)
+        _state.value.pendingGtin?.let { gtin ->
+            viewModelScope.launch { confirmGtinMapping(gtin, entry.codCim) }
+            _state.update { it.copy(pendingGtin = null) }
+        }
+    }
+
+    /** Rezultatul unui scan de pe cutie: gtin=null -> cod nerecunoscut/neparsabil. Altfel cautam
+     * maparea locala; hit -> pre-completam ca la o sugestie aleasa manual; miss -> retinem GTIN-ul
+     * "in asteptare", userul alege manual din sugestiile de mai jos (invatam maparea la acel moment). */
+    fun onBarcodeScanned(gtin: String?) {
+        if (gtin == null) {
+            _state.update { it.copy(scanUnrecognized = true) }
+            return
+        }
+        viewModelScope.launch {
+            val match = lookupTreatmentByGtin(gtin)
+            if (match != null) {
+                applySuggestion(match)
+                _state.update { it.copy(pendingGtin = null, scanUnrecognized = false) }
+            } else {
+                _state.update { it.copy(pendingGtin = gtin, scanUnrecognized = false) }
+            }
         }
     }
 
@@ -189,7 +234,8 @@ class AddTreatmentViewModel @Inject constructor(
                     formaFarmaceutica = s.formaFarmaceutica.trim(),
                     cantitate = s.cantitate.trim(),
                     indicatie = s.indicatie.trim(),
-                    instructiuni = s.instructiuni.trim()
+                    instructiuni = s.instructiuni.trim(),
+                    codCim = s.codCim
                 )
                 if (s.isEditing) {
                     reminderCoordinator.cancelFutureFor(treatmentId)
