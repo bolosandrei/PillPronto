@@ -76,10 +76,16 @@ fun AccountScreen(
         Modifier.fillMaxSize().padding(padding).padding(16.dp).verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        // Unealta locala (Faza 2b-i), independenta de cont — vizibila indiferent de starea de
-        // autentificare, spre deosebire de butoanele legate de conturi Supabase de mai jos.
-        OutlinedButton(onClick = onAssociateGtin, modifier = Modifier.fillMaxWidth()) {
-            Text(stringResource(R.string.account_associate_gtin_button))
+        // Vizibil DOAR pt. contribuitori de incredere (profiles.is_trusted_contributor, setat
+        // manual — vezi Profile.kt) — un user obisnuit nu are ce cauta aici: propriile lui
+        // mapari se invata oricum automat din fluxul de scanare al AddTreatmentScreen, iar acest
+        // ecran e gandit special pt. construirea rapida a catalogului PARTAJAT, la care doar
+        // contribuitorii de incredere pot scrie (RLS server-side, dar ascundem si butonul —
+        // altfel un user obisnuit ar vedea un buton care nu face nimic util pt. el).
+        if (state.profile?.isTrustedContributor == true) {
+            OutlinedButton(onClick = onAssociateGtin, modifier = Modifier.fillMaxWidth()) {
+                Text(stringResource(R.string.account_associate_gtin_button))
+            }
         }
 
         when (val session = state.sessionState) {

@@ -360,9 +360,11 @@ device. Testele instrumentate rămân de rulat de utilizator. Migrările `0010`/
     păstrate ca teste de regresie în `Gs1ParserTest` (GTIN e dată de produs public, nu personală).
     Retestat pe device după fix — **confirmat funcțional** de utilizator (scan → recunoaștere OK).
 - **`ui/gtinmapping/AssociateGtinScreen`+`ViewModel`** — ecran dedicat (buton „Asociere coduri
-  (GTIN)" în tab-ul Cont, vizibil indiferent de autentificare): scan → caută în Nomenclator →
-  alege → salvat → gata pt. următorul, **fără să creeze un tratament** (spre deosebire de fluxul
-  din `AddTreatmentScreen`). `NomenclatureSuggestions` extras din `AddTreatmentScreen.kt` în
+  (GTIN)" în tab-ul Cont, **vizibil DOAR pt. contribuitori de încredere** —
+  `state.profile?.isTrustedContributor == true`, gating adăugat după ce userul a semnalat că
+  butonul apărea și pe un cont netrusted): scan → caută în Nomenclator → alege → salvat → gata pt.
+  următorul, **fără să creeze un tratament** (spre deosebire de fluxul din `AddTreatmentScreen`,
+  disponibil tuturor). `NomenclatureSuggestions` extras din `AddTreatmentScreen.kt` în
   `core/ui/components/NomenclatureSuggestionsList.kt` (acum reutilizat din 2 ecrane).
 - **Tabel local `gtin_mappings`** (`PillProntoDatabase`, NU `NomenclatureDatabase` — acolo s-ar
   pierde la orice reimport al Nomenclatorului): GTIN scanat → Cod CIM, construit progresiv — la un
