@@ -421,14 +421,54 @@ device. Testele instrumentate rămân de rulat de utilizator. Migrările `0010`/
   `CaregiverAlertWorker`/`MissedDoseChecker`/`CaregiverAlertNotifier` deja existente. Se
   sincronizează (`expiryDate`, ca `codCim`) → migrarea `0012_treatment_expiry_date.sql`. Schema
   Room v7→v8.
-- **Faza 2b-ii** (următorul pas, separat intenționat): OCR ca fallback pt. cutii fără cod lizibil —
-  vezi secțiunea 8b.
 - **De făcut sesiunea viitoare**: userul rulează manual migrările `0010`, `0011`, `0012` (în
   ordine), se marchează contribuitor de încredere (SQL direct: `update profiles set
   is_trusted_contributor = true where id = '<uid>'`), testează pe device: confirmarea unei mapări
   + verificare apariție rând în `gtin_mappings` (Supabase Table Editor) + pull pe alt cont/device;
   scanarea unei cutii cu dată de expirare (culoare corectă în `AddTreatmentScreen`/
-  `TreatmentDetailScreen`). Apoi commit + push + PR + merge.
+  `TreatmentDetailScreen`); testarea OCR fallback (vezi mai jos, Faza 2b-ii). Apoi commit + push +
+  PR + merge.
+
+### Faza 2b-ii — OCR fallback pentru cutii fără cod lizibil (implementat — 2026-09-10)
+
+**⚠️ Necomis încă**, pe același branch `feature/faza2b-i-gs1-scan`, aceeași sesiune. Compilat +
+toate testele unitare trec local. **Neinstalat pe device** — telefonul s-a deconectat la finalul
+sesiunii, rămâne de testat live sesiunea viitoare.
+
+- Scop clarificat explicit cu userul (discuție despre cascada Viziune→OCR→cod 2D): **doar**
+  fallback pt. cutii cu cod absent/deteriorat dar text lizibil pe ambalaj — NU recunoaștere de
+  folie/pastilă fără cutie (asta rămâne exclusiv Faza 4, embeddings — o folie n-are niciodată cod
+  de bare, iar textul de pe ea e mult mai greu de citit prin OCR decât cel de pe cutie).
+- **Fără CameraX, fără dependență Document Scanner nouă** — o singură poză + OCR e suficient.
+  Intent implicit `ACTION_IMAGE_CAPTURE` către camera sistemului (`ActivityResultContracts.TakePicture()`),
+  cu `EXTRA_OUTPUT` printr-un `content://` URI — `FileProvider` deja configurat (Faza 1.5d),
+  extins cu un al doilea `cache-path` (`ocr_captures/`, distinct de `shared_images/`).
+  **Niciun `CAMERA` nou în manifest** (camera sistemului își gestionează propria permisiune),
+  **niciun `<queries>` nou** (`ACTION_IMAGE_CAPTURE` e exceptat de la package visibility Android 11+).
+- **Dependență nouă**: `com.google.mlkit:text-recognition:16.0.1` (model Latin, **bundled**, nu
+  `play-services-mlkit-text-recognition` — acela descarcă modelul separat, întârziere la prima
+  utilizare; bundled = funcționează offline imediat, consecvent cu restul aplicației).
+- **`ui/treatments/OcrCapture.kt`** — `isCameraAvailable` (verificare înainte de lansare, esec
+  tăcut dacă nu există aplicație cameră), `createOcrCaptureUri`, `recognizeText` (rulează
+  `TextRecognizer`, șterge fișierul temporar după, succes sau eșec), `bestCandidateLine` (funcție
+  pură, testabilă: prima linie nevidă ≥3 caractere din blocul recunoscut — euristică minimă, nu
+  parsare structurată; rezultatul rămâne editabil în UI).
+- **Integrare**: rezultatul OCR alimentează direct `AddTreatmentViewModel.onName` (deci debounce +
+  căutare Nomenclator + listă de sugestii deja existente, **zero UI nou de căutare**) — buton nou
+  în `AddTreatmentScreen`, mereu vizibil (nu condiționat de un scan de cod eșuat anterior — Play
+  Services Code Scanner nu oferă un semnal curat de "niciun cod găsit", doar succes sau tăcere, deci
+  un trigger automat ar fi ambiguu). Anularea pozei rămâne tăcută (ca la scanarea de cod); doar o
+  poză făcută fără text util recunoscut arată hint-ul de eșec (`ocrFailed`).
+- **Doar `AddTreatmentScreen`** — `AssociateGtinScreen` mapează GTIN-uri; fără GTIN scanat n-are ce
+  asocia, deci OCR-ul nu se aplică acolo.
+- **Teste noi**: `OcrCaptureTest` (`bestCandidateLine` — text normal, gol, linii sub prag, spații
+  la margini) — toate trec local. Restul (`createOcrCaptureUri`/`recognizeText`/`isCameraAvailable`)
+  Android-dependente, netestabile JVM fără Robolectric — consecvent cu `scanMedicationBarcode`
+  însuși (deja netestat direct, doar logica pură din `ScanBarcode.kt` are teste).
+- **De testat manual pe device, sesiunea viitoare**: apasă butonul nou din "Adaugă tratament" →
+  fă o poză unei cutii → verifică că textul recunoscut apare în câmpul de căutare → alege o
+  sugestie Nomenclator. Testează și cazul "text ilizibil" (poză neclară) → verifică hint-ul de
+  eșec.
 
 ---
 
@@ -468,9 +508,9 @@ device. Testele instrumentate rămân de rulat de utilizator. Migrările `0010`/
   `feature/faza2b-i-gs1-scan`) — de rulat manual migrările `0010`+`0011` (în ordine), de marcat
   userul contribuitor de încredere, de testat push+pull către catalogul partajat, apoi
   commit+push+PR+merge — vezi secțiunea 7 pentru detalii complete.
-- **Faza 2b-ii — OCR fallback** (următorul pas, după 2b-i): OCR (ML Kit Text Recognition) pt.
-  cutii fără cod lizibil/DataMatrix absent — alimentează câmpul de căutare Nomenclator existent cu
-  textul recunoscut, nu duplică UI-ul de sugestii.
+- **Faza 2b-ii — OCR fallback:** ✅ **implementată** (vezi secțiunea 7), **neinstalată/netestată pe
+  device** (telefonul s-a deconectat la finalul sesiunii) — pe același branch, de testat live
+  sesiunea viitoare împreună cu restul Fazei 2b-i, apoi commit+push+PR+merge.
 - **Faza 3 — Viziune:** feed CameraX, **YOLO-seg** (LiteRT/ONNX), detecție multi-obiect pe cadru de ansamblu, **contururi gri** (detectat/neidentificat).
 - **Faza 4 — Recunoaștere & enrollment:** model de **embeddings** (metric learning), galerie nearest-neighbor, enrollment multi-view + top-k candidați, **colorare contur** după statusul dozei.
 - **Faza 5 — Tracking & AR:** ByteTrack + netezire, ancorare dinamică a panoului de info, buton show/hide; ancore ARCore pentru scanare progresivă.

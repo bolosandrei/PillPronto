@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- FileProvider (Faza 1.5d) — expune doar fisierele temporare de distribuire (ex. cod QR de
-     invitatie, vezi ui/access/QrCodeGenerator.kt), nu tot cache-ul aplicatiei. -->
+<!-- FileProvider (Faza 1.5d) — expune doar fisierele temporare necesare, nu tot cache-ul
+     aplicatiei. shared_images = distribuire (ex. cod QR de invitatie, vezi
+     ui/access/QrCodeGenerator.kt). ocr_captures = poze temporare pt. OCR (Faza 2b-ii, vezi
+     ui/treatments/OcrCapture.kt) — scrise de camera sistemului, citite+sterse de app dupa procesare. -->
 <paths xmlns:android="http://schemas.android.com/apk/res/android">
     <cache-path name="shared_images" path="shared_images/" />
+    <cache-path name="ocr_captures" path="ocr_captures/" />
 </paths>

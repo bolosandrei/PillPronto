@@ -72,6 +72,9 @@ data class AddTreatmentUiState(
     // vezi Treatment.expiryDate. Independenta de pendingGtin/hit-ul de mapare: tine de cutia
     // fizica scanata, nu de identificarea produsului.
     val expiryDate: LocalDate? = null,
+    // Poza facuta pt. OCR fallback (Faza 2b-ii), dar niciun text util recunoscut — informativ, nu
+    // blocheaza (userul poate oricum introduce numele manual).
+    val ocrFailed: Boolean = false,
     val error: AddTreatmentError? = null,
     // Sugestii din Nomenclatorul ANMDMR pt. numele curent tastat (Faza 2a) — pur asistiv, NU
     // obligatoriu: campurile raman complet editabile pt. medicamente din afara Nomenclatorului.
@@ -188,6 +191,18 @@ class AddTreatmentViewModel @Inject constructor(
             } else {
                 _state.update { it.copy(pendingGtin = gtin, scanUnrecognized = false) }
             }
+        }
+    }
+
+    /** Rezultatul OCR-ului de pe cutie (Faza 2b-ii, fallback cand nu exista cod lizibil): text
+     * gasit -> deleaga direct la `onName` (acelasi debounce + cautare Nomenclator ca la tastare
+     * manuala, zero logica noua); null -> informativ, userul introduce manual. */
+    fun onOcrTextRecognized(text: String?) {
+        if (text != null) {
+            _state.update { it.copy(ocrFailed = false) }
+            onName(text)
+        } else {
+            _state.update { it.copy(ocrFailed = true) }
         }
     }
 
