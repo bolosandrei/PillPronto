@@ -32,8 +32,13 @@ object Gs1Parser {
     private const val VARIABLE_FIELD_MAX_LENGTH = 20
 
     /** null daca payload-ul e gol/invalid sau daca n-a putut fi extras niciun camp cunoscut. */
-    fun parse(raw: String): Gs1DecodedData? {
-        if (raw.isBlank()) return null
+    fun parse(rawInput: String): Gs1DecodedData? {
+        if (rawInput.isBlank()) return null
+        // "FNC1 in first position" (cerut de standardul GS1 ca sa marcheze un Data Matrix ca
+        // GS1-formatat) — Play Services Code Scanner il lasa ca prefix literal GS in rawValue,
+        // in loc sa-l elimine el insusi (confirmat pe device real, 2 cutii diferite: rawValue
+        // incepe cu <0x1D> inainte de primul AI). Fara asta parsarea s-ar opri la primul pas.
+        val raw = rawInput.removePrefix(GS.toString())
 
         var i = 0
         var gtin: String? = null

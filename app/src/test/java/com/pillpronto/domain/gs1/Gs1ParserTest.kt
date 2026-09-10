@@ -90,4 +90,30 @@ class Gs1ParserTest {
 
         assertEquals(LocalDate.of(1951, 12, 31), decoded?.expiry)
     }
+
+    // Payload-uri reale capturate de pe cutii de medicamente (Faza 2b-i, testare pe device fizic,
+    // 2026-09-10) — Play Services Code Scanner lasa FNC1-ul initial ca prefix literal GS in
+    // rawValue, in loc sa-l elimine el insusi. GTIN e date de produs public (ANMDMR/GS1), nu date
+    // personale — sigur de folosit ca fixture.
+    @Test
+    fun `payload real de pe cutie cu prefix GS la inceput se parseaza corect`() {
+        val raw = GS + "010366204299876821250377235778" + GS + "1726103110028101"
+
+        val decoded = Gs1Parser.parse(raw)
+
+        assertEquals("03662042998768", decoded?.gtin)
+        assertEquals(LocalDate.of(2026, 10, 31), decoded?.expiry)
+        assertEquals("028101", decoded?.batch)
+    }
+
+    @Test
+    fun `al doilea payload real cu serial alfanumeric si prefix GS`() {
+        val raw = GS + "01059447050046712111784Y9RFREVF2" + GS + "17271031105R01611A"
+
+        val decoded = Gs1Parser.parse(raw)
+
+        assertEquals("05944705004671", decoded?.gtin)
+        assertEquals(LocalDate.of(2027, 10, 31), decoded?.expiry)
+        assertEquals("5R01611A", decoded?.batch)
+    }
 }
