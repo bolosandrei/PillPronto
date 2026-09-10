@@ -49,7 +49,8 @@ din `auth-kt`), JDK 17, Gradle KTS + version catalog (`gradle/libs.versions.toml
 - `ui/account/`, `ui/onboarding/` — Faza 1.5a/b.
 - `ui/access/`, `ui/patients/` — Faza 1.5d/e.
 - `ui/gtinmapping/` — Faza 2b-i (asociere coduri GTIN).
-- `ui/vision/` — `CameraPreview`, `VisionScanScreen` — Faza 3a-i (feed live cameră, fără ML încă).
+- `domain/vision/` — `Detection`, `YoloOutputDecoder`, `LetterboxMapper`, `NonMaxSuppression` — Faza 3a-ii (pur Kotlin, testabil).
+- `ui/vision/` — `CameraPreview`, `VisionScanScreen`, `YoloSegModel`, `DetectionOverlay` — Faza 3a-i/3a-ii (feed cameră + detecție generică, doar cutii).
 
 ## 4. Convenții de cod
 
@@ -529,12 +530,71 @@ YOLO11n-seg + decodare ieșire + overlay contururi gri).
   parte din build-ul Gradle, cere `pip install ultralytics`): descarcă `yolo11n-seg.pt` preantrenat
   și îl exportă la LiteRT (`.tflite`, `model.export(format="tflite")`). Pregătit acum pt. Faza
   3a-ii, **neconsumat încă** de aplicație în acest stadiu.
-- **De făcut sesiunea viitoare (Faza 3a-ii, plan mode separat)**: userul rulează scriptul Python
-  local, copiază `.tflite`-ul rezultat în `app/src/main/assets/`; Claude adaugă dependența LiteRT
-  (`com.google.ai.edge.litert`, coordonată Maven exactă de confirmat la momentul respectiv),
-  decodare ieșire YOLO-seg (boxes + mask coefficients, NMS), overlay Compose cu contururi gri
-  peste feed-ul deja funcțional din 3a-i, mapare corectă a coordonatelor de detecție pe
-  coordonatele preview-ului de cameră.
+### Faza 3a-ii — model LiteRT (YOLO-seg) + decodare (doar cutii) + overlay (implementat — 2026-09-11)
+
+**Decizie de scop, luată cu utilizatorul**: în acest pas se decodează DOAR tensorul de detecție
+(cutii + clase + scor), FĂRĂ măștile de segmentare (protos 160×160×32 + coeficienți + resize) —
+acelea rămân pt. **Faza 3a-iii** (viitor), după ce se confirmă că restul pipeline-ului
+(CameraX→LiteRT→overlay) funcționează corect. Contur gri = dreptunghi (bounding box), nu formă
+exactă de segmentare, la această etapă.
+
+- **LiteRT**: `com.google.ai.edge.litert:litert:2.2.0` (confirmat "Latest" direct din
+  `maven-metadata.xml`, nu din research indirect). API `CompiledModel` (clasa veche `Interpreter`
+  a fost **eliminată**, nu doar deprecată, în LiteRT 2.0+). Semnătura fără parametru `env` explicit
+  (`CompiledModel.create(context.assets, "model.tflite", CompiledModel.Options(Accelerator.CPU))`)
+  — confirmată printr-un exemplu real de cod dintr-un issue GitHub oficial (documentația arăta și
+  o variantă cu `env` suplimentar, dar fără detalii complete despre construcția lui) — **compilează
+  corect**, confirmă alegerea. AGP-ul proiectului (9.3.2) adaugă automat `.tflite` la
+  `noCompress` — fără config manuală.
+- **`domain/vision/`** (pur Kotlin, testabil JVM, ca `domain/gs1`/`domain/util`): `Detection.kt`
+  (`RectF01` cx/cy/w/h normalizate), `CocoLabels.kt` (cele 80 clase COCO), `NonMaxSuppression.kt`
+  (greedy, IoU), `YoloOutputDecoder.kt` (decodează layout-ul **channel-first** al tensorului de
+  detecție `[1, 4+numClasses, numAnchors]` — pt. ancora `a`, canalul `c` e la indexul
+  `c*numAnchors+a`), `LetterboxMapper.kt` (inversează letterbox-ul din preprocesare, mapează
+  cutiile din spațiul 640×640 al modelului înapoi în spațiul normalizat al imaginii originale).
+  **8 teste unitare noi** (`YoloOutputDecoderTest`, `LetterboxMapperTest`) — verifică matematica
+  (extragere layout, filtrare prag, NMS, cele 3 cazuri de padding letterbox) **înainte** de a
+  scrie partea Android — toate trec.
+- **`ui/vision/YoloSegModel.kt`** — glue Android (Context/Bitmap/LiteRT), documentat ca excepție
+  de la separarea strictă ui/domain (precedent `ScanBarcode.kt`/`GoogleSignInHelper.kt`, secțiunea
+  4): încarcă modelul din assets (`yolo11n_seg.tflite`, nume fix), letterbox-resize la 640×640,
+  normalizare NHWC RGB [0,1], `model.run()`, decodare + un `Log.w` o singură dată cu dimensiunea
+  reală a tensorului de ieșire (verificare empirică a presupunerii `[1,116,8400]` = 4 cutie + 80
+  clase COCO, layout posibil să difere ușor între exporturi Ultralytics).
+- **`ui/vision/DetectionOverlay.kt`** — `Canvas` Compose, dreptunghiuri gri (culoarea `DoseUnknown`
+  din temă — exact reutilizarea anticipată în secțiunea 3 pt. AR) + etichetă (clasă COCO +
+  confidence, util pt. validare vizuală pe un ecran oricum "experimental"). Mapare cu formulă
+  **crop-to-fill** (`scale = max(...)`) — presupune că `CameraXViewfinder` umple ecranul prin crop
+  (ca vechiul `PreviewView.FILL_CENTER`); API-ul Compose nou dedicat acestui scop
+  (`CoordinateTransformer` din `androidx.camera.compose`) nu avea documentație publică suficient de
+  completă la research pt. o folosire sigură — **de confirmat empiric pe device** (dacă e de fapt
+  letterbox, o singură schimbare: `min` în loc de `max`).
+- **`ui/vision/CameraPreview.kt`** — extins cu un al doilea use case `ImageAnalysis` opțional
+  (`RGBA_8888` + `imageProxy.toBitmap()`, evită conversia manuală YUV; `STRATEGY_KEEP_ONLY_LATEST`
+  = backpressure automat, fără throttling manual), legat alături de `Preview` în același
+  `bindToLifecycle(...)`.
+- **`ui/vision/VisionScanScreen.kt`** — instanțiază `YoloSegModel` o singură dată (`DisposableEffect`,
+  închis la dispose, `runCatching` — degradare grațioasă cu banner „Model AI lipsă" dacă `.tflite`-ul
+  nu există încă în assets) + `Executor` dedicat pt. analiza de frame-uri (NU main thread —
+  `CompiledModel.run()` e blocant). Rotește bitmap-ul cu `imageInfo.rotationDegrees` înainte de
+  inferență (`ImageAnalysis` nu pre-rotește bufferul).
+- **Limitare reală de mediu, găsită live la research/testare (2026-09-11)**: exportul Ultralytics
+  la LiteRT **nu rulează pe Windows nativ** — `AssertionError: LiteRT export only supported on
+  Linux x86 and macOS`, restricție hard-codată în unealta de export (fișierul `.tflite` rezultat
+  rulează normal pe orice platformă, inclusiv Android — doar procesul de export cere Linux/macOS).
+  `scripts/export-yolo-seg-model.py` documentează 2 alternative (Google Colab, recomandat — zero
+  instalare locală; WSL2 local). Utilizatorul a ales WSL2 — instalarea unei distribuții reale
+  (Ubuntu, mediul avea doar `docker-desktop`, minimal/nepotrivit) cere setup interactiv de
+  user/parolă la primul run, **nefezabil din acest mediu Claude Code** — pas lăsat manual
+  utilizatorului, într-un terminal propriu.
+- **De făcut, rămas la utilizator**: instalează Ubuntu via WSL2 (`wsl --install -d Ubuntu`, într-un
+  terminal Windows propriu, NU prin Claude), apoi rulează în terminalul Ubuntu: venv + `pip install
+  ultralytics` + `python scripts/export-yolo-seg-model.py` (cale proiect montată la
+  `/mnt/b/Facultate/Master/Disertatie/PillPronto App`) → copiază `.tflite`-ul rezultat ca
+  `app/src/main/assets/yolo11n_seg.tflite` (nume exact). Apoi testare live pe device: din ecranul
+  „Scanare vizuală" (deja pe main din 3a-i) — verifică apariția dreptunghiurilor gri + etichete
+  peste obiecte reale, aliniere corectă (confirmă/infirmă ipoteza crop-to-fill), performanță
+  vizuală, intrare/ieșire repetată pe ecran.
 
 ---
 
@@ -577,10 +637,12 @@ YOLO11n-seg + decodare ieșire + overlay contururi gri).
 - **Faza 2b-ii — OCR fallback:** ❌ **implementată, testată live, apoi ELIMINATĂ** — rată de succes
   prea scăzută în practică (vezi secțiunea 7). Rămân doar scanare cod + introducere manuală
   (cu fallback fuzzy) ca metode de identificare la această etapă.
-- **Faza 3a-i — CameraX feed live + permisiune:** ✅ **implementată, testată live pe device** — vezi
-  secțiunea 7. Pe branch `feature/faza3a-i-camerax-feed`, necomisă încă push/PR.
-- **Faza 3a-ii — model LiteRT (YOLO-seg) + overlay contururi gri:** următorul pas, plan mode separat
-  — vezi secțiunea 7 pentru ce rămâne de făcut.
+- **Faza 3a-i — CameraX feed live + permisiune:** ✅ **complet implementată, mergeuită pe `main`**
+  (PR #12) — vezi secțiunea 7.
+- **Faza 3a-ii — model LiteRT (YOLO-seg) + decodare cutii + overlay:** ✅ **implementată, build+teste
+  trec** — pe branch `feature/faza3a-ii-litert-detect`, necomisă/nemergeuită încă push/PR. De testat
+  live pe device (blocat pe exportul `.tflite`, rămas la utilizator — vezi secțiunea 7). Faza
+  3a-iii (măști de segmentare) — viitor, plan mode separat.
 - **Faza 3 (restul) — Viziune:** detecție/segmentare multi-obiect pe cadru de ansamblu (după 3a-ii).
 - **Faza 4 — Recunoaștere & enrollment:** model de **embeddings** (metric learning), galerie nearest-neighbor, enrollment multi-view + top-k candidați, **colorare contur** după statusul dozei.
 - **Faza 5 — Tracking & AR:** ByteTrack + netezire, ancorare dinamică a panoului de info, buton show/hide; ancore ARCore pentru scanare progresivă.

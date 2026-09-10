@@ -126,6 +126,11 @@ dependencies {
     implementation(libs.androidx.camera.lifecycle)
     implementation(libs.androidx.camera.compose)
 
+    // LiteRT (Faza 3a-ii) - inferenta on-device pt. modelul YOLO-seg preantrenat, doar decodare
+    // de cutii in acest pas (masca de segmentare ramane pt. Faza 3a-iii). AGP 4.1+ adauga automat
+    // .tflite la noCompress - fara config manuala de aaptOptions.
+    implementation(libs.litert)
+
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.turbine)
