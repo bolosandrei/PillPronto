@@ -45,6 +45,7 @@ fun AccountScreen(
     onManageProfessionalAccess: () -> Unit,
     onMyPatients: () -> Unit,
     onAssociateGtin: () -> Unit,
+    onVisionScan: () -> Unit,
     vm: AccountViewModel = hiltViewModel()
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
@@ -86,6 +87,12 @@ fun AccountScreen(
             OutlinedButton(onClick = onAssociateGtin, modifier = Modifier.fillMaxWidth()) {
                 Text(stringResource(R.string.account_associate_gtin_button))
             }
+        }
+
+        // Faza 3a-i, experimental — doar feed live de camera, fara scriere de date, vizibil
+        // necondiționat (spre deosebire de asocierea GTIN de mai sus).
+        OutlinedButton(onClick = onVisionScan, modifier = Modifier.fillMaxWidth()) {
+            Text(stringResource(R.string.account_vision_scan_button))
         }
 
         when (val session = state.sessionState) {
