@@ -68,6 +68,10 @@ data class AddTreatmentUiState(
     // Ultimul scan citit dar neparsabil (format nesuportat / payload GS1 fara niciun camp
     // cunoscut) — informativ, nu blocheaza salvarea.
     val scanUnrecognized: Boolean = false,
+    // Data expirarii ultimei cutii scanate (AI 17, doar DataMatrix serializat FMD o contine) —
+    // vezi Treatment.expiryDate. Independenta de pendingGtin/hit-ul de mapare: tine de cutia
+    // fizica scanata, nu de identificarea produsului.
+    val expiryDate: LocalDate? = null,
     val error: AddTreatmentError? = null,
     // Sugestii din Nomenclatorul ANMDMR pt. numele curent tastat (Faza 2a) — pur asistiv, NU
     // obligatoriu: campurile raman complet editabile pt. medicamente din afara Nomenclatorului.
@@ -115,7 +119,8 @@ class AddTreatmentViewModel @Inject constructor(
                             cantitate = t.cantitate,
                             indicatie = t.indicatie,
                             instructiuni = t.instructiuni,
-                            codCim = t.codCim
+                            codCim = t.codCim,
+                            expiryDate = t.expiryDate
                         )
                     }
                 }
@@ -166,8 +171,11 @@ class AddTreatmentViewModel @Inject constructor(
 
     /** Rezultatul unui scan de pe cutie: gtin=null -> cod nerecunoscut/neparsabil. Altfel cautam
      * maparea locala; hit -> pre-completam ca la o sugestie aleasa manual; miss -> retinem GTIN-ul
-     * "in asteptare", userul alege manual din sugestiile de mai jos (invatam maparea la acel moment). */
-    fun onBarcodeScanned(gtin: String?) {
+     * "in asteptare", userul alege manual din sugestiile de mai jos (invatam maparea la acel
+     * moment). Data expirarii (daca a fost citita) se seteaza indiferent de hit/miss pe GTIN. */
+    fun onBarcodeScanned(scanned: ScannedBarcode) {
+        _state.update { it.copy(expiryDate = scanned.expiryDate) }
+        val gtin = scanned.gtin
         if (gtin == null) {
             _state.update { it.copy(scanUnrecognized = true) }
             return
@@ -235,7 +243,8 @@ class AddTreatmentViewModel @Inject constructor(
                     cantitate = s.cantitate.trim(),
                     indicatie = s.indicatie.trim(),
                     instructiuni = s.instructiuni.trim(),
-                    codCim = s.codCim
+                    codCim = s.codCim,
+                    expiryDate = s.expiryDate
                 )
                 if (s.isEditing) {
                     reminderCoordinator.cancelFutureFor(treatmentId)

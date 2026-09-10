@@ -39,6 +39,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -48,11 +49,29 @@ import com.pillpronto.R
 import com.pillpronto.core.ui.components.BackTopAppBar
 import com.pillpronto.core.ui.components.DatePickerDialogBox
 import com.pillpronto.core.ui.components.NomenclatureSuggestions
+import com.pillpronto.core.ui.theme.DoseDueNow
+import com.pillpronto.core.ui.theme.DoseMissed
+import com.pillpronto.domain.model.NEAR_EXPIRY_DAYS_THRESHOLD
+import java.time.LocalDate
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
+import java.time.temporal.ChronoUnit
 
 private val HM = DateTimeFormatter.ofPattern("HH:mm")
 private val DMY = DateTimeFormatter.ofPattern("dd.MM.yyyy")
+
+/** Culoare de avertizare pt. data expirarii — null (culoare implicita de text) daca expirarea e
+ * departe, portocaliu sub pragul de "aproape expirat", rosu daca deja trecuta. Acelasi prag ca
+ * ExpiryAlertWorker (NEAR_EXPIRY_DAYS_THRESHOLD), ca afisarea si alerta sa nu diverga. Nu-i
+ * `private` — reutilizata si de TreatmentDetailScreen.kt (acelasi pachet). */
+fun expiryWarningColor(expiryDate: LocalDate): Color? {
+    val daysUntil = ChronoUnit.DAYS.between(LocalDate.now(), expiryDate)
+    return when {
+        daysUntil < 0 -> DoseMissed
+        daysUntil <= NEAR_EXPIRY_DAYS_THRESHOLD -> DoseDueNow
+        else -> null
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -108,6 +127,19 @@ fun AddTreatmentScreen(
                     stringResource(R.string.add_treatment_scan_unrecognized),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error
+                )
+            }
+            state.expiryDate?.let { expiry ->
+                val warningColor = expiryWarningColor(expiry)
+                val textRes = if (warningColor == DoseMissed) {
+                    R.string.add_treatment_expiry_date_expired
+                } else {
+                    R.string.add_treatment_expiry_date
+                }
+                Text(
+                    stringResource(textRes, DMY.format(expiry)),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = warningColor ?: MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
             if (state.suggestions.isNotEmpty()) {

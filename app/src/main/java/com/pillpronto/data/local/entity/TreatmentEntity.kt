@@ -30,6 +30,7 @@ data class TreatmentEntity(
     // DataMatrix, Faza 2b-i) — trasabilitate, NU e folosit la afisare (numele/dozajul raman
     // sursa de adevar). Gol daca tratamentul nu a fost asociat cu nicio intrare din Nomenclator.
     val codCim: String = "",
+    val expiryDate: String? = null, // ISO LocalDate, din AI 17 al ultimei scanari DataMatrix
     // --- sync Room <-> Supabase (Faza 1.5c, vezi data/sync/SyncManager.kt) ---
     val remoteId: String,          // UUID stabil, generat client-side o singura data la creare
     val updatedAt: Long,           // epoch millis, actualizat la fiecare scriere locala

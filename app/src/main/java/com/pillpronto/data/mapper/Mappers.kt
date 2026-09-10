@@ -65,6 +65,7 @@ fun Treatment.toEntity(
         indicatie = indicatie,
         instructiuni = instructiuni,
         codCim = codCim,
+        expiryDate = expiryDate?.toString(),
         remoteId = remoteId,
         updatedAt = updatedAt,
         dirty = dirty
@@ -84,7 +85,8 @@ fun TreatmentEntity.toDomain(): Treatment = Treatment(
     cantitate = cantitate,
     indicatie = indicatie,
     instructiuni = instructiuni,
-    codCim = codCim
+    codCim = codCim,
+    expiryDate = expiryDate?.let { LocalDate.parse(it) }
 )
 
 // --- DoseLog ---

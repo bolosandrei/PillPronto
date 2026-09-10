@@ -27,8 +27,11 @@ import com.pillpronto.data.local.entity.TreatmentEntity
     //     + tabel gtin_mappings (Faza 2b-i) — mapare GTIN scanat -> Cod CIM confirmat de user,
     //     construita progresiv; STRICT locala, NU se sincronizeaza (specifica exemplarului fizic
     //     scanat local, nu date de sanatate portabile).
+    // v8: TreatmentEntity.expiryDate (data expirarii ultimei cutii scanate, din AI 17 GS1 —
+    //     sincronizat, migrarea Supabase 0012) — afisare la scanare + alerte de expirare apropiata
+    //     (ExpiryAlertWorker).
     // fallbackToDestructiveMigration.
-    version = 7,
+    version = 8,
     exportSchema = false
 )
 abstract class PillProntoDatabase : RoomDatabase() {

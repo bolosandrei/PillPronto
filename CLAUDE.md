@@ -351,7 +351,14 @@ device. Testele instrumentate rămân de rulat de utilizator. Migrările `0010`/
   (rezervat Fazei 3 — feed continuu, caz de utilizare diferit de un scan single-shot).
 - **`domain/gs1/Gs1Parser.kt`** (domain pur, fără dependențe Android): parsează payload-ul GS1
   DataMatrix după Application Identifiers — AI `01` GTIN (14 cifre fix), `17` expirare YYMMDD
-  (fix), `10` lot (variabil ≤20), `21` serial (variabil ≤20), cele 4 mandatate FMD.
+  (fix), `10` lot (variabil ≤20), `21` serial (variabil ≤20), cele 4 mandatate FMD. **Documentat cu
+  surse oficiale** (Regulamentul Delegat (UE) 2016/161 + ghidul GS1 Healthcare de implementare
+  FMD — vezi `eu2016161`/`gs1fmd2016` în `Lucrare_Disertatie/thesis.bib`, secțiunea "Partea III"):
+  codul GS1 DataMatrix (serializare/trasabilitate) e obligatoriu **doar** pe medicamentele Rx
+  (+ excepții Anexa I/II), spre deosebire de codul de bare comercial (EAN-13), obligatoriu pe toate
+  — confirmă că `extractGtin`/`ScanBarcode.kt` (formate liniare ca fallback) modelează corect
+  ambele cazuri reale. Confirmă și decizia deja stabilă: EMVS rămâne restricționat la actori
+  autorizați din lanțul de distribuție, aplicația NU îl interoghează.
   - **Bug real găsit + fixat la testarea pe device**: primul test a eșuat — codul era corect
     DataMatrix (`format=16`), dar payload-ul are un caracter FNC1/GS literal (`0x1D`) **înaintea**
     primului AI (Play Services Code Scanner nu-l elimină el însuși), pe care parserul nu-l
@@ -402,13 +409,26 @@ device. Testele instrumentate rămân de rulat de utilizator. Migrările `0010`/
   rândul lui construiește `ReminderScheduler` cu un `Context` Android real (`AlarmManager`) chiar în
   constructor — imposibil de instanțiat într-un test JVM pur fără Robolectric/Mockito (niciuna
   configurată în proiect, convenția fiind fake-uri scrise de mână pe interfețe).
+- **Extindere — dată expirare la scanare + alerte** (cercetare GS1/FMD → `Treatment.expiryDate`
+  nou, din AI `17` al codului DataMatrix, `ScanBarcode.kt::extractGtin` → `extractScannedBarcode`
+  (întoarce `ScannedBarcode(gtin, expiryDate)`, ambele ecrane de scanare actualizate)): afișare
+  colorată (`DoseDueNow`/`DoseMissed`, prag `NEAR_EXPIRY_DAYS_THRESHOLD = 14` zile, definit în
+  `domain/model/Treatment.kt`, reutilizat identic de UI și de alertă — o singură sursă de adevăr)
+  în `AddTreatmentScreen` + `TreatmentDetailScreen`. **Alertă locală periodică** (nu doar afișare
+  pasivă): `ExpiryAlertWorker` (12h) + `ExpiryAlertChecker` (logică pură, deduplicare pe cheie
+  compusă `treatmentId:expiryDate:stage` — o rescanare cu altă expirare capătă automat propriile
+  alerte, fără reset explicit) + `ExpiryAlertNotifier` (canal propriu) — toate mirror 1:1 pe
+  `CaregiverAlertWorker`/`MissedDoseChecker`/`CaregiverAlertNotifier` deja existente. Se
+  sincronizează (`expiryDate`, ca `codCim`) → migrarea `0012_treatment_expiry_date.sql`. Schema
+  Room v7→v8.
 - **Faza 2b-ii** (următorul pas, separat intenționat): OCR ca fallback pt. cutii fără cod lizibil —
   vezi secțiunea 8b.
-- **De făcut sesiunea viitoare**: userul rulează manual migrările `0010` și `0011` (în ordine), se
-  marchează contribuitor de încredere (SQL direct: `update profiles set is_trusted_contributor =
-  true where id = '<uid>'`), testează pe device confirmarea unei mapări + verifică apariția
-  rândului în `gtin_mappings` (Supabase Table Editor) + verifică pull-ul pe alt cont/device. Apoi
-  commit + push + PR + merge.
+- **De făcut sesiunea viitoare**: userul rulează manual migrările `0010`, `0011`, `0012` (în
+  ordine), se marchează contribuitor de încredere (SQL direct: `update profiles set
+  is_trusted_contributor = true where id = '<uid>'`), testează pe device: confirmarea unei mapări
+  + verificare apariție rând în `gtin_mappings` (Supabase Table Editor) + pull pe alt cont/device;
+  scanarea unei cutii cu dată de expirare (culoare corectă în `AddTreatmentScreen`/
+  `TreatmentDetailScreen`). Apoi commit + push + PR + merge.
 
 ---
 

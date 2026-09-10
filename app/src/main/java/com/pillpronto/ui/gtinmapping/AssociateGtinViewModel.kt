@@ -6,6 +6,7 @@ import com.pillpronto.domain.model.NomenclatureEntry
 import com.pillpronto.domain.usecase.ContributeGtinMappingUseCase
 import com.pillpronto.domain.usecase.LookupTreatmentByGtinUseCase
 import com.pillpronto.domain.usecase.SearchNomenclatureUseCase
+import com.pillpronto.ui.treatments.ScannedBarcode
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -54,8 +55,11 @@ class AssociateGtinViewModel @Inject constructor(
     private var searchJob: Job? = null
 
     /** Rezultatul unui scan: gtin=null -> cod nerecunoscut/neparsabil. Altfel cautam daca exista
-     * deja o mapare pt. acest GTIN — informativ, nu blocheaza re-asocierea. */
-    fun onBarcodeScanned(gtin: String?) {
+     * deja o mapare pt. acest GTIN — informativ, nu blocheaza re-asocierea. Data expirarii (daca a
+     * fost citita) e irelevanta aici — ecranul asociaza produsul cu Nomenclatorul, nu o cutie
+     * anume — ignorata deliberat. */
+    fun onBarcodeScanned(scanned: ScannedBarcode) {
+        val gtin = scanned.gtin
         searchJob?.cancel()
         if (gtin == null) {
             _state.update { it.copy(scanUnrecognized = true, scannedGtin = null, existingMatch = null) }

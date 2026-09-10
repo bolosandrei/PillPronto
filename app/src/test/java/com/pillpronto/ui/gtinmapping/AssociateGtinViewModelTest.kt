@@ -12,6 +12,7 @@ import com.pillpronto.util.FakeGtinMappingRepository
 import com.pillpronto.util.FakeNomenclatureRepository
 import com.pillpronto.util.FakeProfileRepository
 import com.pillpronto.util.MainDispatcherRule
+import com.pillpronto.ui.treatments.ScannedBarcode
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -66,7 +67,7 @@ class AssociateGtinViewModelTest {
 
     @Test
     fun `scan cu gtin null marcheaza scanUnrecognized`() = runTest {
-        vm.onBarcodeScanned(null)
+        vm.onBarcodeScanned(ScannedBarcode(null, null))
 
         assertTrue(vm.state.value.scanUnrecognized)
         assertNull(vm.state.value.scannedGtin)
@@ -74,7 +75,7 @@ class AssociateGtinViewModelTest {
 
     @Test
     fun `scan cu gtin necunoscut nu are existingMatch`() = runTest {
-        vm.onBarcodeScanned("05901234123457")
+        vm.onBarcodeScanned(ScannedBarcode("05901234123457", null))
 
         assertEquals("05901234123457", vm.state.value.scannedGtin)
         assertNull(vm.state.value.existingMatch)
@@ -86,14 +87,14 @@ class AssociateGtinViewModelTest {
         gtinMappingRepository.mappings["05901234123457"] = "W43451001"
         nomenclatureRepository.byCodCim = mapOf("W43451001" to sampleEntry())
 
-        vm.onBarcodeScanned("05901234123457")
+        vm.onBarcodeScanned(ScannedBarcode("05901234123457", null))
 
         assertEquals("ASPIRINA 500mg", vm.state.value.existingMatch?.denumireComerciala)
     }
 
     @Test
     fun `alegerea unei sugestii confirma maparea si actualizeaza lastSaved`() = runTest {
-        vm.onBarcodeScanned("05901234123457")
+        vm.onBarcodeScanned(ScannedBarcode("05901234123457", null))
 
         vm.onSuggestionPicked(sampleEntry())
 
@@ -104,7 +105,7 @@ class AssociateGtinViewModelTest {
 
     @Test
     fun `alegerea unei sugestii de catre un user neautentificat nu marcheaza contributia in catalogul comun`() = runTest {
-        vm.onBarcodeScanned("05901234123457")
+        vm.onBarcodeScanned(ScannedBarcode("05901234123457", null))
 
         vm.onSuggestionPicked(sampleEntry())
 
@@ -117,7 +118,7 @@ class AssociateGtinViewModelTest {
         profileRepository.profiles["user-1"] = com.pillpronto.domain.model.Profile(
             "user-1", com.pillpronto.domain.model.AccountRole.PHARMACIST, "Test", isTrustedContributor = true
         )
-        vm.onBarcodeScanned("05901234123457")
+        vm.onBarcodeScanned(ScannedBarcode("05901234123457", null))
 
         vm.onSuggestionPicked(sampleEntry())
 
@@ -133,7 +134,7 @@ class AssociateGtinViewModelTest {
 
     @Test
     fun `reset goleste starea`() = runTest {
-        vm.onBarcodeScanned("05901234123457")
+        vm.onBarcodeScanned(ScannedBarcode("05901234123457", null))
 
         vm.reset()
 

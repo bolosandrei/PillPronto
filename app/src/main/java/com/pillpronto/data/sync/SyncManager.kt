@@ -166,6 +166,7 @@ private fun TreatmentEntity.toDto(patientProfileId: String) = TreatmentDto(
     indicatie = indicatie,
     instructiuni = instructiuni,
     codCim = codCim,
+    expiryDate = expiryDate,
     updatedAt = updatedAt.toIsoInstant()
 )
 
@@ -185,6 +186,7 @@ private fun TreatmentDto.toEntity(localId: Long, patientProfileId: String) = Tre
     indicatie = indicatie,
     instructiuni = instructiuni,
     codCim = codCim,
+    expiryDate = expiryDate,
     remoteId = id,
     updatedAt = updatedAt.isoInstantToEpochMillis(),
     dirty = false

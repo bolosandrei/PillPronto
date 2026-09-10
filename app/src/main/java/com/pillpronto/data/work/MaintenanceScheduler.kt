@@ -92,4 +92,15 @@ class MaintenanceScheduler @Inject constructor(
             startupRequest
         )
     }
+
+    /** Alerte expirare tratamente active — nu are nevoie de cadenta 6h/30min a celorlalti
+     * workeri, expirarea nu se schimba brusc. */
+    fun scheduleExpiryAlerts() {
+        val request = PeriodicWorkRequestBuilder<ExpiryAlertWorker>(12, TimeUnit.HOURS).build()
+        WorkManager.getInstance(context).enqueueUniquePeriodicWork(
+            ExpiryAlertWorker.UNIQUE_NAME,
+            ExistingPeriodicWorkPolicy.KEEP,
+            request
+        )
+    }
 }

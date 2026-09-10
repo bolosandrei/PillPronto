@@ -42,7 +42,8 @@ class LinkedPatientDataRepositoryImpl @Inject constructor(
         cantitate = cantitate,
         indicatie = indicatie,
         instructiuni = instructiuni,
-        codCim = codCim
+        codCim = codCim,
+        expiryDate = expiryDate?.let { LocalDate.parse(it) }
     )
 
     private fun DoseLogDto.toDomain(): DoseLog = DoseLog(

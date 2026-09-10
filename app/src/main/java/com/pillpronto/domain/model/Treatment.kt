@@ -3,6 +3,11 @@ package com.pillpronto.domain.model
 import java.time.LocalDate
 import java.time.LocalTime
 
+// Prag "pe cale de expirare" pt. Treatment.expiryDate — reutilizat atat de logica de alerta
+// (data/notification/ExpiryAlertChecker) cat si de UI (culoare de avertizare) — o singura sursa
+// de adevar, ca cele doua sa nu diverga daca pragul se schimba vreodata.
+const val NEAR_EXPIRY_DAYS_THRESHOLD = 14L
+
 /**
  * Un tratament introdus de utilizator (Faza 1: manual).
  * In Faza 2 se leaga de Nomenclatorul ANMDMR prin GTIN/cod CIM.
@@ -26,7 +31,12 @@ data class Treatment(
     val instructiuni: String = "",       // ex. "cu mancare"
     // Cod CIM din Nomenclatorul ANMDMR ales pt. acest tratament — manual (cautare text) sau prin
     // scanare GS1 DataMatrix (Faza 2b-i). Gol daca tratamentul nu a fost asociat cu nicio intrare.
-    val codCim: String = ""
+    val codCim: String = "",
+    // Data expirarii ULTIMEI cutii scanate pt. acest tratament (AI 17 din codul GS1 DataMatrix —
+    // doar codul de serializare FMD o contine, un cod de bare comercial simplu nu). Nu e un
+    // istoric per-cutie — o rescanare (cutie noua) o suprascrie. null daca nu s-a scanat niciodata
+    // un cod cu data expirarii.
+    val expiryDate: LocalDate? = null
 ) {
     /** Derivat din `schedule` — pentru codul care doar CITESTE orele (validare, afisare), fara sa
      * aiba nevoie de cantitatea per slot. Nu e parametru de constructor — orice loc care
