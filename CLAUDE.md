@@ -615,6 +615,55 @@ exactă de segmentare, la această etapă.
   (local + `origin`). Faza 3a-ii e considerată închisă; Faza 3a-iii (măști de segmentare) pornește
   pe branch nou.
 
+### Faza 3a-iii — măști de segmentare (contur real, nu doar bounding box) (implementat, testat live pe device — 2026-09-11)
+
+**Decizie de scop, luată cu utilizatorul**: fără niciun contur poligonal calculat explicit
+(marching squares etc.) — masca se desenează ca bitmap semi-transparent colorat (tenta
+`DoseUnknown`) exact peste dreptunghiul deja mapat pe ecran; marginea vizuală a zonei translucide
+E conturul, mult mai simplu decât extragerea unui `Path` și suficient pt. validarea vizuală cerută
+la această etapă. Dreptunghiul gri + eticheta rămân desenate ca ghidaj.
+
+- **Model matematic** (convenția YOLOv8/11-seg, standard Ultralytics): tensorul de detecție
+  (output 0) are de fapt `4+numClasses+maskDim` canale (`maskDim=32`), nu doar `4+numClasses` —
+  codul din Faza 3a-ii deja "tolera" asta din greșeală (verifica doar un bound minim, ignora tacit
+  canalele finale). Al 2-lea tensor de ieșire (output 1) = "proto-măști", `[1,32,160,160]`
+  **channel-first**. Masca finală per detecție = `sigmoid(coeficienți(32) · proto(32,y,x))` per
+  pixel, threshold 0.5 → boolean, calculată DOAR pe regiunea proto-pixelilor corespunzătoare cutiei
+  (crop, nu tot grid-ul 160×160) — cutia (0..1 normalizată relativ la modelul 640×640) indexează
+  direct în proto (160×160 e aceeași imagine, doar rezoluție mai mică), fără transformare
+  suplimentară. Crop-ul se face cât timp cutia e încă în spațiul modelului (imediat după
+  `YoloOutputDecoder.decode`, ÎNAINTE de `LetterboxMapper.mapToOriginalImage`) — grid-ul mic
+  rezultat e cărat neschimbat prin `.copy(box=...)` (care păstrează câmpurile nespecificate), apoi
+  întins direct peste dreptunghiul FINAL la randare, fără nicio transformare inversă de letterbox.
+- **`domain/vision/Detection.kt`**: `SegMask(width, height, values: List<Boolean>)` (List, nu
+  BooleanArray, pt. `equals` structural gratuit — cost de autoboxing neglijabil la dimensiunile
+  astea, crop nu grid întreg). `Detection` capătă `maskCoeffs: List<Float>? = null` (tranzitoriu,
+  cei 32 coeficienți bruți) + `mask: SegMask? = null` (final) — ambele opționale, fără breaking
+  change pe testele existente din 3a-ii.
+- **`domain/vision/YoloOutputDecoder.kt`**: `decode(...)` capătă `maskDim: Int = 0` (default =
+  comportament identic 3a-ii); extrage `maskCoeffs` din canalele finale când `maskDim > 0`.
+- **`domain/vision/MaskDecoder.kt`** (nou, pur, testabil): `decode(...)` (dot-product+sigmoid+
+  threshold pe crop, clamped la limitele grid-ului, minim 1×1 chiar pt. obiecte foarte mici/
+  departate) + `attach(...)` (populează `mask` pe lista de detecții, golește `maskCoeffs` odată
+  consumați). **6 teste noi** (`MaskDecoderTest`) + 2 teste noi în `YoloOutputDecoderTest` — toate
+  trec.
+- **`ui/vision/YoloSegModel.kt`**: constante noi `MASK_DIM=32`, `PROTO_SIZE=160`; citește și
+  `outputBuffers[1]` (protos) — degradare grațioasă (fallback la `maskDim=0`, doar cutii, ca în
+  3a-ii) dacă modelul n-are al 2-lea output.
+- **`ui/vision/DetectionOverlay.kt`**: pt. fiecare `detection.mask != null`, construiește un
+  `Bitmap` mic din grid-ul boolean (gri translucid ~40% alpha unde `true`, transparent unde
+  `false`) și îl întinde (`drawBitmap`) exact peste dreptunghiul deja calculat pe ecran.
+- **Verificare empirică pe device (2026-09-11), confirmată din prima încercare** (spre deosebire de
+  bug-ul NCHW din 3a-ii): logging temporar (`Log.e`, șters după confirmare) a arătat
+  `outputBuffers.size=2`, `output0.size=974400` (=116×8400 exact) și `output1.size=819200`
+  (=32×160×160 exact) — presupunerile de layout confirmate la nivel de dimensiuni. Verificare
+  vizuală pe ecranul "Scanare vizuală (experimental)": masca (zonă translucidă gri) urmărește
+  vizibil forma reală a obiectului, nu doar dreptunghiul — **confirmat funcțional de utilizator,
+  fără nevoie de debugging suplimentar** (channel-first-ul presupus pt. proto s-a dovedit corect
+  din prima, spre deosebire de input-ul NCHW din 3a-ii care a cerut o sesiune întreagă de debugging).
+- **Pe branch `feature/faza3a-iii-litert-masks`**, necomis încă la momentul implementării — de
+  commis + push + PR la finalul sesiunii (merge doar la cerere explicită, convenția stabilă).
+
 ---
 
 ## 8. CE URMEAZĂ — TODO
@@ -659,9 +708,13 @@ exactă de segmentare, la această etapă.
   (PR #12) — vezi secțiunea 7.
 - **Faza 3a-ii — model LiteRT (YOLO-seg) + decodare cutii + overlay:** ✅ **implementată, testată
   live pe device, confirmată funcțională, mergeuită pe `main` (PR #13)** (bug real NCHW vs. NHWC
-  găsit + fixat — vezi secțiunea 7). Faza 3a-iii (măști de segmentare) — pe branch nou
-  `feature/faza3a-iii-litert-masks`, plan mode separat.
-- **Faza 3 (restul) — Viziune:** detecție/segmentare multi-obiect pe cadru de ansamblu (după 3a-ii).
+  găsit + fixat — vezi secțiunea 7).
+- **Faza 3a-iii — măști de segmentare (contur real):** ✅ **implementată, testată live pe device,
+  confirmată funcțională din prima încercare** (layout proto channel-first corect, fără debugging
+  suplimentar) — vezi secțiunea 7. Pe branch `feature/faza3a-iii-litert-masks`, de mergeuit la
+  cerere explicită.
+- **Faza 3 (restul) — Viziune:** tracking multi-obiect pe cadru de ansamblu cu modelul de
+  recunoaștere propriu (după Faza 4 — embeddings), nu doar model generic COCO.
 - **Faza 4 — Recunoaștere & enrollment:** model de **embeddings** (metric learning), galerie nearest-neighbor, enrollment multi-view + top-k candidați, **colorare contur** după statusul dozei.
 - **Faza 5 — Tracking & AR:** ByteTrack + netezire, ancorare dinamică a panoului de info, buton show/hide; ancore ARCore pentru scanare progresivă.
 - **Faza 6 — Chatbot RAG + interacțiuni:** RAG peste tratament activ + prospecte, guardrails + disclaimere, verificare interacțiuni medicamentoase.

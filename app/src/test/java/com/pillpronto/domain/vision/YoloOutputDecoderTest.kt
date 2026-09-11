@@ -76,6 +76,41 @@ class YoloOutputDecoderTest {
     }
 
     @Test
+    fun `maskDim 0 (implicit) nu extrage maskCoeffs - comportament identic Fazei 3a-ii`() {
+        val box = RectF01(cx = 0.5f, cy = 0.5f, width = 0.2f, height = 0.3f)
+        val raw = buildRaw(numAnchors = 10, numClasses = 3, anchorIndex = 4, classId = 1, score = 0.9f, box = box)
+
+        val result = YoloOutputDecoder.decode(raw, numAnchors = 10, numClasses = 3, labels = listOf("a", "b", "c"), confidenceThreshold = 0.4f)
+
+        assertEquals(null, result[0].maskCoeffs)
+    }
+
+    @Test
+    fun `maskDim mai mare ca 0 extrage coeficientii de masca din canalele finale`() {
+        val numAnchors = 5
+        val numClasses = 2
+        val maskDim = 3
+        val anchorIndex = 2
+        val raw = FloatArray((4 + numClasses + maskDim) * numAnchors)
+        raw[0 * numAnchors + anchorIndex] = 0.5f
+        raw[1 * numAnchors + anchorIndex] = 0.5f
+        raw[2 * numAnchors + anchorIndex] = 0.2f
+        raw[3 * numAnchors + anchorIndex] = 0.2f
+        raw[(4 + 1) * numAnchors + anchorIndex] = 0.9f // classId=1
+        // Coeficienti de masca, canalele 4+numClasses..4+numClasses+maskDim.
+        raw[(4 + numClasses + 0) * numAnchors + anchorIndex] = 1.1f
+        raw[(4 + numClasses + 1) * numAnchors + anchorIndex] = -2.2f
+        raw[(4 + numClasses + 2) * numAnchors + anchorIndex] = 3.3f
+
+        val result = YoloOutputDecoder.decode(
+            raw, numAnchors, numClasses, labels = listOf("a", "b"), confidenceThreshold = 0.4f, maskDim = maskDim
+        )
+
+        assertEquals(1, result.size)
+        assertEquals(listOf(1.1f, -2.2f, 3.3f), result[0].maskCoeffs)
+    }
+
+    @Test
     fun `doua detectii distincte fara suprapunere sunt ambele pastrate`() {
         val numAnchors = 2
         val numClasses = 1
