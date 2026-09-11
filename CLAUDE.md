@@ -661,8 +661,38 @@ la această etapă. Dreptunghiul gri + eticheta rămân desenate ca ghidaj.
   vizibil forma reală a obiectului, nu doar dreptunghiul — **confirmat funcțional de utilizator,
   fără nevoie de debugging suplimentar** (channel-first-ul presupus pt. proto s-a dovedit corect
   din prima, spre deosebire de input-ul NCHW din 3a-ii care a cerut o sesiune întreagă de debugging).
-- **Pe branch `feature/faza3a-iii-litert-masks`**, necomis încă la momentul implementării — de
-  commis + push + PR la finalul sesiunii (merge doar la cerere explicită, convenția stabilă).
+- **PR #14 deschis** (`feature/faza3a-iii-litert-masks` → `main`), nemergeuit — merge doar la
+  cerere explicită, convenția stabilă.
+
+### Optimizare — accelerator GPU pt. inferență LiteRT (implementat, testat live pe device — 2026-09-11)
+
+**Context**: utilizatorul a semnalat overlay (contur+mască) sacadat/cu întârziere față de obiectul
+real — NU feed-ul de cameră (`Preview` rulează deja fluid, independent de rata de analiză, vezi
+`STRATEGY_KEEP_ONLY_LATEST` în `CameraPreview.kt`), ci strict rata la care se termină
+`YoloSegModel.detect()` per cadru analizat.
+
+- **`YoloSegModel.kt` forța `CompiledModel.Options(Accelerator.CPU)`** — inspectând direct
+  bytecode-ul `.aar`-ului LiteRT 2.2.0 din cache-ul Gradle local (nu presupunere), enum-ul
+  `Accelerator` are de fapt `NONE, CPU, GPU, NPU`, iar runtime-ul deja bundle-uiește
+  `libLiteRtClGlAccelerator.so` (OpenCL/OpenGL) pt. `arm64-v8a`/`armeabi-v7a`/`x86_64` — GPU
+  delegate era deja disponibil în dependința existentă, doar nefolosit. **Nicio schimbare de
+  dependențe Gradle.**
+- **Măsurat pe device, înainte/după** (instrumentare temporară de timp în `detect()`, ștearsă după
+  confirmare — convenția proiectului): **CPU: ~450-500ms/cadru (~2-2.3 fps)** →
+  **GPU: ~85-120ms/cadru (~9-12 fps)** — **~5x mai rapid**, confirmă exact cauza lag-ului semnalat.
+- **`createModel(context)`** (nou, în `YoloSegModel`): încearcă întâi `Accelerator.GPU`, `catch
+  (e: Throwable)` (la fel de larg ca `runCatching` deja folosit în `VisionScanScreen` pt.
+  încărcarea modelului) → fallback grațios la `Accelerator.CPU` dacă delegate-ul eșuează la
+  compilare pe un anumit device (nu toate GPU-urile mobile suportă la fel de bine OpenCL/OpenGL).
+  Pe acest device: GPU a reușit direct, fără fallback. 2 loguri `Log.w` permanente (create model)
+  arată ce accelerator rulează efectiv.
+- **Fără teste noi** — cod glue Android/LiteRT (alegere accelerator), netestabil semnificativ în
+  JVM, ca restul Fazei 3a; nimic din `domain/vision/` (pur, testat) s-a atins.
+- **Alternative discutate, nu implementate acum** (dacă GPU nu ar fi fost suficient): cuantizare
+  INT8 la export (reduce costul real per cadru, nu doar mută treaba pe alt silicon) și/sau
+  rezoluție de input mai mică (640→416/320, trade-off real de calitate pe obiecte mici).
+- **Pe același branch/PR** (`feature/faza3a-iii-litert-masks`, PR #14) — atinge același fișier
+  modificat acolo, evită complicații de merge între branch-uri paralele.
 
 ---
 
