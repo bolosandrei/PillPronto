@@ -760,8 +760,8 @@ Treatment** — vin în Faza 4b, când persistarea unor embeddings etichetate ch
   păstrat.
 - **Fără teste instrumentate noi** — glue Android/MediaPipe, netestabil semnificativ în JVM, ca
   restul Fazei 3a/4a.
-- **Pe branch `feature/faza4a-embeddings-pipeline`**, de comis + PR (merge doar la cerere
-  explicită, convenția stabilă).
+- **PR #15 mergeuit pe `main`** (2026-09-11), branch `feature/faza4a-embeddings-pipeline` șters
+  (local + `origin`).
 
 ---
 
@@ -814,9 +814,8 @@ Treatment** — vin în Faza 4b, când persistarea unor embeddings etichetate ch
 - **Faza 3 (restul) — Viziune:** tracking multi-obiect pe cadru de ansamblu cu modelul de
   recunoaștere propriu (după Faza 4 — embeddings), nu doar model generic COCO.
 - **Faza 4a — pipeline de embeddings (validare tehnică):** ✅ **implementată, testată live pe
-  device, confirmată funcțională** (MediaPipe ImageEmbedder + crop mascat cu segmentarea din
-  3a-iii, semnal confirmat pe ambele direcții) — vezi secțiunea 7. Pe branch
-  `feature/faza4a-embeddings-pipeline`, de mergeuit la cerere explicită.
+  device, confirmată funcțională, mergeuită pe `main` (PR #15)** (MediaPipe ImageEmbedder + crop
+  mascat cu segmentarea din 3a-iii, semnal confirmat pe ambele direcții) — vezi secțiunea 7.
 - **Faza 4 (restul) — Recunoaștere & enrollment:** galerie Room (embeddings + legătură
   Nomenclator), enrollment multi-view + top-k candidați (Faza 4b), integrare recunoaștere runtime
   + **colorare contur** după statusul dozei (Faza 4c) — vezi decizia de strategie date/antrenare
