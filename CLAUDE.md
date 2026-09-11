@@ -706,6 +706,63 @@ real — NU feed-ul de cameră (`Preview` rulează deja fluid, independent de ra
   antrenat pe cutii) — alegerea de arhitectură de bază are sens făcută atunci, nu acum pe un model
   ce va fi oricum aruncat.
 
+### Faza 4a — pipeline de embeddings, validare tehnică (implementat, testat live pe device — 2026-09-11)
+
+**Context**: Faza 4 (Recunoaștere & enrollment) e mare — utilizatorul lucrează prima dată cu
+embeddings/metric learning, discuție educațională purtată înainte de plan (ce e un embedding, de
+ce metric learning nu clasificator, cum se antrenează — ArcFace/triplet loss, transfer learning de
+la un backbone pretrained, fezabil pe GPU propriu în ore nu zile — și de unde vin datele: seed
+colectat manual vs. acumulare organică din enrollment-ul userilor). **Decizie comună**: NU
+antrenăm nimic acum (nu există încă dataset propriu de cutii, ca la Faza 3a) — Faza 4a validează
+DOAR pipeline-ul tehnic (crop → embedding → comparare) cu un model generic pretrained, exact
+disciplina de scop de la 3a-ii. **Fără galerie Room, fără enrollment, fără legătură Nomenclator/
+Treatment** — vin în Faza 4b, când persistarea unor embeddings etichetate chiar are sens.
+
+- **Model: MediaPipe `ImageEmbedder`** (`com.google.mediapipe:tasks-vision:1.0.0`, versiune
+  stabilă, NU LiteRT brut ca la YOLO) — API de nivel înalt (ca ML Kit) care gestionează singur
+  preprocesarea, evită o repetare a saga-i NCHW/proto-layout de la Faza 3a-ii/iii. Model implicit
+  `mobilenet_v3_small.tflite` (MobileNetV3-Small, ImageNet, generic — NU antrenat pe cutii),
+  **comis în repo** (`app/src/main/assets/mobilenet_v3_small_embedder.tflite`, ~3.9MB, descărcat
+  de la URL-ul oficial Google Storage, confirmat prin `curl -I`).
+- **API confirmat cu `javap` real** (nu doar grep pe bytecode ca la explorarea inițială — lecție
+  nouă de tehnică: `javap` era deja instalat local, cale completă
+  `C:\Program Files\Java\jdk-17\bin\javap.exe`, mult mai fiabil decât grep pe stringuri din
+  `.class` pt. semnături exacte de metode): `ImageEmbedder.createFromOptions` →
+  `embed(MPImage): ImageEmbedderResult` → `.embeddingResult().embeddings()[0].floatEmbedding()`
+  întoarce direct `float[]` (NU `Optional<FloatEmbedding>` cum presupusese prima variantă de cod —
+  bug de compilare prins imediat de compilator, nu unul silențios de runtime ca la NCHW, categorie
+  de risc mult mai mică).
+- **`domain/recognition/CosineSimilarity.kt`** (nou pachet — mirror `domain/vision`/`domain/gs1`):
+  `cosineSimilarity(FloatArray, FloatArray): Float`, pur, gestionează vector-zero (evită NaN). **6
+  teste noi**, toate trec. MediaPipe are propriul `ImageEmbedder.cosineSimilarity(Embedding,
+  Embedding)` static, dar NU folosit — ar aduce tipul vendor `Embedding` în domain, încalcă
+  regula de puritate a stratului `domain` (ca `AuthSessionState` pt. Supabase).
+- **`ui/vision/ImageEmbedderModel.kt`** (nou, glue Android): încearcă GPU, fallback grațios la
+  CPU — mirror EXACT `YoloSegModel.createModel()` (Faza 3a-iii), pattern deja confirmat. Pe acest
+  device: GPU a reușit direct.
+- **`ui/vision/VisionScanScreen.kt`** (extins, UI de validare temporară — va fi înlocuită de
+  fluxul real de enrollment în Faza 4b): apasă lung pe ecran = îngheață embedding-ul celei mai
+  mari detecții curente ca "referință" (`State` local, NU persistat); banner sus arată
+  similaritatea live față de referință. Embedding calculat o singură dată per cadru (doar pt. cea
+  mai mare detecție, nu toate) — cost redus.
+- **Bug real găsit + fixat prin testare live pe device**: prima încercare a dat similaritate doar
+  ~60% între două obiecte similare (2 banane) — utilizatorul a semnalat, corect, că pare scăzut.
+  **Nu era un bug de implementare** — explicat utilizatorului: un backbone ImageNet antrenat prin
+  clasificare (nu metric learning) nu e optimizat explicit ca aceeași categorie să dea cosine
+  similarity mare, doar să distingă categorii — 60% e tipic, nu o eroare. **Îmbunătățire aplicată,
+  la cererea utilizatorului**: crop-ul trimis la embedding folosește acum masca de segmentare
+  reală (Faza 3a-iii, `Detection.mask`) ca să elimine fundalul (pixeli din afara măștii → negru
+  opac), nu doar dreptunghiul brut de încadrare — reutilizare directă a investiției din 3a-iii.
+  `cropToBox`/`applyMask` (funcții private noi în `VisionScanScreen.kt`, aceeași tehnică de
+  "întinde grid-ul mic al măștii peste dreptunghiul final" ca în `DetectionOverlay.maskBitmap`,
+  dar pt. selecție de pixeli, nu tentă vizuală translucidă). **Confirmat pe device**: similaritate
+  vizibil mai mare la obiecte similare, discriminarea (obiecte diferite → similaritate mică) s-a
+  păstrat.
+- **Fără teste instrumentate noi** — glue Android/MediaPipe, netestabil semnificativ în JVM, ca
+  restul Fazei 3a/4a.
+- **Pe branch `feature/faza4a-embeddings-pipeline`**, de comis + PR (merge doar la cerere
+  explicită, convenția stabilă).
+
 ---
 
 ## 8. CE URMEAZĂ — TODO
@@ -756,7 +813,14 @@ real — NU feed-ul de cameră (`Preview` rulează deja fluid, independent de ra
   prima încercare + accelerare GPU ~5x (rezolvă lag-ul de overlay semnalat) — vezi secțiunea 7.
 - **Faza 3 (restul) — Viziune:** tracking multi-obiect pe cadru de ansamblu cu modelul de
   recunoaștere propriu (după Faza 4 — embeddings), nu doar model generic COCO.
-- **Faza 4 — Recunoaștere & enrollment:** model de **embeddings** (metric learning), galerie nearest-neighbor, enrollment multi-view + top-k candidați, **colorare contur** după statusul dozei.
+- **Faza 4a — pipeline de embeddings (validare tehnică):** ✅ **implementată, testată live pe
+  device, confirmată funcțională** (MediaPipe ImageEmbedder + crop mascat cu segmentarea din
+  3a-iii, semnal confirmat pe ambele direcții) — vezi secțiunea 7. Pe branch
+  `feature/faza4a-embeddings-pipeline`, de mergeuit la cerere explicită.
+- **Faza 4 (restul) — Recunoaștere & enrollment:** galerie Room (embeddings + legătură
+  Nomenclator), enrollment multi-view + top-k candidați (Faza 4b), integrare recunoaștere runtime
+  + **colorare contur** după statusul dozei (Faza 4c) — vezi decizia de strategie date/antrenare
+  în secțiunea 7 (Faza 4a): fără antrenare proprie acum, date acumulate organic din enrollment.
 - **Faza 5 — Tracking & AR:** ByteTrack + netezire, ancorare dinamică a panoului de info, buton show/hide; ancore ARCore pentru scanare progresivă.
 - **Faza 6 — Chatbot RAG + interacțiuni:** RAG peste tratament activ + prospecte, guardrails + disclaimere, verificare interacțiuni medicamentoase.
 - **Faza 7 — Hardening & studiu:** GDPR (consimțământ, ștergere), battery optimization, teste, instrumentare pentru studiul pilot de aderență.
