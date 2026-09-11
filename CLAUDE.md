@@ -611,10 +611,9 @@ exactă de segmentare, la această etapă.
   rularea de referință a bibliotecii originale (Ultralytics/PyTorch) pe EXACT aceeași imagine
   extrasă din pipeline e mult mai eficientă decât ghicitul succesiv de ipoteze — a confirmat rapid
   că problema era 100% în preprocesarea Kotlin, nu în model/imagine, înainte de a găsi bug-ul exact.
-- **PR #13 deschis** (`feature/faza3a-ii-litert-detect` → `main`), **nemergeuit încă** — la cererea
-  userului, merge doar cu feature-uri complete/testate confirmat pe device (acest caz), nu
-  automat. De văzut la sesiunea viitoare dacă se dă merge sau se continuă direct cu 3a-iii pe
-  acest branch.
+- **PR #13 mergeuit pe `main`** (2026-09-11), branch `feature/faza3a-ii-litert-detect` șters
+  (local + `origin`). Faza 3a-ii e considerată închisă; Faza 3a-iii (măști de segmentare) pornește
+  pe branch nou.
 
 ---
 
@@ -650,19 +649,18 @@ exactă de segmentare, la această etapă.
 - **Faza 2a — Import Nomenclator + căutare/asociere:** ✅ **complet implementată, mergeuită pe
   `main` (PR #10)**, migrările `0008`/`0009` rulate — vezi secțiunea 7.
 - **Faza 2b-i — Scanare GS1 DataMatrix + catalog `gtin_mappings`:** ✅ **complet implementată,
-  mergeuită pe `main` (PR #11)** — bug de parser găsit + fixat live, cautare fuzzy Nomenclator, dată
-  expirare + alerte — vezi secțiunea 7. Rămas la utilizator (de rulat manual): migrările
-  `0010`+`0011`+`0012`, marcarea contului drept contribuitor de încredere, testarea push+pull către
-  catalogul partajat.
+  mergeuită pe `main` (PR #11), migrările `0010`/`0011`/`0012` rulate, cont marcat contribuitor de
+  încredere, push+pull pe catalogul comun + afișare expirare testate live pe device** — vezi
+  secțiunea 7.
 - **Faza 2b-ii — OCR fallback:** ❌ **implementată, testată live, apoi ELIMINATĂ** — rată de succes
   prea scăzută în practică (vezi secțiunea 7). Rămân doar scanare cod + introducere manuală
   (cu fallback fuzzy) ca metode de identificare la această etapă.
 - **Faza 3a-i — CameraX feed live + permisiune:** ✅ **complet implementată, mergeuită pe `main`**
   (PR #12) — vezi secțiunea 7.
 - **Faza 3a-ii — model LiteRT (YOLO-seg) + decodare cutii + overlay:** ✅ **implementată, testată
-  live pe device, confirmată funcțională** (bug real NCHW vs. NHWC găsit + fixat — vezi secțiunea
-  7) — **PR #13 deschis**, nemergeuit încă (merge doar la cerere explicită). Faza 3a-iii (măști de
-  segmentare) — viitor, plan mode separat.
+  live pe device, confirmată funcțională, mergeuită pe `main` (PR #13)** (bug real NCHW vs. NHWC
+  găsit + fixat — vezi secțiunea 7). Faza 3a-iii (măști de segmentare) — pe branch nou
+  `feature/faza3a-iii-litert-masks`, plan mode separat.
 - **Faza 3 (restul) — Viziune:** detecție/segmentare multi-obiect pe cadru de ansamblu (după 3a-ii).
 - **Faza 4 — Recunoaștere & enrollment:** model de **embeddings** (metric learning), galerie nearest-neighbor, enrollment multi-view + top-k candidați, **colorare contur** după statusul dozei.
 - **Faza 5 — Tracking & AR:** ByteTrack + netezire, ancorare dinamică a panoului de info, buton show/hide; ancore ARCore pentru scanare progresivă.
