@@ -883,6 +883,19 @@ salvează local, legate de acel Cod CIM. **Strict scriere** — nearest-neighbor
   de existența acelui detector/backbone antrenat — posibil rezultat direct al acestui dataset.
   Colorarea conturului după statusul dozei (verde/portocaliu/roșu/gri, deja definite în
   `Theme.kt`) rămâne planul pt. când 4c se reia.
+  - **Ghidaj foto dat utilizatorului** (nu implementare, doar sfat, de reținut pt. sesiunea
+    viitoare când revine cu pozele): 10-15 medicamente, 6-10 poze/medicament, unghiuri variate
+    (față, lateral ×2, de sus, oblic 15-30° din 2-3 direcții), distanțe variate (aproape + normal
+    de scanare), lumină variată (minim 2-3 condiții — naturală, artificială interior, slab
+    luminat; evită blitz direct), fundal variat (nu constant, ca modelul să nu "învețe" fundalul),
+    poziții variate ale cutiei (dreaptă + culcată/înclinată), fără crop/editare manuală a
+    pozelor, un folder per medicament denumit clar (`paracetamol_500mg/` etc. — mapează direct pe
+    o clasă/identitate la antrenare).
+  - **Sesiunea viitoare începe aici**: verifică dacă userul a terminat sesiunea foto — dacă da,
+    următorul pas e pregătirea/organizarea dataset-ului și decizia despre antrenare (vezi
+    secțiunea 7, Faza 4a, pt. context complet despre opțiunile de antrenare deja discutate cu
+    userul — ArcFace/triplet loss, transfer learning, PyTorch + `pytorch-metric-learning` → ONNX
+    → TFLite). Dacă nu, se poate relua orice alt item din backlog (secțiunea 8a) sau alte faze.
 - **Faza 5 — Tracking & AR:** ByteTrack + netezire, ancorare dinamică a panoului de info, buton show/hide; ancore ARCore pentru scanare progresivă.
 - **Faza 6 — Chatbot RAG + interacțiuni:** RAG peste tratament activ + prospecte, guardrails + disclaimere, verificare interacțiuni medicamentoase.
 - **Faza 7 — Hardening & studiu:** GDPR (consimțământ, ștergere), battery optimization, teste, instrumentare pentru studiul pilot de aderență.
