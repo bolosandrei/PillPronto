@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.Room
 import com.pillpronto.data.local.PillProntoDatabase
 import com.pillpronto.data.local.dao.DoseDao
+import com.pillpronto.data.local.dao.EnrolledMedicationDao
 import com.pillpronto.data.local.dao.GtinMappingDao
 import com.pillpronto.data.local.dao.PendingRemoteDeleteDao
 import com.pillpronto.data.local.dao.TreatmentDao
@@ -37,4 +38,7 @@ object DatabaseModule {
 
     @Provides
     fun provideGtinMappingDao(db: PillProntoDatabase): GtinMappingDao = db.gtinMappingDao()
+
+    @Provides
+    fun provideEnrolledMedicationDao(db: PillProntoDatabase): EnrolledMedicationDao = db.enrolledMedicationDao()
 }

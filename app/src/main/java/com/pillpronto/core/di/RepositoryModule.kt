@@ -5,6 +5,7 @@ import com.pillpronto.data.reminder.ReminderCoordinator
 import com.pillpronto.data.reminder.ReminderSync
 import com.pillpronto.data.repository.AuthRepositoryImpl
 import com.pillpronto.data.repository.DoseRepositoryImpl
+import com.pillpronto.data.repository.EnrolledMedicationRepositoryImpl
 import com.pillpronto.data.repository.GtinMappingRepositoryImpl
 import com.pillpronto.data.repository.LinkRepositoryImpl
 import com.pillpronto.data.repository.LinkedPatientDataRepositoryImpl
@@ -17,6 +18,7 @@ import com.pillpronto.data.sync.SupabaseSyncDataSource
 import com.pillpronto.data.sync.SyncRemoteDataSource
 import com.pillpronto.domain.repository.AuthRepository
 import com.pillpronto.domain.repository.DoseRepository
+import com.pillpronto.domain.repository.EnrolledMedicationRepository
 import com.pillpronto.domain.repository.GtinMappingRepository
 import com.pillpronto.domain.repository.LinkRepository
 import com.pillpronto.domain.repository.LinkedPatientDataRepository
@@ -81,4 +83,8 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindGtinCatalogRemoteDataSource(impl: SupabaseGtinCatalogDataSource): GtinCatalogRemoteDataSource
+
+    @Binds
+    @Singleton
+    abstract fun bindEnrolledMedicationRepository(impl: EnrolledMedicationRepositoryImpl): EnrolledMedicationRepository
 }

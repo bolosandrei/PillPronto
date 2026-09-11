@@ -3,10 +3,12 @@ package com.pillpronto.data.local
 import androidx.room.Database
 import androidx.room.RoomDatabase
 import com.pillpronto.data.local.dao.DoseDao
+import com.pillpronto.data.local.dao.EnrolledMedicationDao
 import com.pillpronto.data.local.dao.GtinMappingDao
 import com.pillpronto.data.local.dao.PendingRemoteDeleteDao
 import com.pillpronto.data.local.dao.TreatmentDao
 import com.pillpronto.data.local.entity.DoseLogEntity
+import com.pillpronto.data.local.entity.EnrolledMedicationEntity
 import com.pillpronto.data.local.entity.GtinMappingEntity
 import com.pillpronto.data.local.entity.PendingRemoteDeleteEntity
 import com.pillpronto.data.local.entity.TreatmentEntity
@@ -14,7 +16,7 @@ import com.pillpronto.data.local.entity.TreatmentEntity
 @Database(
     entities = [
         TreatmentEntity::class, DoseLogEntity::class, PendingRemoteDeleteEntity::class,
-        GtinMappingEntity::class
+        GtinMappingEntity::class, EnrolledMedicationEntity::class
     ],
     // v2: Treatment.asNeeded + DoseLog.isAsNeeded (PRN).
     // v3: patientProfileId pe ambele entitati (Faza 1.5 — conturi & roluri, vezi docs/user-management-plan.md).
@@ -30,8 +32,12 @@ import com.pillpronto.data.local.entity.TreatmentEntity
     // v8: TreatmentEntity.expiryDate (data expirarii ultimei cutii scanate, din AI 17 GS1 —
     //     sincronizat, migrarea Supabase 0012) — afisare la scanare + alerte de expirare apropiata
     //     (ExpiryAlertWorker).
+    // v9: tabel enrolled_medications (Faza 4b) — galerie locala de embeddings de recunoastere,
+    //     un rand per captura din timpul inrolarii unui medicament nou, legat de Cod CIM ales
+    //     manual de user. STRICT locala, NU se sincronizeaza (health-adjacent) — fara migrare
+    //     Supabase corespunzatoare, spre deosebire de restul tabelelor noi din proiect.
     // fallbackToDestructiveMigration.
-    version = 8,
+    version = 9,
     exportSchema = false
 )
 abstract class PillProntoDatabase : RoomDatabase() {
@@ -39,6 +45,7 @@ abstract class PillProntoDatabase : RoomDatabase() {
     abstract fun doseDao(): DoseDao
     abstract fun pendingRemoteDeleteDao(): PendingRemoteDeleteDao
     abstract fun gtinMappingDao(): GtinMappingDao
+    abstract fun enrolledMedicationDao(): EnrolledMedicationDao
 
     companion object {
         const val NAME = "pillpronto.db"
