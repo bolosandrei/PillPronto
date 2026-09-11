@@ -661,8 +661,8 @@ la această etapă. Dreptunghiul gri + eticheta rămân desenate ca ghidaj.
   vizibil forma reală a obiectului, nu doar dreptunghiul — **confirmat funcțional de utilizator,
   fără nevoie de debugging suplimentar** (channel-first-ul presupus pt. proto s-a dovedit corect
   din prima, spre deosebire de input-ul NCHW din 3a-ii care a cerut o sesiune întreagă de debugging).
-- **PR #14 deschis** (`feature/faza3a-iii-litert-masks` → `main`), nemergeuit — merge doar la
-  cerere explicită, convenția stabilă.
+- **PR #14 mergeuit pe `main`** (2026-09-11), branch `feature/faza3a-iii-litert-masks` șters
+  (local + `origin`).
 
 ### Optimizare — accelerator GPU pt. inferență LiteRT (implementat, testat live pe device — 2026-09-11)
 
@@ -691,8 +691,20 @@ real — NU feed-ul de cameră (`Preview` rulează deja fluid, independent de ra
 - **Alternative discutate, nu implementate acum** (dacă GPU nu ar fi fost suficient): cuantizare
   INT8 la export (reduce costul real per cadru, nu doar mută treaba pe alt silicon) și/sau
   rezoluție de input mai mică (640→416/320, trade-off real de calitate pe obiecte mici).
-- **Pe același branch/PR** (`feature/faza3a-iii-litert-masks`, PR #14) — atinge același fișier
-  modificat acolo, evită complicații de merge între branch-uri paralele.
+- **Pe același branch/PR** (`feature/faza3a-iii-litert-masks`, PR #14, mergeuit pe `main`
+  împreună cu măștile de segmentare).
+- **Decizie luată cu utilizatorul (2026-09-11)**: rămânem pe YOLO11n-seg deocamdată, NU trecem la
+  YOLO26 (succesorul Ultralytics, lansat ianuarie 2026, +3.7 mask AP și ~35% mai rapid pe CPU față
+  de YOLO11n pe hârtie) — cercetare (nu presupunere) a găsit riscuri reale nerezolvate specifice
+  combinației noastre (segmentare + TFLite/LiteRT + Android + GPU delegate): delegate-ul GPU
+  eșuează pe Android cu modele YOLO26 exportate la TFLite (operatori nesuportați la LiteRT ~2.1,
+  issue închis "not planned" de Ultralytics/LiteRT — ar pune în pericol exact accelerarea GPU de
+  mai sus), modulul de proto-măști (`Proto26`) e arhitectural diferit (nu un swap simplu de
+  fișier `.tflite`, ar cere reverificare empirică de la zero ca la bug-ul NCHW), plus bug-uri de
+  export recente specifice segmentării (INT8, rezoluție mască). Motivare suplimentară: modelul
+  COCO generic e oricum temporar (doar validare pipeline, Faza 4 îl înlocuiește cu modelul propriu
+  antrenat pe cutii) — alegerea de arhitectură de bază are sens făcută atunci, nu acum pe un model
+  ce va fi oricum aruncat.
 
 ---
 
@@ -739,10 +751,9 @@ real — NU feed-ul de cameră (`Preview` rulează deja fluid, independent de ra
 - **Faza 3a-ii — model LiteRT (YOLO-seg) + decodare cutii + overlay:** ✅ **implementată, testată
   live pe device, confirmată funcțională, mergeuită pe `main` (PR #13)** (bug real NCHW vs. NHWC
   găsit + fixat — vezi secțiunea 7).
-- **Faza 3a-iii — măști de segmentare (contur real):** ✅ **implementată, testată live pe device,
-  confirmată funcțională din prima încercare** (layout proto channel-first corect, fără debugging
-  suplimentar) — vezi secțiunea 7. Pe branch `feature/faza3a-iii-litert-masks`, de mergeuit la
-  cerere explicită.
+- **Faza 3a-iii — măști de segmentare (contur real) + accelerator GPU:** ✅ **implementată, testată
+  live pe device, confirmată funcțională, mergeuită pe `main` (PR #14)** — măștile funcționale din
+  prima încercare + accelerare GPU ~5x (rezolvă lag-ul de overlay semnalat) — vezi secțiunea 7.
 - **Faza 3 (restul) — Viziune:** tracking multi-obiect pe cadru de ansamblu cu modelul de
   recunoaștere propriu (după Faza 4 — embeddings), nu doar model generic COCO.
 - **Faza 4 — Recunoaștere & enrollment:** model de **embeddings** (metric learning), galerie nearest-neighbor, enrollment multi-view + top-k candidați, **colorare contur** după statusul dozei.
