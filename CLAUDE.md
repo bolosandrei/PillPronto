@@ -49,7 +49,8 @@ din `auth-kt`), JDK 17, Gradle KTS + version catalog (`gradle/libs.versions.toml
 - `ui/account/`, `ui/onboarding/` — Faza 1.5a/b.
 - `ui/access/`, `ui/patients/` — Faza 1.5d/e.
 - `ui/gtinmapping/` — Faza 2b-i (asociere coduri GTIN).
-- `ui/vision/` — `CameraPreview`, `VisionScanScreen` — Faza 3a-i (feed live cameră, fără ML încă).
+- `domain/vision/` — `Detection`, `YoloOutputDecoder`, `LetterboxMapper`, `NonMaxSuppression` — Faza 3a-ii (pur Kotlin, testabil).
+- `ui/vision/` — `CameraPreview`, `VisionScanScreen`, `YoloSegModel`, `DetectionOverlay` — Faza 3a-i/3a-ii (feed cameră + detecție generică, doar cutii).
 
 ## 4. Convenții de cod
 
@@ -529,12 +530,91 @@ YOLO11n-seg + decodare ieșire + overlay contururi gri).
   parte din build-ul Gradle, cere `pip install ultralytics`): descarcă `yolo11n-seg.pt` preantrenat
   și îl exportă la LiteRT (`.tflite`, `model.export(format="tflite")`). Pregătit acum pt. Faza
   3a-ii, **neconsumat încă** de aplicație în acest stadiu.
-- **De făcut sesiunea viitoare (Faza 3a-ii, plan mode separat)**: userul rulează scriptul Python
-  local, copiază `.tflite`-ul rezultat în `app/src/main/assets/`; Claude adaugă dependența LiteRT
-  (`com.google.ai.edge.litert`, coordonată Maven exactă de confirmat la momentul respectiv),
-  decodare ieșire YOLO-seg (boxes + mask coefficients, NMS), overlay Compose cu contururi gri
-  peste feed-ul deja funcțional din 3a-i, mapare corectă a coordonatelor de detecție pe
-  coordonatele preview-ului de cameră.
+### Faza 3a-ii — model LiteRT (YOLO-seg) + decodare (doar cutii) + overlay (implementat — 2026-09-11)
+
+**Decizie de scop, luată cu utilizatorul**: în acest pas se decodează DOAR tensorul de detecție
+(cutii + clase + scor), FĂRĂ măștile de segmentare (protos 160×160×32 + coeficienți + resize) —
+acelea rămân pt. **Faza 3a-iii** (viitor), după ce se confirmă că restul pipeline-ului
+(CameraX→LiteRT→overlay) funcționează corect. Contur gri = dreptunghi (bounding box), nu formă
+exactă de segmentare, la această etapă.
+
+- **LiteRT**: `com.google.ai.edge.litert:litert:2.2.0` (confirmat "Latest" direct din
+  `maven-metadata.xml`, nu din research indirect). API `CompiledModel` (clasa veche `Interpreter`
+  a fost **eliminată**, nu doar deprecată, în LiteRT 2.0+). Semnătura fără parametru `env` explicit
+  (`CompiledModel.create(context.assets, "model.tflite", CompiledModel.Options(Accelerator.CPU))`)
+  — confirmată printr-un exemplu real de cod dintr-un issue GitHub oficial (documentația arăta și
+  o variantă cu `env` suplimentar, dar fără detalii complete despre construcția lui) — **compilează
+  corect**, confirmă alegerea. AGP-ul proiectului (9.3.2) adaugă automat `.tflite` la
+  `noCompress` — fără config manuală.
+- **`domain/vision/`** (pur Kotlin, testabil JVM, ca `domain/gs1`/`domain/util`): `Detection.kt`
+  (`RectF01` cx/cy/w/h normalizate), `CocoLabels.kt` (cele 80 clase COCO), `NonMaxSuppression.kt`
+  (greedy, IoU), `YoloOutputDecoder.kt` (decodează layout-ul **channel-first** al tensorului de
+  detecție `[1, 4+numClasses, numAnchors]` — pt. ancora `a`, canalul `c` e la indexul
+  `c*numAnchors+a`), `LetterboxMapper.kt` (inversează letterbox-ul din preprocesare, mapează
+  cutiile din spațiul 640×640 al modelului înapoi în spațiul normalizat al imaginii originale).
+  **8 teste unitare noi** (`YoloOutputDecoderTest`, `LetterboxMapperTest`) — verifică matematica
+  (extragere layout, filtrare prag, NMS, cele 3 cazuri de padding letterbox) **înainte** de a
+  scrie partea Android — toate trec.
+- **`ui/vision/YoloSegModel.kt`** — glue Android (Context/Bitmap/LiteRT), documentat ca excepție
+  de la separarea strictă ui/domain (precedent `ScanBarcode.kt`/`GoogleSignInHelper.kt`, secțiunea
+  4): încarcă modelul din assets (`yolo11n_seg.tflite`, nume fix, **comis în repo** — 11.8MB, la
+  fel ca `nomenclator.tsv.gz`/`gtin_mappings_seed.tsv`, altfel o clonă curată n-ar avea feature-ul
+  funcțional fără pasul manual de export), letterbox-resize la 640×640, `model.run()`, decodare.
+- **`ui/vision/DetectionOverlay.kt`** — `Canvas` Compose, dreptunghiuri gri (culoarea `DoseUnknown`
+  din temă — exact reutilizarea anticipată în secțiunea 3 pt. AR) + etichetă (clasă COCO +
+  confidence, util pt. validare vizuală pe un ecran oricum "experimental"). Mapare cu formulă
+  **crop-to-fill** (`scale = max(...)`) — **confirmată corectă empiric pe device** (dreptunghiurile
+  se aliniază corect cu obiectele reale).
+- **`ui/vision/CameraPreview.kt`** — extins cu un al doilea use case `ImageAnalysis` opțional
+  (`RGBA_8888` + `imageProxy.toBitmap()`, evită conversia manuală YUV; `STRATEGY_KEEP_ONLY_LATEST`
+  = backpressure automat, fără throttling manual), legat alături de `Preview` în același
+  `bindToLifecycle(...)`.
+- **`ui/vision/VisionScanScreen.kt`** — instanțiază `YoloSegModel` o singură dată (`DisposableEffect`,
+  închis la dispose, `runCatching` — degradare grațioasă cu banner „Model AI lipsă" dacă `.tflite`-ul
+  nu există încă în assets) + `Executor` dedicat pt. analiza de frame-uri (NU main thread —
+  `CompiledModel.run()` e blocant). Rotește bitmap-ul cu `imageInfo.rotationDegrees` înainte de
+  inferență (`ImageAnalysis` nu pre-rotește bufferul).
+- **Limitare reală de mediu, găsită live (2026-09-11)**: exportul Ultralytics la LiteRT **nu
+  rulează pe Windows nativ** — `AssertionError: LiteRT export only supported on Linux x86 and
+  macOS`, restricție hard-codată în unealta de export (fișierul `.tflite` rezultat rulează normal
+  pe orice platformă, inclusiv Android — doar procesul de export cere Linux/macOS). Utilizatorul a
+  folosit **Google Colab** (zero instalare locală) — funcțional, `.tflite` exportat cu succes.
+  `scripts/export-yolo-seg-model.py` documentează ambele alternative (Colab + WSL2, dacă cineva
+  preferă local pe viitor).
+- **Bug real găsit + fixat prin testare live pe device (2026-09-11) — cel mai semnificativ din
+  această fază**: prima rulare pe device arăta feed-ul de cameră, dar NICIO detecție, niciodată,
+  indiferent de obiect. Diagnosticat prin logging temporar iterativ direct pe device (scor maxim
+  brut per frame, min/max global pe tensor, max per canal din cele 116, salvare pe disk +
+  inspecție vizuală a imaginii preprocesate) — toate arătau o imagine de intrare vizual perfect
+  corectă (letterbox, rotație, culori), dar scoruri de clasă mereu aproape de zero (niciodată
+  peste prag). **Root cause găsit prin comparație directă cu Ultralytics** (rulat în Colab pe
+  ACEEAȘI imagine extrasă de pe device, `adb pull` + `SendUserFile`): Ultralytics obținea
+  încredere >0.85 pe acea imagine, deci modelul + imaginea erau amândouă corecte — bug-ul era
+  exclusiv în codul de preprocesare Kotlin. Confirmat citind direct din codul sursă Ultralytics
+  (`nn/modules/head.py`, `Segment._inference`) că ordinea canalelor tensorului de ieșire e
+  `[cutie(4), scoruri clasă(80, sigmoid deja aplicat la export), coeficienți mască(32)]` — exact ce
+  implementasem — deci decodarea (`YoloOutputDecoder`) era corectă de la bun început. Bug-ul real:
+  `interpreter.get_input_details()` (rulat de user în Colab, pe fișierul `.tflite` real) a arătat
+  `shape=[1, 3, 640, 640]` — **input NCHW (planuri R/G/B separate), NU NHWC (`[1,640,640,3]`,
+  RGB interleaved per pixel) cum presupusese `bitmapToNormalizedFloatArray`** — quirk al
+  exportului `onnx2tf` folosit de Ultralytics pt. TFLite, care poate păstra layout-ul nativ
+  PyTorch (NCHW) în loc de convenția TF "standard" (NHWC). Array-ul avea dimensiunea corectă
+  (1228800 floats), deci nu arunca nicio eroare — doar conținutul era complet amestecat spațial
+  pentru rețea. Fix: `bitmapToNchwFloatArray` (redenumită), scrie 3 planuri separate (tot R, apoi
+  tot G, apoi tot B) în loc de interleaved per pixel. **Retestat pe device — confirmat funcțional**:
+  dreptunghiuri gri + etichetă corectă pe obiecte uzuale (COCO). Pe cutia de medicamente NU apare
+  nimic — **comportament AȘTEPTAT, nu bug**: COCO (clasele acestui model generic) nu are o clasă
+  „cutie de medicamente" — exact motivul pt. care Faza 4 (embeddings + enrollment) există, acest
+  model preantrenat era doar pt. validarea pipeline-ului tehnic, nu pt. recunoaștere reală.
+  **Lecție reținută, adăugată la convenția de debugging a proiectului**: la un model ML "care
+  rulează dar nu produce rezultate corecte" (nu crapă, doar iese greșit), comparația directă cu
+  rularea de referință a bibliotecii originale (Ultralytics/PyTorch) pe EXACT aceeași imagine
+  extrasă din pipeline e mult mai eficientă decât ghicitul succesiv de ipoteze — a confirmat rapid
+  că problema era 100% în preprocesarea Kotlin, nu în model/imagine, înainte de a găsi bug-ul exact.
+- **PR #13 deschis** (`feature/faza3a-ii-litert-detect` → `main`), **nemergeuit încă** — la cererea
+  userului, merge doar cu feature-uri complete/testate confirmat pe device (acest caz), nu
+  automat. De văzut la sesiunea viitoare dacă se dă merge sau se continuă direct cu 3a-iii pe
+  acest branch.
 
 ---
 
@@ -577,10 +657,12 @@ YOLO11n-seg + decodare ieșire + overlay contururi gri).
 - **Faza 2b-ii — OCR fallback:** ❌ **implementată, testată live, apoi ELIMINATĂ** — rată de succes
   prea scăzută în practică (vezi secțiunea 7). Rămân doar scanare cod + introducere manuală
   (cu fallback fuzzy) ca metode de identificare la această etapă.
-- **Faza 3a-i — CameraX feed live + permisiune:** ✅ **implementată, testată live pe device** — vezi
-  secțiunea 7. Pe branch `feature/faza3a-i-camerax-feed`, necomisă încă push/PR.
-- **Faza 3a-ii — model LiteRT (YOLO-seg) + overlay contururi gri:** următorul pas, plan mode separat
-  — vezi secțiunea 7 pentru ce rămâne de făcut.
+- **Faza 3a-i — CameraX feed live + permisiune:** ✅ **complet implementată, mergeuită pe `main`**
+  (PR #12) — vezi secțiunea 7.
+- **Faza 3a-ii — model LiteRT (YOLO-seg) + decodare cutii + overlay:** ✅ **implementată, testată
+  live pe device, confirmată funcțională** (bug real NCHW vs. NHWC găsit + fixat — vezi secțiunea
+  7) — **PR #13 deschis**, nemergeuit încă (merge doar la cerere explicită). Faza 3a-iii (măști de
+  segmentare) — viitor, plan mode separat.
 - **Faza 3 (restul) — Viziune:** detecție/segmentare multi-obiect pe cadru de ansamblu (după 3a-ii).
 - **Faza 4 — Recunoaștere & enrollment:** model de **embeddings** (metric learning), galerie nearest-neighbor, enrollment multi-view + top-k candidați, **colorare contur** după statusul dozei.
 - **Faza 5 — Tracking & AR:** ByteTrack + netezire, ancorare dinamică a panoului de info, buton show/hide; ancore ARCore pentru scanare progresivă.

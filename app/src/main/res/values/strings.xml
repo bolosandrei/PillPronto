@@ -149,6 +149,7 @@
     <string name="vision_scan_title">Scanare vizuală (experimental)</string>
     <string name="vision_scan_permission_denied">Ai nevoie de permisiunea camerei ca să folosești acest ecran.</string>
     <string name="vision_scan_open_settings">Deschide setările aplicației</string>
+    <string name="vision_scan_model_missing">Model AI lipsă din aplicație (.tflite) — se arată doar feed-ul de cameră, fără detecție.</string>
 
     <string name="associate_gtin_title">Asociere coduri (GTIN)</string>
     <string name="associate_gtin_hint">Scanează codul de pe o cutie, apoi alege medicamentul corect — maparea rămâne reținută pentru toate scanările viitoare ale aceluiași cod.</string>
