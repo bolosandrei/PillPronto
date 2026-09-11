@@ -3,42 +3,65 @@ package com.pillpronto.ui.vision
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.util.Log
 import com.google.ai.edge.litert.Accelerator
 import com.google.ai.edge.litert.CompiledModel
 import com.pillpronto.domain.vision.COCO_LABELS
 import com.pillpronto.domain.vision.Detection
 import com.pillpronto.domain.vision.LetterboxInfo
 import com.pillpronto.domain.vision.LetterboxMapper
+import com.pillpronto.domain.vision.MaskDecoder
 import com.pillpronto.domain.vision.YoloOutputDecoder
 import kotlin.math.min
 
+private const val TAG = "YoloSegModel"
 private const val MODEL_ASSET_NAME = "yolo11n_seg.tflite"
 private const val MODEL_INPUT_SIZE = 640
 private const val NUM_ANCHORS = 8400 // (80x80)+(40x40)+(20x20) grid-uri, standard YOLO la input 640
+private const val MASK_DIM = 32 // coeficienti de masca per detectie, standard Ultralytics YOLO-seg
+private const val PROTO_SIZE = 160 // rezolutia grid-ului de proto-masti (MODEL_INPUT_SIZE / 4)
 
-/** Wrapper Android peste LiteRT `CompiledModel` pt. modelul YOLO11n-seg preantrenat (Faza 3a-ii)
- * — glue Android (Context/Bitmap/assets), documentat ca excepție de la separarea strictă
- * ui/domain (vezi CLAUDE.md secțiunea 4, precedent `ScanBarcode.kt`/`GoogleSignInHelper.kt`):
- * încărcarea modelului și preprocesarea de imagine cer API-uri Android directe, fără beneficiu
- * real de abstractizare printr-un repository.
+/** Wrapper Android peste LiteRT `CompiledModel` pt. modelul YOLO11n-seg preantrenat — glue
+ * Android (Context/Bitmap/assets), documentat ca excepție de la separarea strictă ui/domain (vezi
+ * CLAUDE.md secțiunea 4, precedent `ScanBarcode.kt`/`GoogleSignInHelper.kt`): încărcarea
+ * modelului și preprocesarea de imagine cer API-uri Android directe, fără beneficiu real de
+ * abstractizare printr-un repository.
  *
- * Decodează DOAR tensorul de detecție (cutii+clase) — tensorul de proto-măști de segmentare e
- * ignorat complet în acest pas (Faza 3a-iii, viitor). Instanțiat o singură dată per intrare pe
- * ecran (`VisionScanScreen`), NU per-frame — încărcarea modelului e costisitoare.
+ * Decodează tensorul de detecție (cutii+clase+coeficienți de mască) ȘI, dacă modelul produce un
+ * al 2-lea tensor de ieșire (proto-măști, Faza 3a-iii), calculează masca de segmentare per
+ * detecție (`MaskDecoder`) — degradează grațios la doar cutii dacă al 2-lea output lipsește
+ * (variantă de model fără segmentare). Instanțiat o singură dată per intrare pe ecran
+ * (`VisionScanScreen`), NU per-frame — încărcarea modelului e costisitoare.
  *
  * Fișierul `.tflite` (nume fix, `MODEL_ASSET_NAME`) e o prerechizită manuală — utilizatorul rulează
  * `scripts/export-yolo-seg-model.py` local și copiază rezultatul în `app/src/main/assets/`.
+ *
+ * Rulează pe **GPU** (delegate OpenCL/OpenGL), cu fallback grațios la CPU dacă delegate-ul
+ * eșuează la compilare pe un anumit device — vezi `createModel`. Măsurat pe device (2026-09-11):
+ * ~5x mai rapid decât CPU (~450-500ms/cadru → ~85-120ms/cadru), motivul real al lag-ului de
+ * overlay semnalat inițial de utilizator.
  */
 class YoloSegModel(context: Context) : AutoCloseable {
 
-    // Semnătura cu 3 argumente (fără `env` explicit) e cea confirmată funcțională într-un exemplu
-    // real (issue LiteRT #6517) — documentația oficială arată și o variantă cu `env`, dar fără
-    // detalii complete despre cum se construiește; folosim varianta confirmată.
-    private val model = CompiledModel.create(
-        context.assets,
-        MODEL_ASSET_NAME,
-        CompiledModel.Options(Accelerator.CPU)
-    )
+    // Incearca intai GPU (delegate OpenCL/OpenGL deja bundle-uit in .aar-ul LiteRT, confirmat prin
+    // inspectia bytecode-ului local: enum Accelerator are NONE/CPU/GPU/NPU) - silicon altfel
+    // neutilizat, in paralel cu CPU-ul care oricum face preprocesarea/UI. Masurat pe device
+    // (2026-09-11): ~450-500ms/cadru (~2fps) pe CPU vs. ~85-120ms/cadru (~9-12fps) pe GPU - ~5x mai
+    // rapid, motivul real al lag-ului de overlay semnalat de user era CPU-only. Fallback grațios la
+    // CPU daca delegate-ul esueaza la compilare (nu toate GPU-urile mobile suporta la fel de bine
+    // OpenCL/OpenGL) - catch(Throwable) la fel de larg ca runCatching deja folosit in
+    // VisionScanScreen pt. incarcarea modelului. Semnătura cu 3 argumente (fără `env` explicit) e
+    // cea confirmată funcțională într-un exemplu real (issue LiteRT #6517).
+    private val model = createModel(context)
+
+    private fun createModel(context: Context): CompiledModel =
+        try {
+            CompiledModel.create(context.assets, MODEL_ASSET_NAME, CompiledModel.Options(Accelerator.GPU))
+                .also { Log.w(TAG, "Model incarcat cu accelerator GPU") }
+        } catch (e: Throwable) {
+            Log.w(TAG, "Accelerator GPU indisponibil, fallback la CPU", e)
+            CompiledModel.create(context.assets, MODEL_ASSET_NAME, CompiledModel.Options(Accelerator.CPU))
+        }
 
     fun detect(bitmap: Bitmap): List<Detection> {
         val (inputBitmap, letterboxInfo) = letterbox(bitmap)
@@ -50,12 +73,34 @@ class YoloSegModel(context: Context) : AutoCloseable {
         model.run(inputBuffers, outputBuffers)
         val rawOutput = outputBuffers[0].readFloat()
 
-        val modelSpaceDetections = YoloOutputDecoder.decode(
+        // Al 2-lea output (proto-masti) e opțional — un .tflite exportat fără segmentare
+        // (sau o versiune viitoare cu alt numar de output-uri) nu trebuie sa crape, doar sa
+        // degradeze grațios la cutii fara masca (ca in Faza 3a-ii). `maskDim` e legat de
+        // prezenta lui `protos` — daca al 2-lea output lipseste, presupunem ca output0 nu are
+        // nici canalele de coeficienti de masca (altfel `YoloOutputDecoder.decode` ar arunca
+        // eroare de validare pe fiecare cadru, in loc sa degradeze grațios la 3a-ii).
+        val protos = if (outputBuffers.size >= 2) outputBuffers[1].readFloat() else null
+        val maskDim = if (protos != null) MASK_DIM else 0
+        if (protos == null) {
+            Log.w(TAG, "Modelul nu produce al 2-lea output (proto-masti) - doar cutii, fara masca de segmentare")
+        }
+
+        var modelSpaceDetections = YoloOutputDecoder.decode(
             raw = rawOutput,
             numAnchors = NUM_ANCHORS,
             numClasses = COCO_LABELS.size,
-            labels = COCO_LABELS
+            labels = COCO_LABELS,
+            maskDim = maskDim
         )
+        if (protos != null) {
+            modelSpaceDetections = MaskDecoder.attach(
+                detections = modelSpaceDetections,
+                protos = protos,
+                maskDim = MASK_DIM,
+                protoHeight = PROTO_SIZE,
+                protoWidth = PROTO_SIZE
+            )
+        }
         return LetterboxMapper.mapToOriginalImage(modelSpaceDetections, letterboxInfo)
     }
 

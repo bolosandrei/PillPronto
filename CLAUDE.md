@@ -615,6 +615,85 @@ exactă de segmentare, la această etapă.
   (local + `origin`). Faza 3a-ii e considerată închisă; Faza 3a-iii (măști de segmentare) pornește
   pe branch nou.
 
+### Faza 3a-iii — măști de segmentare (contur real, nu doar bounding box) (implementat, testat live pe device — 2026-09-11)
+
+**Decizie de scop, luată cu utilizatorul**: fără niciun contur poligonal calculat explicit
+(marching squares etc.) — masca se desenează ca bitmap semi-transparent colorat (tenta
+`DoseUnknown`) exact peste dreptunghiul deja mapat pe ecran; marginea vizuală a zonei translucide
+E conturul, mult mai simplu decât extragerea unui `Path` și suficient pt. validarea vizuală cerută
+la această etapă. Dreptunghiul gri + eticheta rămân desenate ca ghidaj.
+
+- **Model matematic** (convenția YOLOv8/11-seg, standard Ultralytics): tensorul de detecție
+  (output 0) are de fapt `4+numClasses+maskDim` canale (`maskDim=32`), nu doar `4+numClasses` —
+  codul din Faza 3a-ii deja "tolera" asta din greșeală (verifica doar un bound minim, ignora tacit
+  canalele finale). Al 2-lea tensor de ieșire (output 1) = "proto-măști", `[1,32,160,160]`
+  **channel-first**. Masca finală per detecție = `sigmoid(coeficienți(32) · proto(32,y,x))` per
+  pixel, threshold 0.5 → boolean, calculată DOAR pe regiunea proto-pixelilor corespunzătoare cutiei
+  (crop, nu tot grid-ul 160×160) — cutia (0..1 normalizată relativ la modelul 640×640) indexează
+  direct în proto (160×160 e aceeași imagine, doar rezoluție mai mică), fără transformare
+  suplimentară. Crop-ul se face cât timp cutia e încă în spațiul modelului (imediat după
+  `YoloOutputDecoder.decode`, ÎNAINTE de `LetterboxMapper.mapToOriginalImage`) — grid-ul mic
+  rezultat e cărat neschimbat prin `.copy(box=...)` (care păstrează câmpurile nespecificate), apoi
+  întins direct peste dreptunghiul FINAL la randare, fără nicio transformare inversă de letterbox.
+- **`domain/vision/Detection.kt`**: `SegMask(width, height, values: List<Boolean>)` (List, nu
+  BooleanArray, pt. `equals` structural gratuit — cost de autoboxing neglijabil la dimensiunile
+  astea, crop nu grid întreg). `Detection` capătă `maskCoeffs: List<Float>? = null` (tranzitoriu,
+  cei 32 coeficienți bruți) + `mask: SegMask? = null` (final) — ambele opționale, fără breaking
+  change pe testele existente din 3a-ii.
+- **`domain/vision/YoloOutputDecoder.kt`**: `decode(...)` capătă `maskDim: Int = 0` (default =
+  comportament identic 3a-ii); extrage `maskCoeffs` din canalele finale când `maskDim > 0`.
+- **`domain/vision/MaskDecoder.kt`** (nou, pur, testabil): `decode(...)` (dot-product+sigmoid+
+  threshold pe crop, clamped la limitele grid-ului, minim 1×1 chiar pt. obiecte foarte mici/
+  departate) + `attach(...)` (populează `mask` pe lista de detecții, golește `maskCoeffs` odată
+  consumați). **6 teste noi** (`MaskDecoderTest`) + 2 teste noi în `YoloOutputDecoderTest` — toate
+  trec.
+- **`ui/vision/YoloSegModel.kt`**: constante noi `MASK_DIM=32`, `PROTO_SIZE=160`; citește și
+  `outputBuffers[1]` (protos) — degradare grațioasă (fallback la `maskDim=0`, doar cutii, ca în
+  3a-ii) dacă modelul n-are al 2-lea output.
+- **`ui/vision/DetectionOverlay.kt`**: pt. fiecare `detection.mask != null`, construiește un
+  `Bitmap` mic din grid-ul boolean (gri translucid ~40% alpha unde `true`, transparent unde
+  `false`) și îl întinde (`drawBitmap`) exact peste dreptunghiul deja calculat pe ecran.
+- **Verificare empirică pe device (2026-09-11), confirmată din prima încercare** (spre deosebire de
+  bug-ul NCHW din 3a-ii): logging temporar (`Log.e`, șters după confirmare) a arătat
+  `outputBuffers.size=2`, `output0.size=974400` (=116×8400 exact) și `output1.size=819200`
+  (=32×160×160 exact) — presupunerile de layout confirmate la nivel de dimensiuni. Verificare
+  vizuală pe ecranul "Scanare vizuală (experimental)": masca (zonă translucidă gri) urmărește
+  vizibil forma reală a obiectului, nu doar dreptunghiul — **confirmat funcțional de utilizator,
+  fără nevoie de debugging suplimentar** (channel-first-ul presupus pt. proto s-a dovedit corect
+  din prima, spre deosebire de input-ul NCHW din 3a-ii care a cerut o sesiune întreagă de debugging).
+- **PR #14 deschis** (`feature/faza3a-iii-litert-masks` → `main`), nemergeuit — merge doar la
+  cerere explicită, convenția stabilă.
+
+### Optimizare — accelerator GPU pt. inferență LiteRT (implementat, testat live pe device — 2026-09-11)
+
+**Context**: utilizatorul a semnalat overlay (contur+mască) sacadat/cu întârziere față de obiectul
+real — NU feed-ul de cameră (`Preview` rulează deja fluid, independent de rata de analiză, vezi
+`STRATEGY_KEEP_ONLY_LATEST` în `CameraPreview.kt`), ci strict rata la care se termină
+`YoloSegModel.detect()` per cadru analizat.
+
+- **`YoloSegModel.kt` forța `CompiledModel.Options(Accelerator.CPU)`** — inspectând direct
+  bytecode-ul `.aar`-ului LiteRT 2.2.0 din cache-ul Gradle local (nu presupunere), enum-ul
+  `Accelerator` are de fapt `NONE, CPU, GPU, NPU`, iar runtime-ul deja bundle-uiește
+  `libLiteRtClGlAccelerator.so` (OpenCL/OpenGL) pt. `arm64-v8a`/`armeabi-v7a`/`x86_64` — GPU
+  delegate era deja disponibil în dependința existentă, doar nefolosit. **Nicio schimbare de
+  dependențe Gradle.**
+- **Măsurat pe device, înainte/după** (instrumentare temporară de timp în `detect()`, ștearsă după
+  confirmare — convenția proiectului): **CPU: ~450-500ms/cadru (~2-2.3 fps)** →
+  **GPU: ~85-120ms/cadru (~9-12 fps)** — **~5x mai rapid**, confirmă exact cauza lag-ului semnalat.
+- **`createModel(context)`** (nou, în `YoloSegModel`): încearcă întâi `Accelerator.GPU`, `catch
+  (e: Throwable)` (la fel de larg ca `runCatching` deja folosit în `VisionScanScreen` pt.
+  încărcarea modelului) → fallback grațios la `Accelerator.CPU` dacă delegate-ul eșuează la
+  compilare pe un anumit device (nu toate GPU-urile mobile suportă la fel de bine OpenCL/OpenGL).
+  Pe acest device: GPU a reușit direct, fără fallback. 2 loguri `Log.w` permanente (create model)
+  arată ce accelerator rulează efectiv.
+- **Fără teste noi** — cod glue Android/LiteRT (alegere accelerator), netestabil semnificativ în
+  JVM, ca restul Fazei 3a; nimic din `domain/vision/` (pur, testat) s-a atins.
+- **Alternative discutate, nu implementate acum** (dacă GPU nu ar fi fost suficient): cuantizare
+  INT8 la export (reduce costul real per cadru, nu doar mută treaba pe alt silicon) și/sau
+  rezoluție de input mai mică (640→416/320, trade-off real de calitate pe obiecte mici).
+- **Pe același branch/PR** (`feature/faza3a-iii-litert-masks`, PR #14) — atinge același fișier
+  modificat acolo, evită complicații de merge între branch-uri paralele.
+
 ---
 
 ## 8. CE URMEAZĂ — TODO
@@ -659,9 +738,13 @@ exactă de segmentare, la această etapă.
   (PR #12) — vezi secțiunea 7.
 - **Faza 3a-ii — model LiteRT (YOLO-seg) + decodare cutii + overlay:** ✅ **implementată, testată
   live pe device, confirmată funcțională, mergeuită pe `main` (PR #13)** (bug real NCHW vs. NHWC
-  găsit + fixat — vezi secțiunea 7). Faza 3a-iii (măști de segmentare) — pe branch nou
-  `feature/faza3a-iii-litert-masks`, plan mode separat.
-- **Faza 3 (restul) — Viziune:** detecție/segmentare multi-obiect pe cadru de ansamblu (după 3a-ii).
+  găsit + fixat — vezi secțiunea 7).
+- **Faza 3a-iii — măști de segmentare (contur real):** ✅ **implementată, testată live pe device,
+  confirmată funcțională din prima încercare** (layout proto channel-first corect, fără debugging
+  suplimentar) — vezi secțiunea 7. Pe branch `feature/faza3a-iii-litert-masks`, de mergeuit la
+  cerere explicită.
+- **Faza 3 (restul) — Viziune:** tracking multi-obiect pe cadru de ansamblu cu modelul de
+  recunoaștere propriu (după Faza 4 — embeddings), nu doar model generic COCO.
 - **Faza 4 — Recunoaștere & enrollment:** model de **embeddings** (metric learning), galerie nearest-neighbor, enrollment multi-view + top-k candidați, **colorare contur** după statusul dozei.
 - **Faza 5 — Tracking & AR:** ByteTrack + netezire, ancorare dinamică a panoului de info, buton show/hide; ancore ARCore pentru scanare progresivă.
 - **Faza 6 — Chatbot RAG + interacțiuni:** RAG peste tratament activ + prospecte, guardrails + disclaimere, verificare interacțiuni medicamentoase.

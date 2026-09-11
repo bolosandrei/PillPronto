@@ -42,8 +42,9 @@ import java.util.concurrent.Executors
 private const val TAG = "VisionScanScreen"
 
 /** Ecran experimental de scanare vizuala — feed live de camera (Faza 3a-i) + detectie generica
- * (Faza 3a-ii, model YOLO11n-seg preantrenat COCO, DOAR cutii de incadrare, fara masti de
- * segmentare — vezi CLAUDE.md pt. decizia de scop). Cere permisiunea CAMERA la intrarea pe ecran
+ * (Faza 3a-ii, model YOLO11n-seg preantrenat COCO) + masca de segmentare reala per detectie
+ * (Faza 3a-iii — vezi CLAUDE.md pt. decizia de scop, model tot generic COCO, nu medicamente).
+ * Cere permisiunea CAMERA la intrarea pe ecran
  * (nu la pornirea aplicatiei, spre deosebire de POST_NOTIFICATIONS din MainActivity — camera se
  * foloseste doar aici). */
 @Composable
