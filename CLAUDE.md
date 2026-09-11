@@ -809,9 +809,13 @@ salvează local, legate de acel Cod CIM. **Strict scriere** — nearest-neighbor
   embedding 4096 bytes (=1024 floats) per rând. Fără buton explicit "Salvează" — alegerea unei
   sugestii din listă E acțiunea de salvare (pattern identic `AssociateGtinScreen`) — confirmat
   clar de utilizator (textul de confirmare vizibil pe ecran).
-- **Pe branch `feature/faza4b-enrollment-gallery`**, de comis + PR (merge doar la cerere
-  explicită, convenția stabilă). **Notă**: `main` are acum o regulă de protecție GitHub (push
-  direct respins) — orice actualizare, inclusiv doc-only, trece prin branch+PR.
+- **PR #17 mergeuit pe `main`** (2026-09-11), branch `feature/faza4b-enrollment-gallery` șters
+  (local + `origin`). **Notă**: `main` are acum o regulă de protecție GitHub (push direct
+  respins) — orice actualizare, inclusiv doc-only, trece prin branch+PR.
+- **`README.md` rescris ca document public** (PR #18, mergeuit) — fusese suprascris accidental cu
+  textul lui `CLAUDE.md` într-o sesiune anterioară (necomis, descoperit + semnalat de utilizator).
+  Conținut nou: ce face aplicația / cum / de ce (decizii cheie) + status condensat pe faze +
+  build&rulare + roadmap — vezi `README.md` la rădăcina repo-ului.
 
 ---
 
@@ -867,13 +871,18 @@ salvează local, legate de acel Cod CIM. **Strict scriere** — nearest-neighbor
   device, confirmată funcțională, mergeuită pe `main` (PR #15)** (MediaPipe ImageEmbedder + crop
   mascat cu segmentarea din 3a-iii, semnal confirmat pe ambele direcții) — vezi secțiunea 7.
 - **Faza 4b — galerie locală + enrollment multi-view:** ✅ **implementată, testată live pe device,
-  confirmată funcțională** (verificat direct în baza de date de pe device — 15 rânduri reale din
-  3 sesiuni) — vezi secțiunea 7. Pe branch `feature/faza4b-enrollment-gallery`, de mergeuit la
-  cerere explicită.
-- **Faza 4c (viitor) — recunoaștere runtime:** nearest-neighbor pe galerie per detecție din
-  `VisionScanScreen` + **colorare contur** după statusul dozei (verde/portocaliu/roșu/gri, deja
-  definite în `Theme.kt`) — vezi decizia de strategie date/antrenare din secțiunea 7 (Faza 4a):
-  fără antrenare proprie acum, date acumulate organic din enrollment.
+  confirmată funcțională, mergeuită pe `main` (PR #17)** (verificat direct în baza de date de pe
+  device — 15 rânduri reale din 3 sesiuni) — vezi secțiunea 7.
+- **Faza 4c — recunoaștere runtime: AMÂNATĂ** (2026-09-11) — planul original ("nearest-neighbor pe
+  galerie **per detecție** din `VisionScanScreen`") s-ar fi lovit de aceeași limitare care a
+  blocat inițial designul Fazei 4b: modelul YOLO generic COCO nu detectează cutii de medicamente
+  reale, deci recunoașterea n-ar avea nimic de potrivit pe o masă reală. **Decizie luată cu
+  utilizatorul**: nu implementăm 4c acum — userul colectează întâi un set propriu de poze (10-15
+  medicamente reale, multi-unghi + multi-lumină, din galeria telefonului) pt. un viitor antrenament
+  de model custom pe cutii RO/UE ("să nu mergem orbește" fără date reale). 4c rămâne condiționată
+  de existența acelui detector/backbone antrenat — posibil rezultat direct al acestui dataset.
+  Colorarea conturului după statusul dozei (verde/portocaliu/roșu/gri, deja definite în
+  `Theme.kt`) rămâne planul pt. când 4c se reia.
 - **Faza 5 — Tracking & AR:** ByteTrack + netezire, ancorare dinamică a panoului de info, buton show/hide; ancore ARCore pentru scanare progresivă.
 - **Faza 6 — Chatbot RAG + interacțiuni:** RAG peste tratament activ + prospecte, guardrails + disclaimere, verificare interacțiuni medicamentoase.
 - **Faza 7 — Hardening & studiu:** GDPR (consimțământ, ștergere), battery optimization, teste, instrumentare pentru studiul pilot de aderență.
