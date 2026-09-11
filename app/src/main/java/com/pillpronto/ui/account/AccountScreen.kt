@@ -46,6 +46,7 @@ fun AccountScreen(
     onMyPatients: () -> Unit,
     onAssociateGtin: () -> Unit,
     onVisionScan: () -> Unit,
+    onEnrollMedication: () -> Unit,
     vm: AccountViewModel = hiltViewModel()
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
@@ -93,6 +94,13 @@ fun AccountScreen(
         // necondiționat (spre deosebire de asocierea GTIN de mai sus).
         OutlinedButton(onClick = onVisionScan, modifier = Modifier.fillMaxWidth()) {
             Text(stringResource(R.string.account_vision_scan_button))
+        }
+
+        // Faza 4b, experimental — inrolare medicament nou (embeddings). Date STRICT locale, fara
+        // sincronizare Supabase (health-adjacent) — spre deosebire de gtin_mappings, aici nu
+        // exista concept de "incredere"/catalog partajat, deci vizibil necondiționat, ca scanarea.
+        OutlinedButton(onClick = onEnrollMedication, modifier = Modifier.fillMaxWidth()) {
+            Text(stringResource(R.string.account_enroll_medication_button))
         }
 
         when (val session = state.sessionState) {

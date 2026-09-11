@@ -145,13 +145,12 @@
     <string name="account_unverified_badge">Cont neverificat — date auto-declarate</string>
     <string name="account_associate_gtin_button">Asociere coduri (GTIN)</string>
     <string name="account_vision_scan_button">Scanare vizuală (experimental)</string>
+    <string name="account_enroll_medication_button">Înrolare medicament (experimental)</string>
 
     <string name="vision_scan_title">Scanare vizuală (experimental)</string>
     <string name="vision_scan_permission_denied">Ai nevoie de permisiunea camerei ca să folosești acest ecran.</string>
     <string name="vision_scan_open_settings">Deschide setările aplicației</string>
     <string name="vision_scan_model_missing">Model AI lipsă din aplicație (.tflite) — se arată doar feed-ul de cameră, fără detecție.</string>
-    <string name="vision_scan_set_reference_hint">Apasă lung pe ecran ca să setezi obiectul cel mai mare detectat ca referință (Faza 4a — validare embeddings).</string>
-    <string name="vision_scan_similarity_label">Similaritate cu referința: %1$d%%</string>
 
     <string name="associate_gtin_title">Asociere coduri (GTIN)</string>
     <string name="associate_gtin_hint">Scanează codul de pe o cutie, apoi alege medicamentul corect — maparea rămâne reținută pentru toate scanările viitoare ale aceluiași cod.</string>
@@ -162,6 +161,17 @@
     <string name="associate_gtin_saved_shared">Salvat și trimis în catalogul comun: %1$s</string>
     <string name="associate_gtin_search_label">Caută medicamentul</string>
     <string name="associate_gtin_reset_button">Scanează următorul</string>
+
+    <string name="enroll_medication_title">Înrolare medicament (experimental)</string>
+    <string name="enroll_medication_capture_hint">Aliniază cutia în interiorul dreptunghiului și apasă „Adaugă captură" din mai multe unghiuri (recomandăm 3-5), apoi „Continuă".</string>
+    <string name="enroll_medication_add_capture_button">Adaugă captură</string>
+    <string name="enroll_medication_capture_count">Capturi: %1$d</string>
+    <string name="enroll_medication_continue_button">Continuă</string>
+    <string name="enroll_medication_model_missing">Model AI lipsă din aplicație (.tflite) — se arată doar feed-ul de cameră, fără detecție.</string>
+    <string name="enroll_medication_search_label">Caută medicamentul</string>
+    <string name="enroll_medication_confirm_hint">Alege medicamentul corect din listă — %1$d capturi vor fi salvate pentru el.</string>
+    <string name="enroll_medication_saved">Înrolat local: %1$s (%2$d capturi)</string>
+    <string name="enroll_medication_reset_button">Înrolează următorul</string>
 
     <!-- Ecranul de onboarding (alegere rol, dupa primul cont creat) -->
     <string name="onboarding_title">Ce fel de cont ai?</string>

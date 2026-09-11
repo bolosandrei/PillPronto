@@ -763,6 +763,56 @@ Treatment** — vin în Faza 4b, când persistarea unor embeddings etichetate ch
 - **PR #15 mergeuit pe `main`** (2026-09-11), branch `feature/faza4a-embeddings-pipeline` șters
   (local + `origin`).
 
+### Faza 4b — galerie locală + enrollment multi-view (implementat, testat live pe device — 2026-09-11)
+
+**Scop**: userul poate înrola un medicament nou — capturează mai multe unghiuri ale cutiei, alege
+manual produsul corect din Nomenclator (human-in-the-loop), embeddings-urile capturate se
+salvează local, legate de acel Cod CIM. **Strict scriere** — nearest-neighbor la runtime
+(recunoaștere efectivă + colorare contur) rămâne Faza 4c.
+
+- **Decizii de design**: **un rând per captură, NU un vector mediat** (practică standard la
+  galerii de embeddings — media poate estompa trăsături discriminative cu puține capturi;
+  strategia de comparare la query rămâne decizie de Faza 4c). Captură **manuală** (buton explicit
+  "Adaugă captură", userul rotește cutia între apăsări) — NU automat/temporizat. **Date STRICT
+  locale, FĂRĂ sincronizare Supabase** — spre deosebire de `gtin_mappings` (fapt public de
+  produs), embeddings-urile propriei cutii sunt informație health-adjacent. Fără galerie/listă de
+  administrare în acest pas.
+- **Bug real găsit + fixat prin testare live pe device — schimbare de design, nu doar cod**:
+  prima variantă lega captura de o `Detection` (ca `VisionScanScreen`) — dar userul a semnalat că
+  "acest model nu-mi selectează nicio cutie de medicament", confirmând empiric limitarea deja
+  documentată din Faza 3a-ii (COCO n-are o clasă "cutie de medicamente") — butonul "Adaugă
+  captură" rămânea permanent dezactivat pt. cazul de utilizare REAL al acestui ecran, nu un caz
+  marginal. **Fix arhitectural**: `EnrollMedicationScreen` NU mai depinde deloc de `YoloSegModel`/
+  `Detection` — ghidaj vizual static (dreptunghi alb centrat, 70%×50% din cadru) + crop central
+  fix la captură (`centerCrop`, nou, fără nicio detecție), pattern comun la fluxuri "aliniază
+  obiectul în cadru" (ca la scanere de coduri). Retestat, confirmat funcțional.
+- **Domain (pur, testabil)**: `domain/recognition/EmbeddingSerialization.kt`
+  (`FloatArray↔ByteArray`, `java.nio.ByteBuffer`), `domain/repository/
+  EnrolledMedicationRepository.kt`, `domain/usecase/EnrollMedicationUseCase.kt` — pattern identic
+  `ConfirmGtinMappingUseCase`. 7 teste noi (serializare + use-case), toate trec.
+- **Data (Room)**: `EnrolledMedicationEntity` (`id, codCim, embedding: ByteArray, capturedAt`) —
+  `ByteArray` mapează nativ la BLOB, fără TypeConverter. `PillProntoDatabase` v8→v9, **fără
+  migrare Supabase** (deliberat — date health-adjacent). `EnrolledMedicationDaoTest` (instrumentat,
+  3 teste, rulate pe device fizic din această sesiune) — toate trec.
+- **UI**: `ui/vision/DetectionCrop.kt` (nou — `cropToBox`/`applyMask` promovate din
+  `VisionScanScreen`, unde erau temporare din Faza 4a; nefolosite momentan, pregătite pt. Faza 4c
+  când recunoașterea reală va lucra pe `Detection`-uri reale). `VisionScanScreen.kt` curățat —
+  elimină UI-ul temporar de validare din 4a, revine strict la scopul 3a-iii. `ui/recognition/
+  EnrollMedicationViewModel.kt` (Hilt, DOAR căutare Nomenclator + salvare — pattern
+  `AssociateGtinViewModel`, 4 teste noi). `ui/recognition/EnrollMedicationScreen.kt` (2 pași:
+  captură fără ViewModel — aceeași excepție documentată ca `VisionScanScreen`, apoi confirmare cu
+  `EnrollMedicationViewModel`). Buton nou "Înrolare medicament (experimental)" în `AccountScreen`,
+  necondiționat (date strict locale, fără concept de încredere).
+- **Verificat direct în baza de date de pe device** (nu doar presupus din UI): `adb exec-out run-as
+  com.pillpronto cat .../pillpronto.db` + `sqlite3` local (`platform-tools/sqlite3.exe`, găsit deja
+  instalat) — confirmă 15 rânduri reale din 3 sesiuni de înrolare (2 pt. un produs, 1 pt. altul),
+  embedding 4096 bytes (=1024 floats) per rând. Fără buton explicit "Salvează" — alegerea unei
+  sugestii din listă E acțiunea de salvare (pattern identic `AssociateGtinScreen`) — confirmat
+  clar de utilizator (textul de confirmare vizibil pe ecran).
+- **Pe branch `feature/faza4b-enrollment-gallery`**, de comis + PR (merge doar la cerere
+  explicită, convenția stabilă). **Notă**: `main` are acum o regulă de protecție GitHub (push
+  direct respins) — orice actualizare, inclusiv doc-only, trece prin branch+PR.
+
 ---
 
 ## 8. CE URMEAZĂ — TODO
@@ -816,10 +866,14 @@ Treatment** — vin în Faza 4b, când persistarea unor embeddings etichetate ch
 - **Faza 4a — pipeline de embeddings (validare tehnică):** ✅ **implementată, testată live pe
   device, confirmată funcțională, mergeuită pe `main` (PR #15)** (MediaPipe ImageEmbedder + crop
   mascat cu segmentarea din 3a-iii, semnal confirmat pe ambele direcții) — vezi secțiunea 7.
-- **Faza 4 (restul) — Recunoaștere & enrollment:** galerie Room (embeddings + legătură
-  Nomenclator), enrollment multi-view + top-k candidați (Faza 4b), integrare recunoaștere runtime
-  + **colorare contur** după statusul dozei (Faza 4c) — vezi decizia de strategie date/antrenare
-  în secțiunea 7 (Faza 4a): fără antrenare proprie acum, date acumulate organic din enrollment.
+- **Faza 4b — galerie locală + enrollment multi-view:** ✅ **implementată, testată live pe device,
+  confirmată funcțională** (verificat direct în baza de date de pe device — 15 rânduri reale din
+  3 sesiuni) — vezi secțiunea 7. Pe branch `feature/faza4b-enrollment-gallery`, de mergeuit la
+  cerere explicită.
+- **Faza 4c (viitor) — recunoaștere runtime:** nearest-neighbor pe galerie per detecție din
+  `VisionScanScreen` + **colorare contur** după statusul dozei (verde/portocaliu/roșu/gri, deja
+  definite în `Theme.kt`) — vezi decizia de strategie date/antrenare din secțiunea 7 (Faza 4a):
+  fără antrenare proprie acum, date acumulate organic din enrollment.
 - **Faza 5 — Tracking & AR:** ByteTrack + netezire, ancorare dinamică a panoului de info, buton show/hide; ancore ARCore pentru scanare progresivă.
 - **Faza 6 — Chatbot RAG + interacțiuni:** RAG peste tratament activ + prospecte, guardrails + disclaimere, verificare interacțiuni medicamentoase.
 - **Faza 7 — Hardening & studiu:** GDPR (consimțământ, ștergere), battery optimization, teste, instrumentare pentru studiul pilot de aderență.
