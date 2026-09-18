@@ -1,6 +1,7 @@
 package com.pillpronto.ui.recognition
 
 import com.pillpronto.domain.model.NomenclatureEntry
+import com.pillpronto.domain.usecase.ClearEnrolledMedicationsUseCase
 import com.pillpronto.domain.usecase.EnrollMedicationUseCase
 import com.pillpronto.domain.usecase.SearchNomenclatureUseCase
 import com.pillpronto.util.FakeEnrolledMedicationRepository
@@ -22,7 +23,8 @@ class EnrollMedicationViewModelTest {
     private val enrolledMedicationRepository = FakeEnrolledMedicationRepository()
     private val vm = EnrollMedicationViewModel(
         searchNomenclature = SearchNomenclatureUseCase(nomenclatureRepository),
-        enrollMedication = EnrollMedicationUseCase(enrolledMedicationRepository)
+        enrollMedication = EnrollMedicationUseCase(enrolledMedicationRepository),
+        clearEnrolledMedications = ClearEnrolledMedicationsUseCase(enrolledMedicationRepository)
     )
 
     private fun sampleEntry(codCim: String = "W43451001") = NomenclatureEntry(
@@ -81,5 +83,15 @@ class EnrollMedicationViewModelTest {
 
         assertEquals(0, vm.state.value.captureCount)
         assertNull(vm.state.value.lastSaved)
+    }
+
+    @Test
+    fun `clearGallery goleste galeria si marcheaza starea`() = runTest {
+        enrolledMedicationRepository.saved += "W1" to floatArrayOf(0.1f)
+
+        vm.clearGallery()
+
+        assertTrue(enrolledMedicationRepository.saved.isEmpty())
+        assertTrue(vm.state.value.galleryCleared)
     }
 }

@@ -3,6 +3,7 @@ package com.pillpronto.ui.recognition
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.pillpronto.domain.model.NomenclatureEntry
+import com.pillpronto.domain.usecase.ClearEnrolledMedicationsUseCase
 import com.pillpronto.domain.usecase.EnrollMedicationUseCase
 import com.pillpronto.domain.usecase.SearchNomenclatureUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -24,7 +25,8 @@ data class EnrollMedicationUiState(
     val captureCount: Int = 0,
     val query: String = "",
     val suggestions: List<NomenclatureEntry> = emptyList(),
-    val lastSaved: NomenclatureEntry? = null
+    val lastSaved: NomenclatureEntry? = null,
+    val galleryCleared: Boolean = false
 )
 
 /** Partea de cautare Nomenclator + salvare a ecranului de inrolare (Faza 4b) — pattern identic
@@ -34,7 +36,8 @@ data class EnrollMedicationUiState(
 @HiltViewModel
 class EnrollMedicationViewModel @Inject constructor(
     private val searchNomenclature: SearchNomenclatureUseCase,
-    private val enrollMedication: EnrollMedicationUseCase
+    private val enrollMedication: EnrollMedicationUseCase,
+    private val clearEnrolledMedications: ClearEnrolledMedicationsUseCase
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(EnrollMedicationUiState())
@@ -81,5 +84,15 @@ class EnrollMedicationViewModel @Inject constructor(
         pendingEmbeddings = emptyList()
         searchJob?.cancel()
         _state.update { EnrollMedicationUiState() }
+    }
+
+    /** Goleste galeria locala — necesar dupa ce modelul de embeddings s-a schimbat/retrenat
+     * (vezi `ClearEnrolledMedicationsUseCase`), altfel randurile vechi (alta dimensiune de
+     * embedding) fac `RecognizeMedicationUseCase` sa arunce eroare la comparatie. */
+    fun clearGallery() {
+        viewModelScope.launch {
+            clearEnrolledMedications()
+            _state.update { it.copy(galleryCleared = true) }
+        }
     }
 }
