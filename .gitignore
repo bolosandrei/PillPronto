@@ -39,3 +39,8 @@ local.env
 # ==== Loguri / temporare ====
 *.log
 /hs_err_pid*
+
+# ==== Python (scripts/ — antrenare/export modele, mediu separat de build-ul Gradle) ====
+.venv/
+scripts/__pycache__/
+scripts/artifacts/

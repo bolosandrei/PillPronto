@@ -10,8 +10,13 @@ interface EnrolledMedicationDao {
     @Insert
     suspend fun insert(entity: EnrolledMedicationEntity)
 
-    // Neutilizat inca de logica de productie (Faza 4b = doar scriere) — pregatit pt. Faza 4c
-    // (nearest-neighbor la runtime) si folosit deja de testul instrumentat de mai jos.
+    // Folosit de RecognizeMedicationUseCase (Faza 4c) pt. nearest-neighbor la runtime.
     @Query("SELECT * FROM enrolled_medications")
     suspend fun findAll(): List<EnrolledMedicationEntity>
+
+    // Golire completa (Faza 4c) — necesara de fiecare data cand modelul de embeddings se
+    // schimba/retreneaza: embeddings-uri din spatii vectoriale diferite nu sunt comparabile
+    // (dimensiuni diferite -> cosineSimilarity arunca eroare de validare).
+    @Query("DELETE FROM enrolled_medications")
+    suspend fun deleteAll()
 }

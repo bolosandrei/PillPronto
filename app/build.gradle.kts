@@ -126,14 +126,12 @@ dependencies {
     implementation(libs.androidx.camera.lifecycle)
     implementation(libs.androidx.camera.compose)
 
-    // LiteRT (Faza 3a-ii/iii) - inferenta on-device pt. modelul YOLO-seg preantrenat (cutii+masti).
+    // LiteRT (Faza 3a-ii/iii/4c) - inferenta on-device pt. modelul YOLO-seg preantrenat (cutii+
+    // masti) SI pt. modelul propriu de embeddings antrenat pe cutii de medicamente (Faza 4c,
+    // MedicationEmbedderModel - a inlocuit MediaPipe ImageEmbedder/modelul generic din Faza 4a,
+    // care nu mai e folosit: modelul custom nu are metadatele TFLite cerute de API-ul MediaPipe).
     // AGP 4.1+ adauga automat .tflite la noCompress - fara config manuala de aaptOptions.
     implementation(libs.litert)
-
-    // MediaPipe Tasks Vision (Faza 4a) - ImageEmbedder, API de nivel inalt (ca ML Kit) pt. modelul
-    // generic de embeddings (MobileNetV3-Small, preantrenat ImageNet, NU pe cutii de medicamente)
-    // - gestioneaza singur preprocesarea, evita un pipeline LiteRT crud ca la YOLO.
-    implementation(libs.mediapipe.tasks.vision)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)

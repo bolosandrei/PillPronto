@@ -27,6 +27,7 @@ import com.pillpronto.R
 import com.pillpronto.ui.access.ManageAccessScreen
 import com.pillpronto.ui.gtinmapping.AssociateGtinScreen
 import com.pillpronto.ui.recognition.EnrollMedicationScreen
+import com.pillpronto.ui.recognition.RecognizeMedicationScreen
 import com.pillpronto.ui.vision.VisionScanScreen
 import com.pillpronto.ui.access.ManageProfessionalAccessScreen
 import com.pillpronto.ui.account.AccountScreen
@@ -143,7 +144,8 @@ fun PillProntoNavHost(
                     onMyPatients = { navController.navigate(Route.MyPatients.create()) },
                     onAssociateGtin = { navController.navigate(Route.AssociateGtin.path) },
                     onVisionScan = { navController.navigate(Route.VisionScan.path) },
-                    onEnrollMedication = { navController.navigate(Route.EnrollMedication.path) }
+                    onEnrollMedication = { navController.navigate(Route.EnrollMedication.path) },
+                    onRecognizeMedication = { navController.navigate(Route.RecognizeMedication.path) }
                 )
             }
             composable(Route.Onboarding.path) {
@@ -164,6 +166,9 @@ fun PillProntoNavHost(
             }
             composable(Route.EnrollMedication.path) {
                 EnrollMedicationScreen(padding, onBack = { navController.popBackStack() })
+            }
+            composable(Route.RecognizeMedication.path) {
+                RecognizeMedicationScreen(padding, onBack = { navController.popBackStack() })
             }
             composable(Route.ManageProfessionalAccess.path) {
                 ManageProfessionalAccessScreen(padding, onBack = { navController.popBackStack() })

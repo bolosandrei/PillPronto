@@ -146,6 +146,7 @@
     <string name="account_associate_gtin_button">Asociere coduri (GTIN)</string>
     <string name="account_vision_scan_button">Scanare vizuală (experimental)</string>
     <string name="account_enroll_medication_button">Înrolare medicament (experimental)</string>
+    <string name="account_recognize_medication_button">Recunoaștere medicament (experimental)</string>
 
     <string name="vision_scan_title">Scanare vizuală (experimental)</string>
     <string name="vision_scan_permission_denied">Ai nevoie de permisiunea camerei ca să folosești acest ecran.</string>
@@ -172,6 +173,14 @@
     <string name="enroll_medication_confirm_hint">Alege medicamentul corect din listă — %1$d capturi vor fi salvate pentru el.</string>
     <string name="enroll_medication_saved">Înrolat local: %1$s (%2$d capturi)</string>
     <string name="enroll_medication_reset_button">Înrolează următorul</string>
+    <string name="enroll_medication_clear_gallery_button">Șterge galeria locală (după schimbarea modelului)</string>
+    <string name="enroll_medication_gallery_cleared">Galeria locală a fost golită.</string>
+
+    <string name="recognize_medication_title">Recunoaștere medicament (experimental)</string>
+    <string name="recognize_medication_hint">Aliniază cutia deja înrolată în interiorul dreptunghiului și apasă „Recunoaște".</string>
+    <string name="recognize_medication_button">Recunoaște</string>
+    <string name="recognize_medication_match">Recunoscut: %1$s (similaritate %2$d%%)</string>
+    <string name="recognize_medication_no_match">Necunoscut — nicio potrivire suficient de similară în galeria locală.</string>
 
     <!-- Ecranul de onboarding (alegere rol, dupa primul cont creat) -->
     <string name="onboarding_title">Ce fel de cont ai?</string>

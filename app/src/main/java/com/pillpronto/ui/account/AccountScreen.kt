@@ -47,6 +47,7 @@ fun AccountScreen(
     onAssociateGtin: () -> Unit,
     onVisionScan: () -> Unit,
     onEnrollMedication: () -> Unit,
+    onRecognizeMedication: () -> Unit,
     vm: AccountViewModel = hiltViewModel()
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
@@ -101,6 +102,13 @@ fun AccountScreen(
         // exista concept de "incredere"/catalog partajat, deci vizibil necondiționat, ca scanarea.
         OutlinedButton(onClick = onEnrollMedication, modifier = Modifier.fillMaxWidth()) {
             Text(stringResource(R.string.account_enroll_medication_button))
+        }
+
+        // Faza 4c-i, experimental — recunoastere pe un singur obiect central (fara detectie
+        // multi-obiect, vezi CLAUDE.md) folosind modelul de embeddings antrenat custom + galeria
+        // locala din Faza 4b. Vizibil necondiționat, ca inrolarea (aceleasi date strict locale).
+        OutlinedButton(onClick = onRecognizeMedication, modifier = Modifier.fillMaxWidth()) {
+            Text(stringResource(R.string.account_recognize_medication_button))
         }
 
         when (val session = state.sessionState) {

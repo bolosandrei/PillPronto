@@ -50,7 +50,7 @@ import com.pillpronto.core.permissions.Permissions
 import com.pillpronto.core.ui.components.BackTopAppBar
 import com.pillpronto.core.ui.components.NomenclatureSuggestions
 import com.pillpronto.ui.vision.CameraPreview
-import com.pillpronto.ui.vision.ImageEmbedderModel
+import com.pillpronto.ui.vision.MedicationEmbedderModel
 import java.util.concurrent.Executors
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -88,6 +88,7 @@ fun EnrollMedicationScreen(
     vm: EnrollMedicationViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
+    val state by vm.state.collectAsStateWithLifecycle()
     var step by remember { mutableStateOf(EnrollStep.CAPTURE) }
 
     var hasCameraPermission by remember {
@@ -104,7 +105,7 @@ fun EnrollMedicationScreen(
     }
 
     var embedderLoadFailed by remember { mutableStateOf(false) }
-    val embedderHolder = remember { mutableStateOf<ImageEmbedderModel?>(null) }
+    val embedderHolder = remember { mutableStateOf<MedicationEmbedderModel?>(null) }
     val analyzerExecutor = remember { Executors.newSingleThreadExecutor() }
     val scope = rememberCoroutineScope()
 
@@ -114,7 +115,7 @@ fun EnrollMedicationScreen(
     val capturedEmbeddings = remember { mutableStateListOf<FloatArray>() }
 
     DisposableEffect(Unit) {
-        embedderHolder.value = runCatching { ImageEmbedderModel(context) }
+        embedderHolder.value = runCatching { MedicationEmbedderModel(context) }
             .onFailure { e ->
                 Log.e(TAG, "Nu s-a putut incarca modelul de embeddings (.tflite lipsa din assets/?)", e)
                 embedderLoadFailed = true
@@ -225,11 +226,26 @@ fun EnrollMedicationScreen(
                     ) {
                         Text(stringResource(R.string.enroll_medication_continue_button))
                     }
+
+                    // Necesar dupa fiecare retrenare a modelului de embeddings (dimensiune noua,
+                    // incomparabila cu randurile vechi) — vezi ClearEnrolledMedicationsUseCase.
+                    OutlinedButton(
+                        onClick = vm::clearGallery,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(stringResource(R.string.enroll_medication_clear_gallery_button))
+                    }
+                    if (state.galleryCleared) {
+                        Text(
+                            stringResource(R.string.enroll_medication_gallery_cleared),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
                 }
             }
 
             EnrollStep.CONFIRM -> {
-                val state by vm.state.collectAsStateWithLifecycle()
                 Column(
                     Modifier.fillMaxSize().padding(padding).padding(innerPadding).padding(16.dp).verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
