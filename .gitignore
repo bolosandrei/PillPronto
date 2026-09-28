@@ -41,6 +41,12 @@ local.env
 /hs_err_pid*
 
 # ==== Python (scripts/ — antrenare/export modele, mediu separat de build-ul Gradle) ====
+# Venv-uri SEPARATE (versiuni diferite de Python — vezi convert_medication_embedder_tflite.py
+# pt. motiv): .venv-train (antrenare+export ONNX), .venv-tflite (conversie ONNX->TFLite).
 .venv/
+.venv-*/
 scripts/__pycache__/
 scripts/artifacts/
+# Greutati pretrained descarcate automat de ultralytics in cwd (yolo11n-seg.pt, mobile_sam.pt) —
+# nu autor, doar cache local, redescarcat automat la nevoie.
+scripts/*.pt

@@ -817,6 +817,82 @@ salvează local, legate de acel Cod CIM. **Strict scriere** — nearest-neighbor
   Conținut nou: ce face aplicația / cum / de ce (decizii cheie) + status condensat pe faze +
   build&rulare + roadmap — vezi `README.md` la rădăcina repo-ului.
 
+### Faza 4c-i — recunoaștere runtime pe un singur obiect (implementat, mergeuit — 2026-09-18)
+
+Model propriu de embeddings antrenat (MobileNetV3-Small + ArcFace, `scripts/train_medication_embedder.py`,
+inițial 59 poze/8 medicamente, fundal unic) — înlocuiește complet modelul generic MediaPipe din
+Faza 4a. `ui/vision/MedicationEmbedderModel.kt` (LiteRT brut), `domain/usecase/RecognizeMedicationUseCase.kt`
+(nearest-neighbor + prag + marjă), `ui/recognition/RecognizeMedicationScreen`. **PR #21 mergeuit**
+pe `main`. **FINDING critic, confirmat empiric**: modelul s-a "prins" de fundal, nu doar de
+identitatea produsului (o cutie neînrolată dădea 81% similaritate falsă pe fundalul de antrenare,
+doar ~40% pe fundal diferit) — cauza: antrenare pe un SINGUR fundal (decizie inițială greșită,
+corectată ulterior). Reantrenat cu 115 poze/2 sesiuni foto (fundaluri diferite) — **background-
+invarianța NU s-a rezolvat complet** (pe fundalul de înrolare >85%, pe fundal diferit <70%) — a dus
+direct la decizia Fazei 4c-ii (detector propriu, nu doar augmentare de date).
+
+### Faza 4c-ii — detector propriu de cutii de medicamente (clasă unică) + fix leak memorie +
+lock orientare portret (implementat, testat live pe device — 2026-09-25, **NECOMIS**)
+
+**Context**: augmentarea de fundal la reantrenarea embedder-ului n-a rezolvat background-invarianța.
+Userul a cerut o metodă de detecție cu acuratețe reală, nu un hack (inspirat de un reel AI —
+segmentare geotehnică, concluzie: pattern-ul UI "contur colorat + etichete ancorate" era deja
+planul PillPronto, tehnica de segmentare pe sine nu se transferă). Decizie (plan mode, aprobat):
+detector propriu, **o SINGURĂ clasă** ("cutie_medicament") — identitatea rămâne treaba
+embeddings-urilor (Faza 4c-i), acesta face doar localizare. Rezolvă simultan background-invarianța
+(mască reală elimină fundalul din crop, ca la Faza 4a) ȘI deblochează detecția multi-obiect reală
+(COCO nu detecta deloc cutii de medicamente ca obiect).
+
+- **`scripts/auto_annotate_boxes.py`** (nou) — adnotare AUTOMATĂ cu SAM (`ultralytics.SAM`,
+  `mobile_sam.pt`), NU manuală, pe cele 115 poze existente (`Poze Antrenare Model/`, poze normale
+  din galerie, FĂRĂ poziție cunoscută a unui dreptunghi-ghidaj). Prompt = **cutie centrală
+  generoasă** (70%×70%), NU punct central — prompt de punct a păstrat doar 79/115 (SAM prindea des
+  un detaliu, nu cutia întreagă); prompt de cutie: 114/115. Vizualizare de verificare reparată
+  (contur LIME gros + fill cyan — fill roșu translucid era aproape invizibil pe cutii roz/roșii,
+  majoritatea medicamentelor din set). Userul a verificat manual, șters 34 poze cu mască greșită →
+  **80 poze finale**. Output YOLO-seg (`scripts/artifacts/box_dataset/`, 68 train/12 val).
+- **`scripts/train_box_detector.py`** (nou) — fine-tune `yolo11n-seg.pt`, early-stop la 74/100
+  epoci, **mAP50=0.995** pe val (umflat — val din aceleași 2 sesiuni foto ca train, aceeași lecție
+  ca la embedder, nu o garanție de generalizare reală).
+- **`scripts/convert_box_detector_tflite.py`** — **2 încercări de conversie**: (1) ONNX+`onnx2tf`
+  local → `.tflite` rula perfect în Python dar **crăpa nativ (SIGSEGV) pe device** prin
+  `CompiledModel` — cauză reală (găsită citind sursa Ultralytics instalată local, nu ghicit):
+  Ultralytics 8.4+ NU mai folosește `onnx2tf` pt. `format="tflite"`, a trecut la `litert_torch`
+  (fix-uri compatibilitate GPU delegate: int32 în loc de int64, evită GATHER_ND); (2) `litert_torch`
+  însuși nu are build Windows (`litert-converter`, dependința reală de conversie — confirmat "No
+  matching distribution" pe orice Python local) → **Colab** (`model.export(format="tflite")` pe
+  `best.pt`, ~6MB), ca la modelul YOLO original. Layout de input DIFERIT față de încercarea onnx2tf:
+  NCHW `[1,3,640,640]` (ca modelul COCO), NU NHWC — verificat programatic, nu presupus.
+- **Integrare** (`YoloSegModel.kt`): `MODEL_ASSET_NAME`→`medication_box_detector.tflite`,
+  `numClasses=1`, label nou `"cutie_medicament"` (înlocuiește `COCO_LABELS`/`CocoLabels.kt`, șters).
+  `YoloOutputDecoder`/`MaskDecoder`/`DetectionOverlay` — neschimbate, deja generice. Model vechi
+  `yolo11n_seg.tflite` (COCO, 11.8MB) șters din assets — înlocuit complet.
+- **Bug real găsit + fixat, separat de model — scurgere de memorie nativă**: cameră deschisă
+  continuu pe `VisionScanScreen` → aplicația devine tot mai lentă, crapă după câteva zeci de
+  secunde/minute. Cauză: `com.google.ai.edge.litert.TensorBuffer` e `AutoCloseable` FĂRĂ finalizer
+  (verificat cu `javap`) — `YoloSegModel.detect()` crea buffere noi la fiecare cadru, niciodată
+  închise. Fix: `try/finally` cu `.close()` pe toate buffer-ele, în `YoloSegModel.detect()` ȘI
+  `MedicationEmbedderModel.embed()` (același bug, mai puțin vizibil acolo). Retestat 2 minute
+  cameră deschisă — confirmat, nu mai crapă.
+- **Lock orientare portret** (cerut de user, ca Instagram): `android:screenOrientation="portrait"`
+  pe `MainActivity` (`AndroidManifest.xml`) — o singură activitate, acoperă toată aplicația.
+- **Acuratețe reală a detectorului — imperfectă, cauză cunoscută**: rateuri pe fundaluri noi,
+  bounding box oscilează (2 laturi corecte, 2 întinse până la marginea ecranului) pe cutii bine
+  încadrate, fals-pozitive pe fundal complex (linii de grid) — 80 poze din doar 2 sesiuni foto,
+  fără exemple negative, exact tiparul deja cunoscut de la background-invarianța embedder-ului.
+  OCR **nu** ajută (ar interveni după localizare, nu o rezolvă; deja eliminat la Faza 2b-ii pt.
+  rată de succes prea mică). Userul a decis să amâne o nouă sesiune foto (fundaluri variate +
+  poze FĂRĂ nicio cutie, exemple negative) pt. mai târziu — revizuiește modelul atunci.
+- **Pipeline local nou, 2 venv-uri Python separate** (`scripts/.venv-train` Python 3.14,
+  `scripts/.venv-tflite` Python 3.12 — vezi motivul detaliat în memoria de sesiune) — antrenare +
+  export ONNX + SAM rulează pe 3.14; conversia `.tflite` a embedder-ului (`onnx2tf`, backbone
+  simplu, fără problema de mai sus) rulează pe 3.12; conversia detectorului (cap YOLO) necesită
+  Colab. Scripturi noi: `scripts/convert_medication_embedder_tflite.py` (conversie locală
+  embedder), `scripts/auto_annotate_boxes.py`, `scripts/train_box_detector.py`,
+  `scripts/convert_box_detector_tflite.py`.
+- **NECOMIS** — toate schimbările (scripturi noi, `YoloSegModel.kt`, `MedicationEmbedderModel.kt`,
+  `AndroidManifest.xml`, `.gitignore`, model nou în assets, `CocoLabels.kt`+`yolo11n_seg.tflite`
+  șterse) așteaptă confirmarea finală a userului înainte de commit+branch+PR.
+
 ---
 
 ## 8. CE URMEAZĂ — TODO
@@ -873,29 +949,27 @@ salvează local, legate de acel Cod CIM. **Strict scriere** — nearest-neighbor
 - **Faza 4b — galerie locală + enrollment multi-view:** ✅ **implementată, testată live pe device,
   confirmată funcțională, mergeuită pe `main` (PR #17)** (verificat direct în baza de date de pe
   device — 15 rânduri reale din 3 sesiuni) — vezi secțiunea 7.
-- **Faza 4c — recunoaștere runtime: AMÂNATĂ** (2026-09-11) — planul original ("nearest-neighbor pe
-  galerie **per detecție** din `VisionScanScreen`") s-ar fi lovit de aceeași limitare care a
-  blocat inițial designul Fazei 4b: modelul YOLO generic COCO nu detectează cutii de medicamente
-  reale, deci recunoașterea n-ar avea nimic de potrivit pe o masă reală. **Decizie luată cu
-  utilizatorul**: nu implementăm 4c acum — userul colectează întâi un set propriu de poze (10-15
-  medicamente reale, multi-unghi + multi-lumină, din galeria telefonului) pt. un viitor antrenament
-  de model custom pe cutii RO/UE ("să nu mergem orbește" fără date reale). 4c rămâne condiționată
-  de existența acelui detector/backbone antrenat — posibil rezultat direct al acestui dataset.
-  Colorarea conturului după statusul dozei (verde/portocaliu/roșu/gri, deja definite în
-  `Theme.kt`) rămâne planul pt. când 4c se reia.
-  - **Ghidaj foto dat utilizatorului** (nu implementare, doar sfat, de reținut pt. sesiunea
-    viitoare când revine cu pozele): 10-15 medicamente, 6-10 poze/medicament, unghiuri variate
-    (față, lateral ×2, de sus, oblic 15-30° din 2-3 direcții), distanțe variate (aproape + normal
-    de scanare), lumină variată (minim 2-3 condiții — naturală, artificială interior, slab
-    luminat; evită blitz direct), fundal variat (nu constant, ca modelul să nu "învețe" fundalul),
-    poziții variate ale cutiei (dreaptă + culcată/înclinată), fără crop/editare manuală a
-    pozelor, un folder per medicament denumit clar (`paracetamol_500mg/` etc. — mapează direct pe
-    o clasă/identitate la antrenare).
-  - **Sesiunea viitoare începe aici**: verifică dacă userul a terminat sesiunea foto — dacă da,
-    următorul pas e pregătirea/organizarea dataset-ului și decizia despre antrenare (vezi
-    secțiunea 7, Faza 4a, pt. context complet despre opțiunile de antrenare deja discutate cu
-    userul — ArcFace/triplet loss, transfer learning, PyTorch + `pytorch-metric-learning` → ONNX
-    → TFLite). Dacă nu, se poate relua orice alt item din backlog (secțiunea 8a) sau alte faze.
+- **Faza 4c-i — recunoaștere runtime pe un singur obiect:** ✅ **implementată, mergeuită pe `main`
+  (PR #21)** — vezi secțiunea 7. FINDING: background-invarianța nu s-a rezolvat complet nici după
+  reantrenare cu fundaluri variate (>85% pe fundalul de înrolare, <70% pe fundal diferit) — a dus
+  la decizia Fazei 4c-ii.
+- **Faza 4c-ii — detector propriu de cutii (clasă unică):** ✅ **implementată, testată live pe
+  device, NECOMIS** (2026-09-25) — vezi secțiunea 7 pt. detalii complete (pipeline SAM+YOLO local,
+  saga conversie onnx2tf vs. litert_torch, fix leak memorie TensorBuffer, lock portret). Acuratețe
+  reală a detectorului imperfectă (dataset mic/omogen, 80 poze/2 sesiuni foto) — userul a decis să
+  amâne o nouă sesiune foto (fundaluri variate + exemple negative) pt. mai târziu.
+  - **Sesiunea viitoare începe aici**: (1) dacă userul a adus commit-ul/PR-ul Fazei 4c-ii la
+    "merge" — confirmă, mergeuiește, șterge branch-ul; (2) verifică dacă a făcut poze noi pt.
+    detector (fundaluri variate + poze FĂRĂ nicio cutie, exemple negative — vezi secțiunea 7) —
+    dacă da, rulează din nou `scripts/auto_annotate_boxes.py`→`train_box_detector.py`→
+    `convert_box_detector_tflite.py` (Colab pt. pasul final, `litert-converter` n-are build
+    Windows) pe setul extins; (3) după ce detectorul e suficient de precis, planul e să folosească
+    masca reală ca crop pt. embedding în loc de dreptunghiul static din `EnrollMedicationScreen`/
+    `RecognizeMedicationScreen` (`cropToBox`/`applyMask` deja scrise în `ui/vision/DetectionCrop.kt`,
+    nefolosite momentan) — asta ar rezolva practic background-invarianța rămasă de la Faza 4c-i.
+    Colorarea conturului după statusul dozei (verde/portocaliu/roșu/gri, deja definite în
+    `Theme.kt`) rămâne planul pt. integrarea completă cu recunoașterea (nearest-neighbor pe
+    galerie **per detecție** din `VisionScanScreen`).
 - **Faza 5 — Tracking & AR:** ByteTrack + netezire, ancorare dinamică a panoului de info, buton show/hide; ancore ARCore pentru scanare progresivă.
 - **Faza 6 — Chatbot RAG + interacțiuni:** RAG peste tratament activ + prospecte, guardrails + disclaimere, verificare interacțiuni medicamentoase.
 - **Faza 7 — Hardening & studiu:** GDPR (consimțământ, ștergere), battery optimization, teste, instrumentare pentru studiul pilot de aderență.

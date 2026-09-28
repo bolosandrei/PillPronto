@@ -5,7 +5,7 @@ Util cand exportul ONNX a picat separat de antrenare (ex. lipsea pachetul `onnxs
 exportatorul "dynamo" din PyTorch recent) — antrenarea (partea lenta) ramane neatinsa, doar
 reincarcam `.pt`-ul deja salvat si reexportam.
 
-RULARE (acelasi mediu/venv ca `train_medication_embedder.py`):
+RULARE (acelasi venv `.venv-train` ca `train_medication_embedder.py`):
 
     python scripts/export_medication_embedder_onnx.py
 """

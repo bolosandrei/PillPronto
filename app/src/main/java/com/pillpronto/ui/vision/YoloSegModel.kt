@@ -6,7 +6,6 @@ import android.graphics.Canvas
 import android.util.Log
 import com.google.ai.edge.litert.Accelerator
 import com.google.ai.edge.litert.CompiledModel
-import com.pillpronto.domain.vision.COCO_LABELS
 import com.pillpronto.domain.vision.Detection
 import com.pillpronto.domain.vision.LetterboxInfo
 import com.pillpronto.domain.vision.LetterboxMapper
@@ -15,15 +14,23 @@ import com.pillpronto.domain.vision.YoloOutputDecoder
 import kotlin.math.min
 
 private const val TAG = "YoloSegModel"
-private const val MODEL_ASSET_NAME = "yolo11n_seg.tflite"
+private const val MODEL_ASSET_NAME = "medication_box_detector.tflite"
 private const val MODEL_INPUT_SIZE = 640
 private const val NUM_ANCHORS = 8400 // (80x80)+(40x40)+(20x20) grid-uri, standard YOLO la input 640
 private const val MASK_DIM = 32 // coeficienti de masca per detectie, standard Ultralytics YOLO-seg
 private const val PROTO_SIZE = 160 // rezolutia grid-ului de proto-masti (MODEL_INPUT_SIZE / 4)
 
-/** Wrapper Android peste LiteRT `CompiledModel` pt. modelul YOLO11n-seg preantrenat — glue
- * Android (Context/Bitmap/assets), documentat ca excepție de la separarea strictă ui/domain (vezi
- * CLAUDE.md secțiunea 4, precedent `ScanBarcode.kt`/`GoogleSignInHelper.kt`): încărcarea
+// Clasa UNICA a detectorului propriu (Faza 4c-ii, fine-tune YOLO11n-seg pe poze reale de cutii de
+// medicamente, `scripts/train_box_detector.py`) — spre deosebire de modelul COCO generic folosit
+// pana acum (80 de clase, care NU detecta deloc cutii de medicamente ca obiect, vezi CLAUDE.md).
+// Identificarea PRODUSULUI exact ramane treaba embeddings-urilor din Faza 4a-c-i — acest model
+// face doar localizare ("unde e o cutie in cadru").
+private val MEDICATION_BOX_LABELS = listOf("cutie_medicament")
+
+/** Wrapper Android peste LiteRT `CompiledModel` pt. detectorul PROPRIU de cutii de medicamente
+ * (Faza 4c-ii, fine-tune YOLO11n-seg pe o singură clasă — vezi `MEDICATION_BOX_LABELS` mai sus) —
+ * glue Android (Context/Bitmap/assets), documentat ca excepție de la separarea strictă ui/domain
+ * (vezi CLAUDE.md secțiunea 4, precedent `ScanBarcode.kt`/`GoogleSignInHelper.kt`): încărcarea
  * modelului și preprocesarea de imagine cer API-uri Android directe, fără beneficiu real de
  * abstractizare printr-un repository.
  *
@@ -33,8 +40,12 @@ private const val PROTO_SIZE = 160 // rezolutia grid-ului de proto-masti (MODEL_
  * (variantă de model fără segmentare). Instanțiat o singură dată per intrare pe ecran
  * (`VisionScanScreen`), NU per-frame — încărcarea modelului e costisitoare.
  *
- * Fișierul `.tflite` (nume fix, `MODEL_ASSET_NAME`) e o prerechizită manuală — utilizatorul rulează
- * `scripts/export-yolo-seg-model.py` local și copiază rezultatul în `app/src/main/assets/`.
+ * Fișierul `.tflite` (nume fix, `MODEL_ASSET_NAME`) e o prerechizită manuală — se regenerează
+ * rulând, în ordine, `scripts/auto_annotate_boxes.py` (+`--finalize`) → `train_box_detector.py` →
+ * `convert_box_detector_tflite.py` (copiază automat rezultatul în `app/src/main/assets/`).
+ * **Înlocuiește complet** modelul COCO generic folosit până la Faza 3a-iii (80 de clase, care NU
+ * detecta deloc cutii de medicamente ca obiect — era oricum documentat ca provizoriu, doar pt.
+ * validarea pipeline-ului tehnic) — vezi CLAUDE.md.
  *
  * Rulează pe **GPU** (delegate OpenCL/OpenGL), cu fallback grațios la CPU dacă delegate-ul
  * eșuează la compilare pe un anumit device — vezi `createModel`. Măsurat pe device (2026-09-11):
@@ -68,40 +79,53 @@ class YoloSegModel(context: Context) : AutoCloseable {
 
         val inputBuffers = model.createInputBuffers()
         val outputBuffers = model.createOutputBuffers()
+        // `TensorBuffer` (com.google.ai.edge.litert) implementeaza `AutoCloseable` — wrapper peste
+        // memorie NATIVA, fara finalizer (verificat cu javap pe litert-api-2.2.0-api.jar:
+        // `JniHandle` nu suprascrie `finalize()`), deci fara `close()` explicit memoria nativa NU
+        // se elibereaza NICIODATA, doar la moartea procesului. Bug real gasit prin testare live pe
+        // device (2026-09-25): analiza continua de cadre (VisionScanScreen ruleaza `detect()` pe
+        // fiecare cadru din camera) fara acest `close()` acumula un buffer nou (input+output-uri)
+        // la fiecare cadru, niciodata eliberat — dupa cateva zeci de secunde de camera deschisa,
+        // aplicatia devine tot mai lenta si in final crapa (epuizare memorie nativa). `finally` in
+        // loc de try-with-resources Kotlin (`use{}`) pt. ca sunt mai multe buffere de inchis odata.
+        try {
+            inputBuffers[0].writeFloat(bitmapToNchwFloatArray(inputBitmap))
+            model.run(inputBuffers, outputBuffers)
+            val rawOutput = outputBuffers[0].readFloat()
 
-        inputBuffers[0].writeFloat(bitmapToNchwFloatArray(inputBitmap))
-        model.run(inputBuffers, outputBuffers)
-        val rawOutput = outputBuffers[0].readFloat()
+            // Al 2-lea output (proto-masti) e opțional — un .tflite exportat fără segmentare
+            // (sau o versiune viitoare cu alt numar de output-uri) nu trebuie sa crape, doar sa
+            // degradeze grațios la cutii fara masca (ca in Faza 3a-ii). `maskDim` e legat de
+            // prezenta lui `protos` — daca al 2-lea output lipseste, presupunem ca output0 nu are
+            // nici canalele de coeficienti de masca (altfel `YoloOutputDecoder.decode` ar arunca
+            // eroare de validare pe fiecare cadru, in loc sa degradeze grațios la 3a-ii).
+            val protos = if (outputBuffers.size >= 2) outputBuffers[1].readFloat() else null
+            val maskDim = if (protos != null) MASK_DIM else 0
+            if (protos == null) {
+                Log.w(TAG, "Modelul nu produce al 2-lea output (proto-masti) - doar cutii, fara masca de segmentare")
+            }
 
-        // Al 2-lea output (proto-masti) e opțional — un .tflite exportat fără segmentare
-        // (sau o versiune viitoare cu alt numar de output-uri) nu trebuie sa crape, doar sa
-        // degradeze grațios la cutii fara masca (ca in Faza 3a-ii). `maskDim` e legat de
-        // prezenta lui `protos` — daca al 2-lea output lipseste, presupunem ca output0 nu are
-        // nici canalele de coeficienti de masca (altfel `YoloOutputDecoder.decode` ar arunca
-        // eroare de validare pe fiecare cadru, in loc sa degradeze grațios la 3a-ii).
-        val protos = if (outputBuffers.size >= 2) outputBuffers[1].readFloat() else null
-        val maskDim = if (protos != null) MASK_DIM else 0
-        if (protos == null) {
-            Log.w(TAG, "Modelul nu produce al 2-lea output (proto-masti) - doar cutii, fara masca de segmentare")
-        }
-
-        var modelSpaceDetections = YoloOutputDecoder.decode(
-            raw = rawOutput,
-            numAnchors = NUM_ANCHORS,
-            numClasses = COCO_LABELS.size,
-            labels = COCO_LABELS,
-            maskDim = maskDim
-        )
-        if (protos != null) {
-            modelSpaceDetections = MaskDecoder.attach(
-                detections = modelSpaceDetections,
-                protos = protos,
-                maskDim = MASK_DIM,
-                protoHeight = PROTO_SIZE,
-                protoWidth = PROTO_SIZE
+            var modelSpaceDetections = YoloOutputDecoder.decode(
+                raw = rawOutput,
+                numAnchors = NUM_ANCHORS,
+                numClasses = MEDICATION_BOX_LABELS.size,
+                labels = MEDICATION_BOX_LABELS,
+                maskDim = maskDim
             )
+            if (protos != null) {
+                modelSpaceDetections = MaskDecoder.attach(
+                    detections = modelSpaceDetections,
+                    protos = protos,
+                    maskDim = MASK_DIM,
+                    protoHeight = PROTO_SIZE,
+                    protoWidth = PROTO_SIZE
+                )
+            }
+            return LetterboxMapper.mapToOriginalImage(modelSpaceDetections, letterboxInfo)
+        } finally {
+            inputBuffers.forEach { it.close() }
+            outputBuffers.forEach { it.close() }
         }
-        return LetterboxMapper.mapToOriginalImage(modelSpaceDetections, letterboxInfo)
     }
 
     override fun close() {
@@ -136,12 +160,21 @@ class YoloSegModel(context: Context) : AutoCloseable {
         return padded to info
     }
 
-    /** NCHW (planuri separate R/G/B, NU interleaved per pixel), normalizat [0,1] — layout REAL al
-     * acestui export (confirmat empiric, 2026-09-11: `interpreter.get_input_details()` a aratat
-     * `shape=[1,3,640,640]`, NU `[1,640,640,3]` cum presupune convenția TFLite "standard" — quirk
-     * al exportului `onnx2tf` folosit de Ultralytics, care poate păstra layout-ul NCHW nativ
-     * PyTorch. Bug real găsit prin comparație cu Ultralytics rulând pe ACEEAȘI imagine (Colab):
-     * încredere >0.85 acolo vs. <0.01 cu preprocesarea NHWC inițială — vezi CLAUDE.md. */
+    /** NCHW (planuri separate R/G/B, NU interleaved per pixel), normalizat [0,1]. Layout REAL al
+     * exportului FINAL folosit (verificat programatic, nu presupus): `shape=[1,3,640,640]`.
+     * Istoric layout, ambele VERIFICATE programatic, niciodată presupuse — regula generală
+     * confirmată de două ori acum: layout-ul depinde de calea exactă de export, nu de arhitectura
+     * modelului:
+     * - Modelul COCO original (Faza 3a-ii, export `model.export(format="tflite")` via
+     *   Ultralytics/Colab) → NCHW.
+     * - Prima încercare pt. acest detector propriu (Faza 4c-ii, export manual ONNX -> `onnx2tf`
+     *   local) → ieșise NHWC — dar acel `.tflite` **cracka nativ pe device** (`CompiledModel`,
+     *   SIGSEGV) deși rula perfect în Python — cauza reală: `onnx2tf` nu mai e calea folosită de
+     *   Ultralytics pt. LiteRT (au trecut la `litert_torch`, cu fix-uri de compatibilitate GPU
+     *   delegate — int32 în loc de int64, evită GATHER_ND — vezi `convert_box_detector_tflite.py`).
+     * - Export final, corect (Colab, `litert_torch` prin `model.export(format="tflite")` —
+     *   `litert-converter`, dependința reală de conversie, nu are build Windows, deci tot Colab,
+     *   ca la modelul COCO) → NCHW din nou, la fel ca modelul COCO. */
     private fun bitmapToNchwFloatArray(bitmap: Bitmap): FloatArray {
         val pixels = IntArray(MODEL_INPUT_SIZE * MODEL_INPUT_SIZE)
         bitmap.getPixels(pixels, 0, MODEL_INPUT_SIZE, 0, 0, MODEL_INPUT_SIZE, MODEL_INPUT_SIZE)
