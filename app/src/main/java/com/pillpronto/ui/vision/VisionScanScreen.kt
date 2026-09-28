@@ -37,6 +37,7 @@ import com.pillpronto.R
 import com.pillpronto.core.permissions.Permissions
 import com.pillpronto.core.ui.components.BackTopAppBar
 import com.pillpronto.domain.vision.Detection
+import com.pillpronto.domain.vision.tracking.MultiObjectTracker
 import java.util.concurrent.Executors
 
 private const val TAG = "VisionScanScreen"
@@ -75,6 +76,9 @@ fun VisionScanScreen(padding: PaddingValues, onBack: () -> Unit) {
     // gestionata intern de sistemul de snapshot-uri.
     var detections by remember { mutableStateOf<List<Detection>>(emptyList()) }
     var imageSize by remember { mutableStateOf(IntSize.Zero) }
+    // Pastreaza starea track-urilor (Kalman + ciclu de viata) intre cadre — instantiat o data per
+    // intrare pe ecran, ca modelHolder/analyzerExecutor, NU per-cadru (vezi MultiObjectTracker.kt).
+    val tracker = remember { MultiObjectTracker() }
 
     DisposableEffect(Unit) {
         modelHolder.value = runCatching { YoloSegModel(context) }
@@ -104,7 +108,7 @@ fun VisionScanScreen(padding: PaddingValues, onBack: () -> Unit) {
                             if (model != null) {
                                 val rotation = imageProxy.imageInfo.rotationDegrees
                                 val bitmap = rotateIfNeeded(imageProxy.toBitmap(), rotation)
-                                detections = model.detect(bitmap)
+                                detections = tracker.update(model.detect(bitmap))
                                 imageSize = IntSize(bitmap.width, bitmap.height)
                             }
                         } catch (e: Exception) {
