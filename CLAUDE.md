@@ -889,9 +889,41 @@ embeddings-urilor (Faza 4c-i), acesta face doar localizare. Rezolvă simultan ba
   Colab. Scripturi noi: `scripts/convert_medication_embedder_tflite.py` (conversie locală
   embedder), `scripts/auto_annotate_boxes.py`, `scripts/train_box_detector.py`,
   `scripts/convert_box_detector_tflite.py`.
-- **NECOMIS** — toate schimbările (scripturi noi, `YoloSegModel.kt`, `MedicationEmbedderModel.kt`,
-  `AndroidManifest.xml`, `.gitignore`, model nou în assets, `CocoLabels.kt`+`yolo11n_seg.tflite`
-  șterse) așteaptă confirmarea finală a userului înainte de commit+branch+PR.
+- **PR #22 mergeuit pe `main`** (2026-09-25), branch `feature/faza4c-ii-box-detector` șters
+  (local + `origin`).
+
+### Faza 5 (parțial) — tracker multi-obiect Kalman + asociere stil ByteTrack (implementat, testat live — 2026-09-28)
+
+**Context**: cutia detectată de Faza 4c-ii oscila cadru-cu-cadru pe device (contur corect vs.
+contur cu 2 laturi întinse până la marginea ecranului). Propunerea inițială (netezire minimală,
+EMA simplu) a fost respinsă explicit de user: din moment ce forma completă era deja în roadmap
+("Faza 5: ByteTrack + netezire Kalman/low-pass"), a cerut implementarea COMPLETĂ de la această
+bifurcație arhitecturală, nu un fix parțial care oricum ar fi fost înlocuit ulterior — decizie de
+scop reținută ca preferință generală a userului pt. sesiuni viitoare (vezi memoria de proiect).
+
+- `domain/vision/tracking/KalmanFilter1D.kt` (filtru Kalman 1D, viteză constantă) + `BoxTrack.kt`
+  (4 filtre independente per track — cx/cy/width/height, NU model SORT 7D corelat, simplificare
+  bloc-diagonală deliberată, evită inversare de matrici generale) + `MultiObjectTracker.kt`
+  (asociere în 2 etape: detecții de prag înalt ≥0.5 întâi, prag jos 0.1-0.5 doar recuperează
+  track-uri existente apropiate de poziția prezisă Kalman — ideea ByteTrack). Track tentativ →
+  confirmat după `DEFAULT_MIN_HITS_TO_CONFIRM` potriviri, șters după `DEFAULT_MAX_MISSED_FRAMES`
+  (5) rateuri. Masca nu se netezește explicit — `DetectionOverlay` oricum întinde grid-ul măștii
+  peste `box` la randare, un box Kalman-netezit dă automat un overlay stabil.
+- `Detection.trackId: Int?` (nou), `iou()` din `NonMaxSuppression.kt` devenit `internal`
+  (reutilizat de tracker), `YoloSegModel.kt` trimite prag de încredere 0.1 (nu 0.4) la decodor —
+  filtrarea vizibilă e acum treaba tracker-ului (doar track-uri confirmate), nu a decodorului.
+  `VisionScanScreen.kt` — un `MultiObjectTracker` per intrare pe ecran. 15 teste noi, toate trec.
+- **FINDING real, cu screenshot de pe device**: pe fundal complex (hartă cu linii de grid/contur
+  de țară) + cutie rotită puternic (~30-40°), detectorul a produs 2 track-uri confirmate simultan
+  — unul cu box corect orizontal dar mult prea înalt (regresie confuzată de liniile hărții), unul
+  fals-pozitiv pe altă zonă a hărții. Confirmă diagnosticul deja cunoscut (dataset mic/omogen, doar
+  mese simple, rotații limitate) — dovadă concretă pt. ghidajul viitoarei sesiuni foto (trebuie și
+  fundaluri complexe/cu model, nu doar variate generic, plus rotații mai pronunțate).
+- **Mitigare rapidă aplicată** (fără reantrenare): `DEFAULT_MIN_HITS_TO_CONFIRM` crescut de la 2 la
+  **5** — un fals-pozitiv trebuie re-propus de model 5 cadre consecutive, nu doar 2, ca să apară
+  vizual. Testele actualizate să folosească constanta dinamic, nu numere hardcodate.
+  **Neretestat pe scena cu harta la finalul sesiunii** — de verificat sesiunea viitoare.
+- **PR #23 în curs** (commit+push+PR+merge cerut explicit de user la finalul sesiunii).
 
 ---
 
@@ -954,23 +986,27 @@ embeddings-urilor (Faza 4c-i), acesta face doar localizare. Rezolvă simultan ba
   reantrenare cu fundaluri variate (>85% pe fundalul de înrolare, <70% pe fundal diferit) — a dus
   la decizia Fazei 4c-ii.
 - **Faza 4c-ii — detector propriu de cutii (clasă unică):** ✅ **implementată, testată live pe
-  device, NECOMIS** (2026-09-25) — vezi secțiunea 7 pt. detalii complete (pipeline SAM+YOLO local,
-  saga conversie onnx2tf vs. litert_torch, fix leak memorie TensorBuffer, lock portret). Acuratețe
-  reală a detectorului imperfectă (dataset mic/omogen, 80 poze/2 sesiuni foto) — userul a decis să
-  amâne o nouă sesiune foto (fundaluri variate + exemple negative) pt. mai târziu.
-  - **Sesiunea viitoare începe aici**: (1) dacă userul a adus commit-ul/PR-ul Fazei 4c-ii la
-    "merge" — confirmă, mergeuiește, șterge branch-ul; (2) verifică dacă a făcut poze noi pt.
-    detector (fundaluri variate + poze FĂRĂ nicio cutie, exemple negative — vezi secțiunea 7) —
-    dacă da, rulează din nou `scripts/auto_annotate_boxes.py`→`train_box_detector.py`→
+  device, mergeuită pe `main` (PR #22)** (2026-09-25) — vezi secțiunea 7 pt. detalii complete
+  (pipeline SAM+YOLO local, saga conversie onnx2tf vs. litert_torch, fix leak memorie
+  TensorBuffer, lock portret). Acuratețe reală a detectorului imperfectă (dataset mic/omogen, 80
+  poze/2 sesiuni foto) — userul a decis să amâne o nouă sesiune foto pt. mai târziu.
+- **Faza 5 (parțial) — tracker multi-obiect Kalman + ByteTrack:** ✅ **implementată, testată live
+  pe device** (2026-09-28) — vezi secțiunea 7. Stabilizează vizual conturul/masca (netezire Kalman
+  pe coordonate + asociere în 2 etape), dar NU rezolvă acuratețea de bază a detectorului — un
+  finding cu screenshot pe fundal complex (hartă) a confirmat asta din nou, dus la creșterea
+  pragului de confirmare (2→5 potriviri consecutive) ca mitigare rapidă.
+  - **Sesiunea viitoare începe aici**: (1) verifică dacă userul a testat scena cu harta după
+    creșterea pragului la 5 — neretestat la finalul sesiunii anterioare; (2) verifică dacă a făcut
+    poze noi pt. detector (fundaluri complexe/cu model, NU doar variate generic — vezi finding-ul
+    din secțiunea 7 — + rotații mai pronunțate + poze FĂRĂ nicio cutie, exemple negative) — dacă
+    da, rulează din nou `scripts/auto_annotate_boxes.py`→`train_box_detector.py`→
     `convert_box_detector_tflite.py` (Colab pt. pasul final, `litert-converter` n-are build
     Windows) pe setul extins; (3) după ce detectorul e suficient de precis, planul e să folosească
     masca reală ca crop pt. embedding în loc de dreptunghiul static din `EnrollMedicationScreen`/
     `RecognizeMedicationScreen` (`cropToBox`/`applyMask` deja scrise în `ui/vision/DetectionCrop.kt`,
     nefolosite momentan) — asta ar rezolva practic background-invarianța rămasă de la Faza 4c-i.
     Colorarea conturului după statusul dozei (verde/portocaliu/roșu/gri, deja definite în
-    `Theme.kt`) rămâne planul pt. integrarea completă cu recunoașterea (nearest-neighbor pe
-    galerie **per detecție** din `VisionScanScreen`).
-- **Faza 5 — Tracking & AR:** ByteTrack + netezire, ancorare dinamică a panoului de info, buton show/hide; ancore ARCore pentru scanare progresivă.
+    `Theme.kt`) + ancore ARCore pt. scanare progresivă rămân restul planului Fazei 5.
 - **Faza 6 — Chatbot RAG + interacțiuni:** RAG peste tratament activ + prospecte, guardrails + disclaimere, verificare interacțiuni medicamentoase.
 - **Faza 7 — Hardening & studiu:** GDPR (consimțământ, ștergere), battery optimization, teste, instrumentare pentru studiul pilot de aderență.
 

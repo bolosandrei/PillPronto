@@ -110,6 +110,12 @@ class YoloSegModel(context: Context) : AutoCloseable {
                 numAnchors = NUM_ANCHORS,
                 numClasses = MEDICATION_BOX_LABELS.size,
                 labels = MEDICATION_BOX_LABELS,
+                // Prag JOS (nu 0.4 implicit) — filtrarea "vizibila" nu mai e treaba decodorului,
+                // MultiObjectTracker (Faza 5) foloseste candidatii sub prag inalt pt. asocierea de
+                // recuperare stil ByteTrack (o detectie slaba care nimereste unde un track existent
+                // a prezis pozitia e probabil obiectul real, nu zgomot) — doar track-urile
+                // CONFIRMATE ajung in UI, nu fiecare detectie bruta peste acest prag minim.
+                confidenceThreshold = 0.1f,
                 maskDim = maskDim
             )
             if (protos != null) {

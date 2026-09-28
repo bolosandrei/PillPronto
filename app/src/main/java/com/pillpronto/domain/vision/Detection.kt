@@ -29,5 +29,9 @@ data class Detection(
     val confidence: Float,
     val box: RectF01,
     val maskCoeffs: List<Float>? = null,
-    val mask: SegMask? = null
+    val mask: SegMask? = null,
+    // Identitate persistenta intre cadre, atasata de MultiObjectTracker (domain/vision/tracking) —
+    // null pt. o detectie bruta, inainte de urmarire. Utila si pt. lucrul viitor (colorare contur
+    // dupa statusul dozei, per obiect urmarit).
+    val trackId: Int? = null
 )

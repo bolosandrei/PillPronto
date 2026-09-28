@@ -17,7 +17,10 @@ fun nonMaxSuppression(detections: List<Detection>, iouThreshold: Float): List<De
     return kept
 }
 
-private fun iou(a: RectF01, b: RectF01): Float {
+/** Refolosita si de `domain/vision/tracking/MultiObjectTracker.kt` pt. asocierea detectii<->track-uri
+ * (IoU intre pozitia prezisa Kalman si detectiile brute din cadrul curent) — de aceea `internal`,
+ * nu `private`. */
+internal fun iou(a: RectF01, b: RectF01): Float {
     val interLeft = maxOf(a.left, b.left)
     val interTop = maxOf(a.top, b.top)
     val interRight = minOf(a.right, b.right)
