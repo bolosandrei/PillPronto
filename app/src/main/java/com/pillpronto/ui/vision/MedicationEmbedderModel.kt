@@ -47,10 +47,18 @@ class MedicationEmbedderModel(context: Context) : AutoCloseable {
 
         val inputBuffers = model.createInputBuffers()
         val outputBuffers = model.createOutputBuffers()
-
-        inputBuffers[0].writeFloat(bitmapToNhwcFloatArray(resized))
-        model.run(inputBuffers, outputBuffers)
-        return outputBuffers[0].readFloat()
+        // `TensorBuffer` e `AutoCloseable`, fara finalizer — fara `close()` explicit, memoria
+        // nativa nu se elibereaza niciodata (bug real gasit in YoloSegModel.detect(), aceeasi
+        // clasa de API, vezi comentariul de acolo). Aici efectul e mai putin vizibil (apel manual
+        // per captura, nu per-cadru de camera), dar tot o scurgere reala.
+        try {
+            inputBuffers[0].writeFloat(bitmapToNhwcFloatArray(resized))
+            model.run(inputBuffers, outputBuffers)
+            return outputBuffers[0].readFloat()
+        } finally {
+            inputBuffers.forEach { it.close() }
+            outputBuffers.forEach { it.close() }
+        }
     }
 
     override fun close() {

@@ -22,13 +22,16 @@ generice de nivel jos/mediu, deja utile), antrenam doar ultimele blocuri + capul
 sa reducem riscul de supra-invatare pe un set atat de mic.
 
 RULARE (mediu SEPARAT de acest repo Android/Kotlin — are nevoie de Python, nu e parte din build-ul
-Gradle; ca la `export-yolo-seg-model.py`):
+Gradle). Foloseste un venv DEDICAT `.venv-train` (Python 3.14 — sau orice versiune pt. care
+`torch` are wheel; verifica cu `pip index versions torch`), SEPARAT de `.venv-tflite` folosit de
+`convert_medication_embedder_tflite.py` (acela cere Python 3.12, pt. ca `tensorflow` inca nu
+publica wheel-uri pt. 3.14 la data scrierii acestui script — vezi acel script pt. detalii):
 
-    python -m venv .venv
+    py -3.14 -m venv scripts/.venv-train
     # Windows:
-    .venv\\Scripts\\activate
+    scripts\\.venv-train\\Scripts\\activate
     # macOS/Linux:
-    source .venv/bin/activate
+    source scripts/.venv-train/bin/activate
 
     pip install torch torchvision pytorch-metric-learning pillow onnx
 
@@ -40,23 +43,10 @@ exportul ONNX nu au restrictia de platforma intalnita la `model.export(format="t
 REZULTAT: `scripts/artifacts/medication_embedder.onnx` — un model ONNX care primeste o imagine
 224x224 si intoarce un vector de embedding normalizat (cosine similarity = produs scalar direct).
 
-PASUL URMATOR (neacoperit de acest script, la fel ca la YOLO — conversie ONNX->TFLite cere
-Linux/macOS, vezi `export-yolo-seg-model.py`): converteste `medication_embedder.onnx` la
-`.tflite` via Google Colab, apoi verifica OBLIGATORIU layout-ul de input inainte de a scrie cod
-Kotlin de inferenta:
-
-    !pip install onnx2tf onnx-graphsurgeon sng4onnx
-    !onnx2tf -i medication_embedder.onnx -o medication_embedder_tflite
-
-    import tensorflow as tf
-    interp = tf.lite.Interpreter(model_path="medication_embedder_tflite/medication_embedder_float32.tflite")
-    interp.allocate_tensors()
-    print(interp.get_input_details())   # <-- verifica shape-ul AICI, nu presupune
-
-`onnx2tf` converteste de regula automat NCHW (PyTorch/ONNX) -> NHWC (conventia TFLite) — dar
-EXACT aceasta presupunere (NCHW vs NHWC) a produs bug-ul real din Faza 3a-ii (vezi CLAUDE.md).
-NU presupune orientarea — citeste `get_input_details()['shape']` din Colab si scrie codul Kotlin
-de preprocesare (viitoarea Faza 4c) dupa ce ai raspunsul, nu inainte.
+PASUL URMATOR: `python scripts/convert_medication_embedder_tflite.py` (venv SEPARAT
+`.venv-tflite`, vezi acel fisier) — converteste local la `.tflite`, VERIFICA programatic layout-ul
+de input (NHWC `[1,224,224,3]`, nu presupune — exact bug-ul NCHW vs NHWC din Faza 3a-ii, vezi
+CLAUDE.md) si copiaza rezultatul in `app/src/main/assets/medication_embedder_float32.tflite`.
 
 IMPORTANT — preprocesarea EXACTA asteptata de model (de replicat identic in Kotlin la inferenta):
   - imagine RGB (nu BGR), redimensionata la 224x224
