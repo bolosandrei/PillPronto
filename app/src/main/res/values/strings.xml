@@ -199,6 +199,13 @@
     <string name="onboarding_error_not_authenticated">Sesiunea a expirat — autentifică-te din nou</string>
     <string name="onboarding_error_save_failed">Eroare la salvare. Încearcă din nou.</string>
 
+    <!-- Faza 1.5f: Pacient — trail de audit ("Cine imi vede datele") -->
+    <string name="account_audit_log_button">Cine îmi vede datele</string>
+    <string name="audit_log_title">Cine îmi vede datele</string>
+    <string name="audit_log_empty">Nimeni nu ți-a văzut încă datele.</string>
+    <string name="audit_log_unknown_actor">Utilizator necunoscut</string>
+    <string name="audit_log_action_view">Ți-a vizualizat datele</string>
+
     <!-- Faza 1.5d: Pacient — gestionare acces (generare/distribuire cod, revocare) -->
     <string name="manage_access_title">Gestionează accesul</string>
     <string name="manage_access_subtitle">Generează un cod și distribuie-l unui aparținător ca să-ți vadă tratamentele și aderența — fără să poată edita nimic.</string>

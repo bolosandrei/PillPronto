@@ -3,6 +3,7 @@ package com.pillpronto.core.di
 import com.pillpronto.data.local.LocalPatientProfileProvider
 import com.pillpronto.data.reminder.ReminderCoordinator
 import com.pillpronto.data.reminder.ReminderSync
+import com.pillpronto.data.repository.AuditLogRepositoryImpl
 import com.pillpronto.data.repository.AuthRepositoryImpl
 import com.pillpronto.data.repository.DoseRepositoryImpl
 import com.pillpronto.data.repository.EnrolledMedicationRepositoryImpl
@@ -16,6 +17,7 @@ import com.pillpronto.data.sync.GtinCatalogRemoteDataSource
 import com.pillpronto.data.sync.SupabaseGtinCatalogDataSource
 import com.pillpronto.data.sync.SupabaseSyncDataSource
 import com.pillpronto.data.sync.SyncRemoteDataSource
+import com.pillpronto.domain.repository.AuditLogRepository
 import com.pillpronto.domain.repository.AuthRepository
 import com.pillpronto.domain.repository.DoseRepository
 import com.pillpronto.domain.repository.EnrolledMedicationRepository
@@ -87,4 +89,8 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindEnrolledMedicationRepository(impl: EnrolledMedicationRepositoryImpl): EnrolledMedicationRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindAuditLogRepository(impl: AuditLogRepositoryImpl): AuditLogRepository
 }

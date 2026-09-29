@@ -12,7 +12,9 @@ import com.pillpronto.domain.model.Treatment
 import com.pillpronto.domain.usecase.GetLinkedPatientDataUseCase
 import com.pillpronto.domain.usecase.GetMyPatientsUseCase
 import com.pillpronto.domain.usecase.ObserveAuthSessionUseCase
+import com.pillpronto.domain.usecase.RecordDataAccessUseCase
 import com.pillpronto.ui.navigation.Route
+import com.pillpronto.util.FakeAuditLogRepository
 import com.pillpronto.util.FakeAuthRepository
 import com.pillpronto.util.FakeLinkRepository
 import com.pillpronto.util.FakeLinkedPatientDataRepository
@@ -32,12 +34,14 @@ class PatientDetailViewModelTest {
     private val authRepository = FakeAuthRepository()
     private val linkRepository = FakeLinkRepository()
     private val linkedPatientDataRepository = FakeLinkedPatientDataRepository()
+    private val auditLogRepository = FakeAuditLogRepository()
 
     private fun createViewModel(patientProfileId: String = "patient-1") = PatientDetailViewModel(
         SavedStateHandle(mapOf(Route.PatientDetail.ARG to patientProfileId)),
         ObserveAuthSessionUseCase(authRepository),
         GetMyPatientsUseCase(linkRepository),
-        GetLinkedPatientDataUseCase(linkedPatientDataRepository)
+        GetLinkedPatientDataUseCase(linkedPatientDataRepository),
+        RecordDataAccessUseCase(auditLogRepository)
     )
 
     @Test
@@ -64,6 +68,7 @@ class PatientDetailViewModelTest {
         assertEquals(1, vm.state.value.treatments.size)
         assertEquals(1.0, vm.state.value.stats.pdc, 0.0001)
         assertEquals(false, vm.state.value.isLoading)
+        assertEquals(listOf("patient-1" to "user-1"), auditLogRepository.recordedAccesses) // Faza 1.5f
     }
 
     @Test
@@ -75,5 +80,15 @@ class PatientDetailViewModelTest {
 
         assertEquals(null, vm.state.value.displayName)
         assertEquals(false, vm.state.value.isLoading)
+    }
+
+    @Test
+    fun `citirea esuata nu inregistreaza niciun acces in audit`() = runTest {
+        linkedPatientDataRepository.error = RuntimeException("reteaua a picat")
+
+        val vm = createViewModel()
+        authRepository.emit(AuthSessionState.Authenticated("user-1"))
+
+        assertEquals(true, auditLogRepository.recordedAccesses.isEmpty()) // Faza 1.5f: nimic vazut, nimic logat
     }
 }

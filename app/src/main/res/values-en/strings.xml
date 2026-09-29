@@ -199,6 +199,13 @@
     <string name="onboarding_error_not_authenticated">Session expired — sign in again</string>
     <string name="onboarding_error_save_failed">Error saving. Try again.</string>
 
+    <!-- Phase 1.5f: Patient — audit trail ("Who sees my data") -->
+    <string name="account_audit_log_button">Who sees my data</string>
+    <string name="audit_log_title">Who sees my data</string>
+    <string name="audit_log_empty">No one has viewed your data yet.</string>
+    <string name="audit_log_unknown_actor">Unknown user</string>
+    <string name="audit_log_action_view">Viewed your data</string>
+
     <!-- Phase 1.5d: Patient — manage access (generate/share code, revoke) -->
     <string name="manage_access_title">Manage access</string>
     <string name="manage_access_subtitle">Generate a code and share it with a caregiver so they can see your treatments and adherence — without being able to edit anything.</string>

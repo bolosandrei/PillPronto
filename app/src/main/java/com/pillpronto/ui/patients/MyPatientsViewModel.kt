@@ -10,6 +10,7 @@ import com.pillpronto.domain.usecase.ClaimInviteUseCase
 import com.pillpronto.domain.usecase.GetLinkedPatientAdherenceUseCase
 import com.pillpronto.domain.usecase.GetMyPatientsUseCase
 import com.pillpronto.domain.usecase.ObserveAuthSessionUseCase
+import com.pillpronto.domain.usecase.RecordDataAccessUseCase
 import com.pillpronto.ui.navigation.Route
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -42,7 +43,8 @@ class MyPatientsViewModel @Inject constructor(
     observeAuthSession: ObserveAuthSessionUseCase,
     private val claimInvite: ClaimInviteUseCase,
     private val getMyPatients: GetMyPatientsUseCase,
-    private val getLinkedPatientAdherence: GetLinkedPatientAdherenceUseCase
+    private val getLinkedPatientAdherence: GetLinkedPatientAdherenceUseCase,
+    private val recordDataAccess: RecordDataAccessUseCase
 ) : ViewModel() {
 
     // Pre-completat din deep link-ul de invitatie (pillpronto://invite?code=...), daca ecranul a
@@ -71,10 +73,11 @@ class MyPatientsViewModel @Inject constructor(
                 .onFailure { Log.e(TAG, "Nu am putut incarca pacientii legati", it) }
                 .getOrDefault(emptyList())
             val withStats = summaries.map { patient ->
-                val stats = runCatching { getLinkedPatientAdherence(patient.patientProfileId) }
+                val result = runCatching { getLinkedPatientAdherence(patient.patientProfileId) }
                     .onFailure { Log.e(TAG, "Nu am putut calcula aderenta pentru ${patient.patientProfileId}", it) }
-                    .getOrDefault(AdherenceStats.EMPTY)
-                PatientListItem(patient.patientProfileId, patient.displayName, stats)
+                // Audit (Faza 1.5f) — doar la un calcul REUSIT (a citit efectiv datele pacientului).
+                result.onSuccess { recordDataAccess(patient.patientProfileId, uid) }
+                PatientListItem(patient.patientProfileId, patient.displayName, result.getOrDefault(AdherenceStats.EMPTY))
             }
             _state.update { it.copy(patients = withStats, isLoadingPatients = false) }
         }
