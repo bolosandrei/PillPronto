@@ -1,5 +1,6 @@
 package com.pillpronto.ui.account
 
+import android.app.Activity
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -14,12 +15,18 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -33,6 +40,7 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.pillpronto.BuildConfig
 import com.pillpronto.R
+import com.pillpronto.core.localization.AppLocale
 import com.pillpronto.domain.model.AccountRole
 import com.pillpronto.domain.model.AuthSessionState
 import kotlinx.coroutines.launch
@@ -79,6 +87,9 @@ fun AccountScreen(
         Modifier.fillMaxSize().padding(padding).padding(16.dp).verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
+        // Selector de limba — vizibil necondiționat (setare globala, nu tine de autentificare).
+        LanguageSelector()
+
         // Vizibil DOAR pt. contribuitori de incredere (profiles.is_trusted_contributor, setat
         // manual — vezi Profile.kt) — un user obisnuit nu are ce cauta aici: propriile lui
         // mapari se invata oricum automat din fluxul de scanare al AddTreatmentScreen, iar acest
@@ -137,6 +148,39 @@ fun AccountScreen(
                 } else {
                     LoadingIndicator()
                 }
+        }
+    }
+}
+
+// Sistem/RO/EN — vezi AppLocale (core/localization/) pt. de ce nu folosim AppCompatDelegate
+// (MainActivity extinde ComponentActivity, nu AppCompatActivity). Pe API 33+ recreate() e
+// tehnic redundant (sistemul recreeaza activitatea singur la schimbarea LocaleManager), dar il
+// pastram necondiționat ca schimbarea sa se vada instant si uniform pe toate versiunile.
+@Composable
+private fun LanguageSelector() {
+    val context = LocalContext.current
+    var selected by remember { mutableStateOf(AppLocale.getLanguage(context)) }
+    val options = listOf(
+        null to R.string.account_language_system,
+        AppLocale.LANGUAGE_ROMANIAN to R.string.account_language_romanian,
+        AppLocale.LANGUAGE_ENGLISH to R.string.account_language_english
+    )
+    Column(Modifier.fillMaxWidth()) {
+        Text(stringResource(R.string.account_language_title), style = MaterialTheme.typography.labelLarge)
+        SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+            options.forEachIndexed { index, (language, labelRes) ->
+                SegmentedButton(
+                    selected = selected == language,
+                    onClick = {
+                        selected = language
+                        AppLocale.setLanguage(context, language)
+                        (context as? Activity)?.recreate()
+                    },
+                    shape = SegmentedButtonDefaults.itemShape(index = index, count = options.size)
+                ) {
+                    Text(stringResource(labelRes))
+                }
+            }
         }
     }
 }
