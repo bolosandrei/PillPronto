@@ -30,6 +30,8 @@ class ReminderCoordinator @Inject constructor(
             .forEach { scheduler.cancelDose(it) }
     }
 
+    override suspend fun cancelDose(doseId: Long) = scheduler.cancelDose(doseId)
+
     companion object {
         const val SCHEDULE_HORIZON_DAYS = 3L
     }

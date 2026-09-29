@@ -3,6 +3,7 @@ package com.pillpronto.domain.usecase
 import com.pillpronto.domain.model.DoseLog
 import com.pillpronto.domain.model.DoseStatus
 import com.pillpronto.util.FakeDoseRepository
+import com.pillpronto.util.FakeReminderSync
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -14,7 +15,8 @@ import java.time.LocalDateTime
 class LogDoseUseCaseTest {
 
     private val repository = FakeDoseRepository()
-    private val useCase = LogDoseUseCase(repository)
+    private val reminderSync = FakeReminderSync()
+    private val useCase = LogDoseUseCase(repository, reminderSync)
 
     @Test
     fun `confirmarea in fereastra aplica statusul si intoarce true`() = runTest {
@@ -27,6 +29,7 @@ class LogDoseUseCaseTest {
         val updated = repository.getItemById(1)!!.dose
         assertEquals(DoseStatus.TAKEN, updated.status)
         assertTrue(updated.takenAt != null)
+        assertEquals(listOf(1L), reminderSync.cancelledDoseIds) // alarma anulata, ca sa nu mai sune
     }
 
     @Test
@@ -40,6 +43,7 @@ class LogDoseUseCaseTest {
         val stillPending = repository.getItemById(1)!!.dose
         assertEquals(DoseStatus.PENDING, stillPending.status)
         assertNull(stillPending.takenAt)
+        assertTrue(reminderSync.cancelledDoseIds.isEmpty())
     }
 
     @Test
@@ -47,6 +51,7 @@ class LogDoseUseCaseTest {
         val result = useCase(999, DoseStatus.TAKEN)
 
         assertFalse(result)
+        assertTrue(reminderSync.cancelledDoseIds.isEmpty())
     }
 
     @Test

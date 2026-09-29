@@ -9,4 +9,10 @@ package com.pillpronto.data.reminder
  */
 interface ReminderSync {
     suspend fun syncReminders(horizonDays: Long = ReminderCoordinator.SCHEDULE_HORIZON_DAYS)
+
+    /** Anuleaza alarma exacta + notificarea unei singure doze — de apelat dupa ce doza a primit
+     * un status final (TAKEN/SKIPPED) inainte ca alarma ei sa se fi declansat, altfel reminder-ul
+     * tot apare la ora programata desi userul a raspuns deja. No-op sigur daca alarma deja s-a
+     * declansat sau nu a existat niciodata (vezi ReminderScheduler.cancelDose). */
+    suspend fun cancelDose(doseId: Long)
 }

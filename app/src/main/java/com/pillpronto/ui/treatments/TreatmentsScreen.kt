@@ -20,6 +20,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.SwipeToDismissBox
@@ -99,20 +100,28 @@ private fun TreatmentCard(t: Treatment, onOpenDetail: () -> Unit, onLogAsNeeded:
         backgroundContent = { SwipeDeleteBackground() }
     ) {
         Card(Modifier.fillMaxWidth().clickable(onClick = onOpenDetail)) {
-            Column(Modifier.padding(12.dp)) {
-                Text(t.medicationName, style = MaterialTheme.typography.titleMedium)
-                Text(
-                    stringResource(
-                        R.string.common_dosage_and_detail,
-                        t.dosage,
-                        if (t.asNeeded) stringResource(R.string.common_as_needed)
-                        else t.times.joinToString(", ") { it.format(HM) }
+            Row(Modifier.padding(start = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f).padding(vertical = 12.dp)) {
+                    Text(t.medicationName, style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        stringResource(
+                            R.string.common_dosage_and_detail,
+                            t.dosage,
+                            if (t.asNeeded) stringResource(R.string.common_as_needed)
+                            else t.times.joinToString(", ") { it.format(HM) }
+                        )
                     )
-                )
-                if (t.asNeeded) {
-                    Row(Modifier.padding(top = 8.dp)) {
-                        OutlinedButton(onClick = onLogAsNeeded) { Text(stringResource(R.string.common_log_dose)) }
+                    if (t.asNeeded) {
+                        Row(Modifier.padding(top = 8.dp)) {
+                            OutlinedButton(onClick = onLogAsNeeded) { Text(stringResource(R.string.common_log_dose)) }
+                        }
                     }
+                }
+                // Buton explicit, pe langa swipe (SwipeToDismissBox de mai sus) — swipe-ul singur
+                // nu e descoperit intuitiv de useri, un buton vizibil confirma ca stergerea e
+                // posibila fara sa depinda de gestul ascuns.
+                IconButton(onClick = { showDeleteConfirm = true }) {
+                    Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.treatments_swipe_delete_content_desc))
                 }
             }
         }
