@@ -158,6 +158,7 @@
     <string name="vision_scan_permission_denied">You need camera permission to use this screen.</string>
     <string name="vision_scan_open_settings">Open app settings</string>
     <string name="vision_scan_model_missing">AI model missing from the app (.tflite) — showing only the camera feed, no detection.</string>
+    <string name="vision_scan_toggle_panels">Show/hide info panels</string>
 
     <string name="associate_gtin_title">Associate codes (GTIN)</string>
     <string name="associate_gtin_hint">Scan the code on a box, then choose the correct medication — the mapping is remembered for all future scans of the same code.</string>
