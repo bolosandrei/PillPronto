@@ -922,40 +922,176 @@ scop reținută ca preferință generală a userului pt. sesiuni viitoare (vezi 
 - **Mitigare rapidă aplicată** (fără reantrenare): `DEFAULT_MIN_HITS_TO_CONFIRM` crescut de la 2 la
   **5** — un fals-pozitiv trebuie re-propus de model 5 cadre consecutive, nu doar 2, ca să apară
   vizual. Testele actualizate să folosească constanta dinamic, nu numere hardcodate.
-  **Neretestat pe scena cu harta la finalul sesiunii** — de verificat sesiunea viitoare.
-- **PR #23 în curs** (commit+push+PR+merge cerut explicit de user la finalul sesiunii).
+- **PR #23 mergeuit pe `main`** (2026-09-29, confirmat la începutul sesiunii următoare).
+  **Retestare 2026-09-29 pe scena cu harta**: pragul=5 NU a rezolvat problema de fond — userul a
+  retestat inclusiv pe fundal NETED (cearșaf), nu doar hartă, și bounding box-ul tot iese imprecis
+  (extins mult peste marginile reale ale cutiei). Confirmă diagnosticul: **nu e problemă de fundal
+  complex specific, e dataset-ul mic (80 poze/2 sesiuni foto)** — orice tuning suplimentar de prag e
+  inutil până la o sesiune foto nouă (userul nu a obținut-o încă la finalul acestei sesiuni).
+
+### Faza 5-0/5a/5b — rezoluție analiză + colorare contur după status doză + panou AR 2D (implementat, testat live, mergeuit — 2026-09-29)
+
+**Context**: userul a cerut planul complet pentru restul Fazei 5 (plan mode, agent Explore de
+research înainte de plan). Confirmat cu userul: **5c (ancore ARCore) rămâne DOAR proiectată**
+(risc real necunoscut — integrare CameraX+ARCore netrivială, suport device neconfirmat),
+implementare separată într-o sesiune viitoare dedicată. **PR #28 mergeuit.**
+
+- **5-0**: `ImageAnalysis` (`ui/vision/CameraPreview.kt`) primește acum `ResolutionSelector`
+  explicit (1280×960, `FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER`) — înainte CameraX alegea un
+  implicit intern nedeliberat (API confirmat cu `javap` pe `camera-core-1.6.2-api.jar` înainte de
+  scris cod, fără dependență nouă).
+- **5a — prima legătură reală recunoaștere↔tracker**: `Detection.trackId` (exista deja din Faza 5
+  partial, niciodată folosit până acum) + crop mascat (`cropToBox`/`applyMask`, scrise în Faza 4b,
+  **zero apelanți până acum**) → `MedicationEmbedderModel.embed` → `RecognizeMedicationUseCase` →
+  `codCim` → use-case nou `domain/usecase/ResolveDoseStatusForCodCimUseCase.kt` (codCim →
+  tratament activ → doza cea mai apropiată de-acum din azi → `DoseStatus` + `isDoseActionable`) →
+  `ui/vision/DoseStatusColor.kt` (TAKEN→verde, MISSED/SKIPPED→roșu — SKIPPED n-are culoare proprie
+  în spec, PENDING+actionabil→portocaliu, orice altceva→gri). `DetectionOverlay` colorează acum
+  masca+conturul per `trackId` (`colorByTrackId: Map<Int, Color>`), nu mai e gri fix. Recunoaștere
+  rulată O SINGURĂ DATĂ per track confirmat nou (nu la fiecare cadru — cost de inferență).
+- **5b — panou AR 2D**: `ui/vision/DoseInfoPanel.kt` (nume medicament + status) — **NU ARCore**,
+  doar poziția 2D curentă a track-ului pe ecran (`mapBoxToScreen`, extrasă din `DetectionOverlay`
+  în `ui/vision/DetectionBoxMapper.kt`, reutilizată de ambele). Buton show/hide global.
+  - **Bug real găsit + fixat la testarea pe device**: textul ieșea trunchiat/complet în afara
+    ecranului când cutia era aproape de margine (ancoră fixă = colț sus-dreapta al cutiei, fără
+    clamp). Fix: `onSizeChanged` măsoară panoul real, flip la stânga cutiei dacă ancora dreapta ar
+    ieși din ecran, apoi `coerceIn` final pe ambele axe — panoul rămâne ÎNTOTDEAUNA complet vizibil.
+- **`VisionScanViewModel`** (nou, Hilt) — primul ViewModel al acestui ecran (înainte Composable
+  simplu), doar punte spre use-case-urile de recunoaștere+status.
+- **Confirmat de user la testare live**: recunoașterea funcționează (limitată de nivelul de
+  antrenare al modelului, așteptat), verde și portocaliu confirmate corect corelate cu statusul
+  din „Azi" (roșu neconfirmat, nicio doză ratată în timpul testării), panoul cu ancoră dinamică
+  confirmat că nu mai iese trunchiat, show/hide funcțional.
+- **Design 5c (ARCore) complet, doar proiectat, NU implementat** — vezi memoria de proiect
+  (fișierul de plan din sesiune a fost suprascris ulterior de planul 1.5f/1.5g, rezumatul complet
+  al design-ului 5c a fost mutat în memorie înainte de suprascriere).
+
+### Switch limbă RO/EN (implementat, testat live, mergeuit — 2026-09-29)
+
+Backlog 8a rezolvat. `app/src/main/res/values-en/strings.xml` (216 chei, paritate 1:1 verificată
+prin `diff` pe numele cheilor — verificare repetată la fiecare string nou adăugat de-atunci).
+`core/localization/AppLocale.kt` (nou) — **decizie cheie**: NU `AppCompatDelegate` (ar cere fie
+`AppCompatActivity`, risc de conflict de temă cu Material3 Compose, fie o dependență nouă
+nefolosită altundeva) — implementare manuală pe 2 căi: API nativ `LocaleManager` pe Android 13+
+(sincronizat cu Setări sistem, sistemul recreează Activity automat); `SharedPreferences` +
+`Configuration` override prin `attachBaseContext` (Application + MainActivity) pe API 26-32, cu
+`recreate()` explicit din UI. Selector Sistem/Română/English în ecranul „Cont", vizibil
+necondiționat. `PillProntoApp.attachBaseContext` acoperă și notificările din Workers/
+BroadcastReceivers (`applicationContext`, nu doar Activity). **PR #24 mergeuit**, testat live de
+user.
+
+### Verificare migrări Supabase — toate 0001-0012 confirmate rulate (2026-09-29)
+
+`supabase/migrations/0013_verify_migrations.sql` (nou, read-only, doar `SELECT`, sigur de rulat
+oricând) — inspectează catalogul Postgres (tabele/coloane/funcții/indecși/politici) pt. semnătura
+exactă a fiecărei migrări, raportează true/false per migrare. Userul l-a rulat — **toate 12
+rânduri au ieșit `true`**. **PR #25 mergeuit.** Închide definitiv itemul de backlog „confirmare
+migrări 0003-0007" din 8b (mai jos).
+
+### Bugfix critic — sincronizarea 1.5c nu funcționase NICIODATĂ pe niciun cont (găsit + fixat — 2026-09-29)
+
+Descoperit prin testarea explicită a sync-ului 1.5c (cerută după verificarea migrărilor, niciodată
+făcută separat până acum, deja notată ca "neverificat" în backlog). Userul a adăugat un tratament,
+confirmat o doză — local funcționa perfect, dar `treatments`/`dose_logs`/`audit_log` erau complet
+GOALE în Supabase, pe orice cont de test din tot istoricul proiectului.
+
+**Root cause confirmat empiric** (nu doar teoretic): `patient_profiles.id` (UUID local,
+`LocalPatientProfileProvider`) se leagă de contul Supabase O SINGURĂ DATĂ, la
+`ProfileRepositoryImpl.completeOnboarding` — niciodată re-verificat după aceea. UUID-ul local
+curent al device-ului (extras cu `adb shell run-as com.pillpronto cat
+shared_prefs/pillpronto_identity.xml`, tehnică nouă reutilizabilă — necesită
+`MSYS_NO_PATHCONV=1` în Git Bash) nu avea niciun rând în `patient_profiles` — deși existau 4
+rânduri legate de conturi de test ANTERIOARE (UUID-uri locale diferite). Orice push de
+tratament/doză cădea silențios pe RLS (`is_patient_profile_owner`), `runCatching` din
+`SyncManager` înghițea eroarea fără urmă.
+
+**Fix** (`domain/repository/ProfileRepository.kt` + `data/repository/ProfileRepositoryImpl.kt` +
+`data/sync/SyncManager.kt`): `ensurePatientProfileLinked(userId, patientProfileId, displayName)` —
+`INSERT ... ON CONFLICT (id) DO NOTHING` (`ignoreDuplicates=true` pe `UpsertRequestBuilder` din
+postgrest-kt, verificat cu `javap`, NU presupus), apelat la ÎNCEPUTUL fiecărui `SyncManager.sync()`,
+nu doar la onboarding — se auto-repară dacă legătura lipsește. Deliberat NU upsert normal (ar
+suprascrie) — dacă UUID-ul local ar coincide vreodată cu al altui cont (scenariul SEPARAT deja din
+backlog 8a, schimbare de cont pe același telefon), fix-ul NU îl rezolvă și NU îl agravează. **PR
+#26 mergeuit, confirmat funcțional live** (patient_profiles + treatments + dose_logs au început să
+primească rânduri reale).
+
+**Rămâne un item SEPARAT, încă deschis**: dacă UUID-ul local ar coincide cu al unui cont Supabase
+DIFERIT deja existent (schimbare de cont pe același telefon), `ensurePatientProfileLinked` corect
+NU face nimic (design defensiv) — dar userul tot ar vedea o eroare de sincronizare fără mesaj clar
+în acel caz specific (vezi backlog 8a).
+
+### 2 fix-uri UX găsite prin testare live (implementate, mergeuite — 2026-09-29, PR #27)
+
+1. **Card de tratament** (tab Tratamente) avea DOAR swipe-to-delete, fără niciun indiciu vizual pe
+   starea de repaus — `IconButton(Delete)` adăugat pe dreapta cardului, lângă swipe (ambele deschid
+   același dialog de confirmare).
+2. **Bug real separat**: confirmarea/omiterea unei doze din „Azi" ÎNAINTE de ora programată nu anula
+   alarma exactă — reminder-ul tot suna la ora respectivă deși userul răspunsese deja. Fix:
+   `LogDoseUseCase` apelează acum `ReminderSync.cancelDose(doseId)` (metodă nouă în interfață,
+   `ReminderCoordinator` o implementează ca passthrough la `ReminderScheduler.cancelDose`, deja
+   existent) după orice status final — centralizat în use-case, acoperă toate căile de apel.
+
+### Faza 1.5f (trail de audit) + 1.5g (teste RLS adversariale) — implementate, NECONFIRMATE (PR #29 draft, 2026-09-29)
+
+Plan complet (plan mode, agent Explore de research înainte). Scop confirmat cu userul: **1.5f =
+doar trail-ul de audit** — consimțământ explicit la creare cont + flux de ștergere cont/date rămân
+backlog separat.
+
+- **Bug real de securitate găsit prin research, nu testare** — `audit_log_insert` (0002) nu
+  verifica deloc că `patient_profile_id` corespunde unei legături reale a actorului: orice user
+  autentificat putea insera un rând de audit FABRICAT pentru orice pacient. Fix:
+  `supabase/migrations/0014_audit_log_insert_requires_link.sql` — strânge politica, refolosind
+  `has_accepted_link` (funcție SECURITY DEFINER deja existentă din 0004, nicio funcție nouă).
+- **Scriere**: `AuditLogRepository`/`Impl` (pattern `LinkRepositoryImpl`) +
+  `RecordDataAccessUseCase` (fire-and-forget, `runCatching`) — apelat explicit DOAR din
+  `PatientDetailViewModel.load()` și `MyPatientsViewModel.refresh()` (deschidere umană de ecran),
+  NU din `LinkedPatientDataRepositoryImpl` (repository comun cu `CaregiverAlertWorker`, polling de
+  fundal la 30 min — NU o "vizualizare" GDPR/UX, ar inunda audit log-ul).
+- **Citire + ecran nou**: `GetAuditLogUseCase`, `ui/audit/AuditLogScreen.kt`+`AuditLogViewModel.kt`
+  (schelet identic `ManageAccessScreen.kt`), buton nou „Cine îmi vede datele" în `AccountScreen`
+  (ramura `AccountRole.PATIENT`).
+- **1.5g**: `supabase/tests/rls_adversarial_test.sql` (pgTAP, NU migrare — fișier separat,
+  re-rulabil oricând, NU în `supabase/migrations/`). 8 teste (4 control pozitiv + 4 adversariale:
+  legătură revocată/pending nu vede tratamentele, revocat nu poate scrie, insert de audit fabricat
+  respins — verifică direct 0014, Pacient nu vede audit-ul altui pacient). Tot scriptul într-o
+  singură tranzacție cu `ROLLBACK` explicit — nu lasă nimic în DB. UUID-uri sintetice verificate
+  manual ca hex valide (am prins + corectat o greșeală de format înainte de commit — `p`/`t` nu
+  sunt cifre hex valide).
+- **Teste noi**: `RecordDataAccessUseCaseTest`, `GetAuditLogUseCaseTest`, `FakeAuditLogRepository`
+  + assertions noi în `PatientDetailViewModelTest`/`MyPatientsViewModelTest` — toate trec local.
+- **NECONFIRMAT** — PR #29 rămâne DRAFT, nemergeuit. Nimic din testarea live (app + rularea
+  scriptului pgTAP în SQL Editor) nu s-a făcut încă. **Sesiunea viitoare începe aici.**
 
 ---
 
 ## 8. CE URMEAZĂ — TODO
 
 ### 8a. Backlog (mic, neplanificat pe fază)
-- **Switch limbă RO/EN** — cerut de utilizator (2026-09-07). Scaffolding deja pregătit
-  (`locales_config.xml`, `android:localeConfig`, toate stringurile în `strings.xml`). Rămâne de
-  făcut: `values-en/strings.xml` cu traduceri + `<locale android:name="en"/>` în
-  `locales_config.xml` + un mecanism de selecție (ecran de setări nou, sau întrerupător simplu care
-  apelează `AppCompatDelegate.setApplicationLocales(...)` / API-ul per-app language din Android 13+).
+- **Switch limbă RO/EN** — ✅ **implementat, testat live, mergeuit (PR #24)**, vezi secțiunea 7.
 - **`LocalPatientProfileProvider` — un singur UUID local per instalare, nu per cont Supabase**
-  (vezi „Bug-uri semnificative", punctul 6, secțiunea 7). Rar în producție (un pacient = propriul
-  telefon), dar reapare la delogare + autentificare cu **alt cont Pacient existent** pe același
-  telefon — RLS blochează corect (`42501`), dar userul vede o eroare brută de salvare la
-  onboarding, nu un mesaj clar. Fix posibil: la conflict de tip owner mismatch pe upsert,
-  regenerează UUID-ul local și reîncearcă automat.
+  (vezi „Bug-uri semnificative", punctul 6, secțiunea 7). **Parțial atins** de bugfix-ul sync din
+  2026-09-29 (`ensurePatientProfileLinked`, secțiunea 7) — acela rezolvă cazul "legătura lipsește
+  complet" (UUID regenerat, nicio legătură niciodată creată), dar NU cazul "owner mismatch" (UUID
+  local ar coincide cu al altui cont deja existent) — acela rămâne exact ca înainte: RLS blochează
+  corect (`42501`), dar userul vede o eroare brută, nu un mesaj clar. Fix posibil neschimbat: la
+  conflict de tip owner mismatch, regenerează UUID-ul local și reîncearcă automat.
 
 ### 8b. Roadmap faze următoare
 - **Faza 1.5 — Conturi & Roluri:** ✅ **complet implementată, merge-uită pe `main` (PR #1-#8),
   testată live pe device fizic** — vezi secțiunea 7 pentru detalii complete pe sub-fază.
-  **Următorul pas, la alegere:**
-  - **Confirmare finală** că toate migrările `supabase/migrations/0003-0007*.sql` sunt rulate
-    (Supabase Dashboard, în ordine, după 0001-0002) — testarea live a acoperit fluxul funcțional,
-    dar nu verificat explicit migrare-cu-migrare.
-  - **1.5c (sync propriu-zis al Pacientului)** rămâne neverificat separat pe device.
+  - **Migrări 0001-0012**: ✅ **toate confirmate rulate** (script `0013_verify_migrations.sql`,
+    2026-09-29) — nu mai e item deschis.
+  - **1.5c (sync propriu-zis al Pacientului)**: ✅ **confirmat funcțional** — dar abia după ce
+    testarea a găsit un bug critic (sync-ul nu funcționase NICIODATĂ pe niciun cont), fixat PR #26
+    (2026-09-29) — vezi secțiunea 7.
+  - **1.5f (trail de audit) + 1.5g (teste RLS adversariale)**: ⏳ **implementate, PR #29 DRAFT,
+    NECONFIRMAT** (2026-09-29) — testare live (app + script pgTAP în SQL Editor) rămasă pentru
+    sesiunea următoare, vezi secțiunea 7. Consimțământ explicit + ștergere cont/date rămân
+    backlog separat (decizie de scop, nu parte din 1.5f).
   - **Profil dependent** (pacient vârstnic fără cont propriu) — amânat explicit din 1.5d, cere
-    suport multi-profil local în Room (schimbare majoră de arhitectură).
-  - **1.5f — audit & consimțământ** (GDPR, ecran „Cine îmi vede datele") / **1.5g — teste RLS
-    adversariale** — vezi `docs/user-management-plan.md` secțiunea 8, neatinse încă.
-  - **Sau trecem direct la Faza 2** (identificare — Nomenclator ANMDMR + scanare) — Faza 1.5 e
-    considerată suficient de matură funcțional, 1.5f/1.5g sunt hardening, nu blocante.
+    suport multi-profil local în Room (schimbare majoră de arhitectură). Rămâne neatins.
+  - **Sau trecem la Faza 6** (Chatbot RAG) — Faza 1.5 e considerată suficient de matură funcțional
+    odată ce PR #29 e confirmat+mergeuit; profilul dependent rămâne backlog opțional, nu blocant.
 - **Faza 2a — Import Nomenclator + căutare/asociere:** ✅ **complet implementată, mergeuită pe
   `main` (PR #10)**, migrările `0008`/`0009` rulate — vezi secțiunea 7.
 - **Faza 2b-i — Scanare GS1 DataMatrix + catalog `gtin_mappings`:** ✅ **complet implementată,
@@ -990,23 +1126,29 @@ scop reținută ca preferință generală a userului pt. sesiuni viitoare (vezi 
   (pipeline SAM+YOLO local, saga conversie onnx2tf vs. litert_torch, fix leak memorie
   TensorBuffer, lock portret). Acuratețe reală a detectorului imperfectă (dataset mic/omogen, 80
   poze/2 sesiuni foto) — userul a decis să amâne o nouă sesiune foto pt. mai târziu.
-- **Faza 5 (parțial) — tracker multi-obiect Kalman + ByteTrack:** ✅ **implementată, testată live
-  pe device** (2026-09-28) — vezi secțiunea 7. Stabilizează vizual conturul/masca (netezire Kalman
-  pe coordonate + asociere în 2 etape), dar NU rezolvă acuratețea de bază a detectorului — un
-  finding cu screenshot pe fundal complex (hartă) a confirmat asta din nou, dus la creșterea
-  pragului de confirmare (2→5 potriviri consecutive) ca mitigare rapidă.
-  - **Sesiunea viitoare începe aici**: (1) verifică dacă userul a testat scena cu harta după
-    creșterea pragului la 5 — neretestat la finalul sesiunii anterioare; (2) verifică dacă a făcut
-    poze noi pt. detector (fundaluri complexe/cu model, NU doar variate generic — vezi finding-ul
-    din secțiunea 7 — + rotații mai pronunțate + poze FĂRĂ nicio cutie, exemple negative) — dacă
-    da, rulează din nou `scripts/auto_annotate_boxes.py`→`train_box_detector.py`→
-    `convert_box_detector_tflite.py` (Colab pt. pasul final, `litert-converter` n-are build
-    Windows) pe setul extins; (3) după ce detectorul e suficient de precis, planul e să folosească
-    masca reală ca crop pt. embedding în loc de dreptunghiul static din `EnrollMedicationScreen`/
-    `RecognizeMedicationScreen` (`cropToBox`/`applyMask` deja scrise în `ui/vision/DetectionCrop.kt`,
-    nefolosite momentan) — asta ar rezolva practic background-invarianța rămasă de la Faza 4c-i.
-    Colorarea conturului după statusul dozei (verde/portocaliu/roșu/gri, deja definite în
-    `Theme.kt`) + ancore ARCore pt. scanare progresivă rămân restul planului Fazei 5.
+- **Faza 5 — tracking & AR:** ✅ **tracker Kalman+ByteTrack (PR #23) + 5-0/5a/5b (rezoluție
+  analiză, colorare contur după status doză, panou AR 2D — PR #28) implementate, testate live,
+  mergeuite** — vezi secțiunea 7. **5c (ancore ARCore pt. persistență la ieșire/reintrare din
+  cadru)**: doar proiectată (design complet în memoria de proiect), implementare separată, nu
+  începută.
+  - **Retestare 2026-09-29, cu pragul=5**: problema de acuratețe a detectorului NU e specifică
+    fundalurilor complexe (hartă) — eșuează la fel de mult pe fundal neted (cearșaf). Confirmă
+    definitiv: cauza e dataset-ul mic (80 poze/2 sesiuni foto), nu ceva specific unui tip de fundal.
+  - **Sesiunea foto nouă rămâne blocantă pt. acuratețea reală a detectorului** — userul nu a
+    obținut-o încă la finalul acestei sesiuni, nu a fost uitată, doar amânată. Ghidaj concret dat
+    userului: minim 200-300 poze, 15-20 medicamente, 5-6 fundaluri real diferite (inclusiv
+    complexe/cu model, nu doar variate generic), rotații 0°/45°/90° în colțurile cadrului nu doar
+    central, 15-20 poze FĂRĂ nicio cutie (exemple negative). Când sunt gata: rulează din nou
+    `scripts/auto_annotate_boxes.py`→`train_box_detector.py`→`convert_box_detector_tflite.py`
+    (Colab pt. pasul final, `litert-converter` n-are build Windows) pe setul extins; apoi
+    folosește masca reală ca crop pt. embedding în loc de dreptunghiul static din
+    `EnrollMedicationScreen`/`RecognizeMedicationScreen` (`cropToBox`/`applyMask` deja scrise în
+    `ui/vision/DetectionCrop.kt`, acum FOLOSITE de Faza 5a în `VisionScanScreen`, dar tot
+    neintegrate în ecranele de înrolare/recunoaștere) — asta ar rezolva practic
+    background-invarianța rămasă de la Faza 4c-i.
+  - **Sesiunea viitoare începe DE FAPT la Faza 1.5f/1.5g** (PR #29, vezi mai sus) — testare live
+    (app + script pgTAP), apoi merge. Faza 5 (sesiune foto + 5c) rămâne independentă, de reluat
+    când userul are pozele sau vrea să înceapă spike-ul ARCore.
 - **Faza 6 — Chatbot RAG + interacțiuni:** RAG peste tratament activ + prospecte, guardrails + disclaimere, verificare interacțiuni medicamentoase.
 - **Faza 7 — Hardening & studiu:** GDPR (consimțământ, ștergere), battery optimization, teste, instrumentare pentru studiul pilot de aderență.
 
