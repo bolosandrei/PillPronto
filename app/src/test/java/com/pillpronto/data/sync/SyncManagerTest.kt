@@ -89,6 +89,33 @@ class SyncManagerTest {
     }
 
     @Test
+    fun `sync re-leaga patient_profiles daca legatura lipseste`() = runTest {
+        authenticateAsPatient(userId = "user-1")
+
+        syncManager.sync()
+
+        assertEquals("user-1" to "Pacient", profileRepository.linkedPatientProfiles[PATIENT_ID])
+    }
+
+    @Test
+    fun `sync nu re-leaga patient_profiles daca userul nu e autentificat ca Pacient`() = runTest {
+        syncManager.sync()
+
+        assertTrue(profileRepository.linkedPatientProfiles.isEmpty())
+    }
+
+    @Test
+    fun `re-legarea esuata nu blocheaza restul ciclului de sync`() = runTest {
+        authenticateAsPatient()
+        profileRepository.ensurePatientProfileLinkedError = RuntimeException("RLS a picat")
+        treatmentDao.upsert(treatment("r1"))
+
+        syncManager.sync()
+
+        assertTrue(remoteDataSource.treatments.containsKey("r1"))
+    }
+
+    @Test
     fun `sync nu face nimic daca rolul nu e Pacient`() = runTest {
         authRepository.emit(AuthSessionState.Authenticated("user-1"))
         profileRepository.profiles["user-1"] = Profile("user-1", AccountRole.CAREGIVER, "Aparținător")

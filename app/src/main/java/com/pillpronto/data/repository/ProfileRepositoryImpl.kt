@@ -38,13 +38,16 @@ class ProfileRepositoryImpl @Inject constructor(
         // Doar Pacientul are date locale (tratamente/doze) de legat de cont — vezi
         // docs/user-management-plan.md pentru de ce id-ul e cel local, nu userId.
         if (role == AccountRole.PATIENT) {
-            supabase.from(PATIENT_PROFILES_TABLE).upsert(
-                PatientProfileInsertDto(
-                    id = localPatientProfileProvider.patientProfileId,
-                    displayName = displayName,
-                    userId = userId
-                )
-            )
+            ensurePatientProfileLinked(userId, localPatientProfileProvider.patientProfileId, displayName)
+        }
+    }
+
+    override suspend fun ensurePatientProfileLinked(userId: String, patientProfileId: String, displayName: String) {
+        supabase.from(PATIENT_PROFILES_TABLE).upsert(
+            PatientProfileInsertDto(id = patientProfileId, displayName = displayName, userId = userId)
+        ) {
+            onConflict = "id"
+            ignoreDuplicates = true
         }
     }
 

@@ -14,6 +14,7 @@ import com.pillpronto.data.remote.dto.DoseLogDto
 import com.pillpronto.data.remote.dto.TreatmentDto
 import com.pillpronto.domain.model.AccountRole
 import com.pillpronto.domain.model.AuthSessionState
+import com.pillpronto.domain.model.Profile
 import com.pillpronto.domain.repository.AuthRepository
 import com.pillpronto.domain.repository.DoseRepository
 import com.pillpronto.domain.repository.PatientProfileIdProvider
@@ -54,8 +55,15 @@ class SyncManager @Inject constructor(
     private val reminderSync: ReminderSync
 ) {
     suspend fun sync() {
-        if (!isSyncEligible()) return
+        val (userId, profile) = eligiblePatient() ?: return
         val patientProfileId = localPatientProfileProvider.patientProfileId
+
+        // Re-leaga UUID-ul local de contul curent daca legatura lipseste (vezi doc pe
+        // ensurePatientProfileLinked) — DOAR insert-daca-lipseste, niciodata overwrite, deci sigur
+        // de rulat necondiționat la fiecare ciclu; o eroare aici nu trebuie sa blocheze restul.
+        runCatching {
+            profileRepository.ensurePatientProfileLinked(userId, patientProfileId, profile.displayName.orEmpty())
+        }
 
         pushPendingDeletes()
         pushDirtyTreatments(patientProfileId)
@@ -67,13 +75,14 @@ class SyncManager @Inject constructor(
 
     // Doar Pacientul are date locale de sincronizat — Apartinator/Medic/Farmacist n-au tratamente
     // proprii in Room (vor citi datele pacientilor legati abia in 1.5d, prin `links`, nu de aici).
-    private suspend fun isSyncEligible(): Boolean {
+    private suspend fun eligiblePatient(): Pair<String, Profile>? {
         val session = withTimeoutOrNull(SESSION_SNAPSHOT_TIMEOUT_MS) {
             authRepository.sessionStatus.first { it !is AuthSessionState.Loading }
-        } ?: return false
-        val userId = (session as? AuthSessionState.Authenticated)?.userId ?: return false
-        val profile = profileRepository.getProfile(userId) ?: return false
-        return profile.role == AccountRole.PATIENT
+        } ?: return null
+        val userId = (session as? AuthSessionState.Authenticated)?.userId ?: return null
+        val profile = profileRepository.getProfile(userId) ?: return null
+        if (profile.role != AccountRole.PATIENT) return null
+        return userId to profile
     }
 
     private suspend fun pushPendingDeletes() {
