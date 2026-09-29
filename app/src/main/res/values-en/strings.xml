@@ -1,0 +1,259 @@
+<resources>
+    <string name="app_name">PillPronto</string>
+
+    <!-- Navigation (bottom bar) -->
+    <string name="nav_today">Today</string>
+    <string name="nav_treatments">Treatments</string>
+    <string name="nav_adherence">Adherence</string>
+    <string name="nav_account">Account</string>
+
+    <!-- Common — reused across multiple screens -->
+    <string name="common_as_needed">as needed</string>
+    <string name="common_dosage_and_detail">%1$s • %2$s</string>
+    <string name="common_no_end_date">no end date</string>
+    <string name="common_start_label">Start: %1$s</string>
+    <string name="common_end_label">End: %1$s</string>
+    <string name="common_log_dose">I took a dose</string>
+    <string name="common_save">Save</string>
+    <string name="common_cancel">Cancel</string>
+    <string name="common_back">Back</string>
+    <string name="common_delete">Delete</string>
+    <string name="common_confirm_take">Confirm</string>
+    <string name="common_skip">Skip</string>
+    <string name="common_ok">OK</string>
+    <string name="common_delete_treatment_title">Delete this treatment?</string>
+    <string name="common_delete_treatment_text">Its scheduled doses will also be deleted. The history of taken/missed doses will be lost.</string>
+    <string name="dose_status_taken">Taken ✓</string>
+    <string name="dose_status_missed">Missed</string>
+    <string name="dose_status_skipped">Skipped</string>
+    <string name="dose_status_pending">Scheduled</string>
+
+    <!-- "Today" screen -->
+    <string name="today_title_today">Today\'s doses</string>
+    <string name="today_title_yesterday">Yesterday\'s doses</string>
+    <string name="today_title_tomorrow">Tomorrow\'s doses</string>
+    <string name="today_title_other_day">Doses for %1$s</string>
+    <string name="today_empty_today">No doses scheduled today. Add a treatment from the Treatments tab.</string>
+    <string name="today_empty_other_day">No doses scheduled on this day.</string>
+    <string name="today_exact_alarm_banner_title">Exact alarms are disabled</string>
+    <string name="today_exact_alarm_banner_text">Without this permission, reminders may be delayed. Enable it for on-time notifications.</string>
+    <string name="today_open_settings">Open settings</string>
+    <string name="today_as_needed_section_title">As needed</string>
+    <string name="today_previous_month">Previous month</string>
+    <string name="today_next_month">Next month</string>
+    <string name="today_open_month_picker">Choose month and year</string>
+
+    <!-- "Treatments" screen -->
+    <string name="treatments_title">My treatments</string>
+    <string name="treatments_empty">No treatments yet. Tap + to add one.</string>
+    <string name="treatments_add_content_desc">Add treatment</string>
+    <string name="treatments_swipe_delete_content_desc">Delete</string>
+
+    <!-- Add/edit treatment screen -->
+    <string name="add_treatment_title_edit">Edit treatment</string>
+    <string name="add_treatment_title_new">Add treatment</string>
+    <string name="add_treatment_name_label">Medication</string>
+    <string name="add_treatment_scan_button">Scan the code on the box</string>
+    <string name="add_treatment_scan_pending_hint">Unknown scanned code — choose the medication from the suggestions below to remember it for next time</string>
+    <string name="add_treatment_scan_unrecognized">The scanned code couldn\'t be read — try again or enter it manually</string>
+    <string name="add_treatment_expiry_date">Expires: %1$s</string>
+    <string name="add_treatment_expiry_date_expired">Expired: %1$s</string>
+    <string name="add_treatment_dosage_label">Dosage (e.g. 500 mg)</string>
+    <string name="add_treatment_as_needed_title">As needed (no fixed schedule)</string>
+    <string name="add_treatment_as_needed_desc">No reminders; log a dose anytime, from the treatments list.</string>
+    <string name="add_treatment_times_title">Administration times</string>
+    <string name="add_treatment_remove_time_content_desc">Remove</string>
+    <string name="add_treatment_add_time">+ time</string>
+    <string name="add_treatment_delete_treatment">Delete treatment</string>
+    <string name="add_treatment_time_picker_add">Add</string>
+    <string name="add_treatment_date_picker_no_date">No date</string>
+    <string name="add_treatment_error_empty_name">Enter the medication name</string>
+    <string name="add_treatment_error_name_too_long">The medication name is too long (max %1$d characters)</string>
+    <string name="add_treatment_error_no_times">Add at least one time (or check \"as needed\")</string>
+    <string name="add_treatment_error_end_before_start">The end date can\'t be before the start date</string>
+    <string name="add_treatment_error_save_failed">Error saving</string>
+    <string name="add_treatment_error_delete_failed">Error deleting</string>
+    <string name="add_treatment_nomenclature_suggestion_detail">%1$s · %2$s · %3$s</string>
+    <string name="add_treatment_quantity_label">Quantity (e.g. 2 tablets)</string>
+    <string name="add_treatment_form_label">Form (e.g. tablet)</string>
+    <string name="add_treatment_indication_label">What it\'s for (optional)</string>
+    <string name="add_treatment_instructions_label">Instructions (optional, e.g. with food)</string>
+    <string name="treatment_detail_quantity">Quantity: %1$s</string>
+    <string name="treatment_detail_form">Form: %1$s</string>
+    <string name="treatment_detail_indication">For: %1$s</string>
+    <string name="treatment_detail_instructions">Instructions: %1$s</string>
+    <string name="treatment_detail_expiry">Expires: %1$s</string>
+    <string name="treatment_detail_expiry_expired">Expired: %1$s</string>
+    <string name="treatment_detail_history_taken_detail">%1$s · Taken %2$s</string>
+    <string name="add_treatment_times_hint">Tap a time to set its own quantity (e.g. a different amount in the morning than in the evening)</string>
+    <string name="add_treatment_slot_quantity_title">Quantity at %1$s</string>
+    <string name="add_treatment_slot_quantity_hint">Default: the general quantity above</string>
+    <string name="treatment_detail_schedule_breakdown">Schedule: %1$s</string>
+
+    <!-- Treatment detail screen -->
+    <string name="treatment_detail_loading">Loading…</string>
+    <string name="treatment_detail_edit_button">Edit treatment</string>
+    <string name="treatment_detail_history_title">Administration history</string>
+    <string name="treatment_detail_history_empty">No history yet. History appears as you confirm or skip doses.</string>
+    <string name="treatment_detail_history_summary">%1$d taken • %2$d missed • %3$d skipped</string>
+    <string name="treatment_detail_history_as_needed_suffix">%1$s (as needed)</string>
+
+    <!-- Adherence screen -->
+    <string name="adherence_title">Adherence (last 30 days)</string>
+    <string name="adherence_pdc_title">PDC — Proportion of Days Covered</string>
+    <string name="adherence_mpr_title">MPR — Medication Possession Ratio</string>
+    <string name="adherence_details_title">Details</string>
+    <string name="adherence_taken_doses">Doses taken: %1$d / %2$d</string>
+    <string name="adherence_missed_doses">Doses missed: %1$d</string>
+    <string name="adherence_covered_days">Days covered: %1$d / %2$d</string>
+    <string name="adherence_status_ok">Status: adherent (PDC ≥ 0.80)</string>
+    <string name="adherence_status_low">Status: below threshold (PDC &lt; 0.80)</string>
+
+    <!-- Account roles — reused on the Account and Onboarding screens -->
+    <string name="account_role_patient">Patient</string>
+    <string name="account_role_caregiver">Caregiver</string>
+    <string name="account_role_doctor">Doctor</string>
+    <string name="account_role_pharmacist">Pharmacist</string>
+
+    <!-- "Account" screen -->
+    <string name="account_title_sign_in">Sign in</string>
+    <string name="account_title_sign_up">Create account</string>
+    <string name="account_email_label">Email</string>
+    <string name="account_password_label">Password</string>
+    <string name="account_confirm_password_label">Confirm password</string>
+    <string name="account_submit_sign_in">Sign in</string>
+    <string name="account_submit_sign_up">Create account</string>
+    <string name="account_toggle_to_sign_up">Don\'t have an account? Create one</string>
+    <string name="account_toggle_to_sign_in">Already have an account? Sign in</string>
+    <string name="account_logged_out_hint">You can use the app without an account. Create one only if you want to share your data with a caregiver or a healthcare professional.</string>
+    <string name="account_confirmation_pending_title">Check your email</string>
+    <string name="account_confirmation_pending_body">We sent a confirmation link to %1$s. Open it, then come back here and sign in.</string>
+    <string name="account_logged_in_as">Signed in as %1$s</string>
+    <string name="account_role_label">Role: %1$s</string>
+    <string name="account_sign_out">Sign out</string>
+    <string name="account_error_empty_email">Enter your email address</string>
+    <string name="account_error_invalid_email">This email address isn\'t valid</string>
+    <string name="account_error_password_too_short">Password must be at least 6 characters</string>
+    <string name="account_error_passwords_mismatch">Passwords don\'t match</string>
+    <string name="account_error_auth_failed">Sign-in failed. Check the details you entered.</string>
+    <string name="account_error_rate_limited">Too many attempts in a short time. Wait a few minutes and try again.</string>
+    <string name="account_google_sign_in">Continue with Google</string>
+    <string name="account_error_google_sign_in_failed">Google sign-in failed. Try again.</string>
+    <string name="account_manage_access_button">Manage Caregiver access</string>
+    <string name="account_manage_professional_access_button">Manage Doctor/Pharmacist access</string>
+    <string name="account_my_patients_button">My patients</string>
+    <string name="account_unverified_badge">Unverified account — self-declared details</string>
+    <string name="account_associate_gtin_button">Associate codes (GTIN)</string>
+    <string name="account_vision_scan_button">Visual scan (experimental)</string>
+    <string name="account_enroll_medication_button">Enroll medication (experimental)</string>
+    <string name="account_recognize_medication_button">Recognize medication (experimental)</string>
+
+    <!-- App language selector -->
+    <string name="account_language_title">App language</string>
+    <string name="account_language_system">System</string>
+    <string name="account_language_romanian">Română</string>
+    <string name="account_language_english">English</string>
+
+    <string name="vision_scan_title">Visual scan (experimental)</string>
+    <string name="vision_scan_permission_denied">You need camera permission to use this screen.</string>
+    <string name="vision_scan_open_settings">Open app settings</string>
+    <string name="vision_scan_model_missing">AI model missing from the app (.tflite) — showing only the camera feed, no detection.</string>
+
+    <string name="associate_gtin_title">Associate codes (GTIN)</string>
+    <string name="associate_gtin_hint">Scan the code on a box, then choose the correct medication — the mapping is remembered for all future scans of the same code.</string>
+    <string name="associate_gtin_scan_button">Scan the code on the box</string>
+    <string name="associate_gtin_scanned_code">Scanned code: %1$s</string>
+    <string name="associate_gtin_already_mapped">Already mapped to: %1$s</string>
+    <string name="associate_gtin_saved">Saved locally: %1$s</string>
+    <string name="associate_gtin_saved_shared">Saved and submitted to the shared catalog: %1$s</string>
+    <string name="associate_gtin_search_label">Search for the medication</string>
+    <string name="associate_gtin_reset_button">Scan the next one</string>
+
+    <string name="enroll_medication_title">Enroll medication (experimental)</string>
+    <string name="enroll_medication_capture_hint">Align the box inside the rectangle and tap "Add capture" from several angles (3-5 recommended), then "Continue".</string>
+    <string name="enroll_medication_add_capture_button">Add capture</string>
+    <string name="enroll_medication_capture_count">Captures: %1$d</string>
+    <string name="enroll_medication_continue_button">Continue</string>
+    <string name="enroll_medication_model_missing">AI model missing from the app (.tflite) — showing only the camera feed, no detection.</string>
+    <string name="enroll_medication_search_label">Search for the medication</string>
+    <string name="enroll_medication_confirm_hint">Choose the correct medication from the list — %1$d captures will be saved for it.</string>
+    <string name="enroll_medication_saved">Enrolled locally: %1$s (%2$d captures)</string>
+    <string name="enroll_medication_reset_button">Enroll the next one</string>
+    <string name="enroll_medication_clear_gallery_button">Clear local gallery (after changing the model)</string>
+    <string name="enroll_medication_gallery_cleared">The local gallery has been cleared.</string>
+
+    <string name="recognize_medication_title">Recognize medication (experimental)</string>
+    <string name="recognize_medication_hint">Align the already-enrolled box inside the rectangle and tap "Recognize".</string>
+    <string name="recognize_medication_button">Recognize</string>
+    <string name="recognize_medication_match">Recognized: %1$s (similarity %2$d%%)</string>
+    <string name="recognize_medication_no_match">Unknown — no sufficiently similar match in the local gallery.</string>
+
+    <!-- Onboarding screen (role choice, after first account created) -->
+    <string name="onboarding_title">What kind of account do you have?</string>
+    <string name="onboarding_subtitle">Choose the right role — you can change this later.</string>
+    <string name="onboarding_display_name_label">Your name</string>
+    <string name="onboarding_submit">Continue</string>
+    <string name="onboarding_error_no_role">Choose a role</string>
+    <string name="onboarding_error_empty_name">Enter a name</string>
+    <string name="onboarding_error_not_authenticated">Session expired — sign in again</string>
+    <string name="onboarding_error_save_failed">Error saving. Try again.</string>
+
+    <!-- Phase 1.5d: Patient — manage access (generate/share code, revoke) -->
+    <string name="manage_access_title">Manage access</string>
+    <string name="manage_access_subtitle">Generate a code and share it with a caregiver so they can see your treatments and adherence — without being able to edit anything.</string>
+    <string name="manage_access_generate_button">Generate new code</string>
+    <string name="manage_access_generating">Generating…</string>
+    <string name="manage_access_empty">You haven\'t generated any code yet.</string>
+    <string name="manage_access_error_generate">We couldn\'t generate the code. Try again.</string>
+    <string name="manage_access_error_revoke">We couldn\'t revoke access. Try again.</string>
+    <string name="manage_access_status_pending">Pending</string>
+    <string name="manage_access_status_accepted">Access granted</string>
+    <string name="manage_access_status_accepted_named">Access granted to %1$s</string>
+    <string name="manage_access_qr_description">Invitation QR code — scan it with the Caregiver\'s phone</string>
+    <string name="manage_access_status_revoked">Access revoked</string>
+    <string name="manage_access_code_label">Code: %1$s</string>
+    <string name="manage_access_share_button">Share</string>
+    <string name="manage_access_share_text">PillPronto access code: %1$s\nEnter it in the app, under “My patients”, to see my treatments and adherence — or scan the QR code below.</string>
+    <string name="manage_access_revoke_button">Revoke</string>
+    <string name="manage_access_cancel_button">Cancel</string>
+    <string name="manage_access_unverified_suffix">(unverified)</string>
+
+    <!-- Phase 1.5e: Patient — manage Doctor/Pharmacist access (same structure as above, just
+         filtered by role; the manage_access_* strings above are reused) -->
+    <string name="manage_professional_access_title">Manage Doctor/Pharmacist access</string>
+    <string name="manage_professional_access_subtitle">Generate a code for your doctor or pharmacist, so they can see your active treatment — without being able to edit anything. The account is self-declared, without verification of the license number.</string>
+
+    <!-- Phase 1.5d: Caregiver — claim code + list of linked patients -->
+    <string name="my_patients_title">My patients</string>
+    <string name="my_patients_claim_label">Access code</string>
+    <string name="my_patients_scan_button">Scan QR code</string>
+    <string name="my_patients_claim_button">Add patient</string>
+    <string name="my_patients_claim_error">Invalid or already used code.</string>
+    <string name="my_patients_empty">You don\'t have any linked patients yet. Enter a code received from a patient.</string>
+    <string name="my_patients_adherence_summary">PDC %1$d%%</string>
+
+    <!-- Phase 1.5d: Caregiver — patient detail (read-only) -->
+    <string name="patient_detail_loading">Loading…</string>
+    <string name="patient_detail_no_treatments">This patient has no recorded treatments.</string>
+    <string name="patient_detail_adherence_summary">PDC %1$d%% · MPR %2$d%%</string>
+
+    <!-- Phase 1.5d: Caregiver notification on missed dose -->
+    <string name="caregiver_alerts_channel_name">Patient alerts</string>
+    <string name="caregiver_alerts_channel_desc">Notifications when a linked patient misses a dose</string>
+    <string name="caregiver_alert_missed_dose_title">%1$s missed a dose</string>
+    <string name="caregiver_alert_missed_dose_text">Check the “My patients” screen for details.</string>
+
+    <!-- Phase 2b-i (extension): treatment expiry alerts -->
+    <string name="expiry_alerts_channel_name">Medication expiry alerts</string>
+    <string name="expiry_alerts_channel_desc">Notifications when a treatment is nearing expiry or has expired</string>
+    <string name="expiry_alert_near_title">%1$s expires soon</string>
+    <string name="expiry_alert_near_text">Expiry date: %1$s</string>
+    <string name="expiry_alert_expired_title">%1$s has expired</string>
+    <string name="expiry_alert_expired_text">Check the treatment — the scanned box has expired.</string>
+
+    <!-- Reminder notifications -->
+    <string name="reminder_channel_name">Medication reminders</string>
+    <string name="reminder_channel_desc">Notifications for taking medication on time</string>
+    <string name="reminder_notification_title">Time for %1$s</string>
+    <string name="reminder_notification_text">Dose: %1$s</string>
+</resources>

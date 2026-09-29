@@ -1,6 +1,7 @@
 package com.pillpronto
 
 import android.Manifest
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
@@ -13,6 +14,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
+import com.pillpronto.core.localization.AppLocale
 import com.pillpronto.core.ui.theme.PillProntoTheme
 import com.pillpronto.ui.access.extractInviteCode
 import com.pillpronto.ui.navigation.PillProntoNavHost
@@ -22,6 +24,12 @@ import kotlinx.coroutines.flow.asSharedFlow
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+
+    // Aplica limba salvata (RO/EN) contextului acestei activitati — vezi AppLocale, no-op pe
+    // API 33+ (sistemul aplica deja configuratia corecta la orice context nou).
+    override fun attachBaseContext(newBase: Context) {
+        super.attachBaseContext(AppLocale.wrap(newBase))
+    }
 
     // Semnal pentru navigarea fortata pe tab-ul "Azi" cand app-ul e deschis dintr-o notificare
     // de reminder (cold start prin onCreate SAU activitate deja pornita prin onNewIntent).

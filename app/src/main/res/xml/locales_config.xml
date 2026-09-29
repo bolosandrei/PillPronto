@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Limbile suportate de aplicatie. Azi doar romana; scaffolding pentru switch RO/EN viitor
-     (vezi CLAUDE.md, backlog) — la adaugarea traducerilor (values-en/) se adauga si <locale android:name="en"/>. -->
+<!-- Limbile suportate de aplicatie — RO (implicit, values/) + EN (values-en/). Folosit de Android
+     pt. ecranul de sistem Setari > Aplicatii > PillPronto > Limba aplicatiei (API 33+) si de
+     AppLocale (core/localization/) pt. selectorul in-app pe toate versiunile suportate. -->
 <locale-config xmlns:android="http://schemas.android.com/apk/res/android">
     <locale android:name="ro" />
+    <locale android:name="en" />
 </locale-config>
