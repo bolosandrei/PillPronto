@@ -1,11 +1,15 @@
 package com.pillpronto.ui.vision
 
+import android.util.Size
 import androidx.camera.compose.CameraXViewfinder
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
 import androidx.camera.core.Preview
 import androidx.camera.core.SurfaceRequest
+import androidx.camera.core.resolutionselector.AspectRatioStrategy
+import androidx.camera.core.resolutionselector.ResolutionSelector
+import androidx.camera.core.resolutionselector.ResolutionStrategy
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.viewfinder.core.ImplementationMode
 import androidx.compose.runtime.Composable
@@ -48,6 +52,18 @@ fun CameraPreview(
             ImageAnalysis.Builder()
                 .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888)
                 .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                // Fara asta, CameraX alege un implicit intern nedeliberat (de obicei modest) — un
+                // obiect mic in cadru (ex. o cutie ce ocupa 25% din suprafata) ajunge reprezentat
+                // de prea putini pixeli reali pana la letterbox-ul la 640x640 al modelului
+                // (Faza 5-0, verificat cu javap ca API-ul e disponibil in camera-core 1.6.2).
+                .setResolutionSelector(
+                    ResolutionSelector.Builder()
+                        .setResolutionStrategy(
+                            ResolutionStrategy(Size(1280, 960), ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER)
+                        )
+                        .setAspectRatioStrategy(AspectRatioStrategy.RATIO_4_3_FALLBACK_AUTO_STRATEGY)
+                        .build()
+                )
                 .build()
                 .also { it.setAnalyzer(analyzerExecutor) { imageProxy -> onFrame(imageProxy) } }
         } else {
