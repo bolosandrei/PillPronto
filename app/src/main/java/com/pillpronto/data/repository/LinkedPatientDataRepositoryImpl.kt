@@ -11,8 +11,10 @@ import com.pillpronto.domain.model.LinkedPatientData
 import com.pillpronto.domain.model.LinkedTreatment
 import com.pillpronto.domain.model.Treatment
 import com.pillpronto.domain.repository.LinkedPatientDataRepository
+import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
+import java.time.ZoneId
 import javax.inject.Inject
 
 class LinkedPatientDataRepositoryImpl @Inject constructor(
@@ -46,11 +48,17 @@ class LinkedPatientDataRepositoryImpl @Inject constructor(
         expiryDate = expiryDate?.let { LocalDate.parse(it) }
     )
 
+    // Supabase intoarce coloanele `timestamptz` cu offset explicit (ex. "...+00:00") —
+    // LocalDateTime.parse (fara zona) arunca DateTimeParseException pe formatul asta. Fix:
+    // acelasi pattern deja folosit in AuditLogRepositoryImpl (Instant -> zona locala -> LocalDateTime).
+    private fun String.toLocalDateTimeFromRemote(): LocalDateTime =
+        Instant.parse(this).atZone(ZoneId.systemDefault()).toLocalDateTime()
+
     private fun DoseLogDto.toDomain(): DoseLog = DoseLog(
         treatmentId = 0L, // nefolosit — dozele sunt deja grupate pe LinkedTreatment.remoteId
-        scheduledAt = LocalDateTime.parse(scheduledAt),
+        scheduledAt = scheduledAt.toLocalDateTimeFromRemote(),
         status = DoseStatus.valueOf(status),
-        takenAt = takenAt?.let { LocalDateTime.parse(it) },
+        takenAt = takenAt?.toLocalDateTimeFromRemote(),
         isAsNeeded = isAsNeeded,
         cantitate = cantitate
     )

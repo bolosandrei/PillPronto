@@ -9,6 +9,7 @@ sealed class Route(val path: String) {
     data object Account : Route("account")
     data object Onboarding : Route("onboarding")
     data object ManageAccess : Route("manage_access")
+    data object AuditLog : Route("audit_log")
     data object AssociateGtin : Route("associate_gtin")
     data object VisionScan : Route("vision_scan")
     data object EnrollMedication : Route("enroll_medication")

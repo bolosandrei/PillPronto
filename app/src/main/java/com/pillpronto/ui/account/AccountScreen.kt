@@ -52,6 +52,7 @@ fun AccountScreen(
     onManageAccess: () -> Unit,
     onManageProfessionalAccess: () -> Unit,
     onMyPatients: () -> Unit,
+    onAuditLog: () -> Unit,
     onAssociateGtin: () -> Unit,
     onVisionScan: () -> Unit,
     onEnrollMedication: () -> Unit,
@@ -143,7 +144,8 @@ fun AccountScreen(
                         onSignOut = vm::onSignOut,
                         onManageAccess = onManageAccess,
                         onManageProfessionalAccess = onManageProfessionalAccess,
-                        onMyPatients = onMyPatients
+                        onMyPatients = onMyPatients,
+                        onAuditLog = onAuditLog
                     )
                 } else {
                     LoadingIndicator()
@@ -271,7 +273,8 @@ private fun LoggedInView(
     onSignOut: () -> Unit,
     onManageAccess: () -> Unit,
     onManageProfessionalAccess: () -> Unit,
-    onMyPatients: () -> Unit
+    onMyPatients: () -> Unit,
+    onAuditLog: () -> Unit
 ) {
     Text(
         stringResource(R.string.account_logged_in_as, displayName ?: "—"),
@@ -300,6 +303,9 @@ private fun LoggedInView(
             }
             OutlinedButton(onClick = onManageProfessionalAccess, modifier = Modifier.fillMaxWidth()) {
                 Text(stringResource(R.string.account_manage_professional_access_button))
+            }
+            OutlinedButton(onClick = onAuditLog, modifier = Modifier.fillMaxWidth()) {
+                Text(stringResource(R.string.account_audit_log_button))
             }
         }
         AccountRole.CAREGIVER, AccountRole.DOCTOR, AccountRole.PHARMACIST ->
