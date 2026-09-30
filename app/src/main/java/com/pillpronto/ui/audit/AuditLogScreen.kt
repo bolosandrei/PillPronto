@@ -28,7 +28,7 @@ import com.pillpronto.core.ui.components.BackTopAppBar
 import com.pillpronto.domain.model.AuditLogEntry
 import java.time.format.DateTimeFormatter
 
-private val DMY_HM = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm")
+private val DMY_HM = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss")
 
 /** Pacient — trail de audit read-only ("Cine imi vede datele", Faza 1.5f, GDPR). Schelet identic
  * `ManageAccessScreen.kt`, fara buton de generare/actiuni — doar lista, cel mai recent primul. */

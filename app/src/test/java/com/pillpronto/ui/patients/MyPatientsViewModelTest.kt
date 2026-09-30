@@ -11,9 +11,7 @@ import com.pillpronto.domain.usecase.ClaimInviteUseCase
 import com.pillpronto.domain.usecase.GetLinkedPatientAdherenceUseCase
 import com.pillpronto.domain.usecase.GetMyPatientsUseCase
 import com.pillpronto.domain.usecase.ObserveAuthSessionUseCase
-import com.pillpronto.domain.usecase.RecordDataAccessUseCase
 import com.pillpronto.ui.navigation.Route
-import com.pillpronto.util.FakeAuditLogRepository
 import com.pillpronto.util.FakeAuthRepository
 import com.pillpronto.util.FakeLinkRepository
 import com.pillpronto.util.FakeLinkedPatientDataRepository
@@ -33,15 +31,13 @@ class MyPatientsViewModelTest {
     private val authRepository = FakeAuthRepository()
     private val linkRepository = FakeLinkRepository()
     private val linkedPatientDataRepository = FakeLinkedPatientDataRepository()
-    private val auditLogRepository = FakeAuditLogRepository()
 
     private fun createViewModel(prefillCode: String? = null) = MyPatientsViewModel(
         SavedStateHandle(prefillCode?.let { mapOf(Route.MyPatients.ARG_PREFILL_CODE to it) } ?: emptyMap()),
         ObserveAuthSessionUseCase(authRepository),
         ClaimInviteUseCase(linkRepository),
         GetMyPatientsUseCase(linkRepository),
-        GetLinkedPatientAdherenceUseCase(linkedPatientDataRepository),
-        RecordDataAccessUseCase(auditLogRepository)
+        GetLinkedPatientAdherenceUseCase(linkedPatientDataRepository)
     )
 
     @Test
@@ -63,7 +59,6 @@ class MyPatientsViewModelTest {
         assertEquals(1, vm.state.value.patients.size)
         assertEquals("Ana", vm.state.value.patients.first().displayName)
         assertEquals(1.0, vm.state.value.patients.first().stats.pdc, 0.0001)
-        assertEquals(listOf("patient-1" to "user-1"), auditLogRepository.recordedAccesses) // Faza 1.5f
     }
 
     @Test
