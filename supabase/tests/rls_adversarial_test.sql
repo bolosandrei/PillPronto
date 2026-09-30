@@ -21,6 +21,16 @@ set search_path = public, extensions;
 
 select plan(8);
 
+-- Colecteaza toate liniile TAP (plan/ok/not ok/diag/finish) intr-un singur tabel temporar, ca
+-- editorul SQL (care afiseaza de regula doar rezultatul ULTIMEI instructiuni) sa poata arata
+-- tot rezultatul testelor dintr-un singur SELECT final, in ordine.
+create temp table test_output (id serial primary key, line text);
+-- Testele comuta la rolul `authenticated` (pg_temp.authenticate_as) — fara acest grant, insert-urile
+-- de mai jos ar da "permission denied for table test_output" odata ce rolul curent nu mai e cel
+-- care a creat tabelul temporar.
+grant insert, select on test_output to authenticated;
+grant usage, select on sequence test_output_id_seq to authenticated;
+
 -- ============================================================================
 -- Fixturi sintetice: Pacient A (owner b...01) + Pacient B (owner b...02, complet neinrudit) +
 -- 3 Apartinatori cu legaturi diferite catre Pacientul A (acceptata / revocata / doar pending).
@@ -71,7 +81,7 @@ $$ language plpgsql;
 -- 1. Control pozitiv — Apartinator cu legatura ACCEPTATA VEDE tratamentele (confirma ca
 --    fixturile + RLS-ul normal functioneaza inainte sa avem incredere in testele negative).
 select pg_temp.authenticate_as('a0000000-0000-0000-0000-000000000011');
-select is(
+insert into test_output(line) select is(
     (select count(*)::int from public.treatments where patient_profile_id = 'b0000000-0000-0000-0000-000000000001'),
     1,
     'Apartinator cu legatura ACCEPTATA vede tratamentul pacientului (control pozitiv)'
@@ -79,7 +89,7 @@ select is(
 
 -- 2. Apartinator cu legatura REVOCATA -> SELECT treatments -> 0 randuri.
 select pg_temp.authenticate_as('a0000000-0000-0000-0000-000000000012');
-select is(
+insert into test_output(line) select is(
     (select count(*)::int from public.treatments where patient_profile_id = 'b0000000-0000-0000-0000-000000000001'),
     0,
     'Apartinator cu legatura REVOCATA NU vede tratamentele pacientului'
@@ -87,7 +97,7 @@ select is(
 
 -- 3. Apartinator cu legatura doar PENDING (neacceptata) -> SELECT treatments -> 0 randuri.
 select pg_temp.authenticate_as('a0000000-0000-0000-0000-000000000013');
-select is(
+insert into test_output(line) select is(
     (select count(*)::int from public.treatments where patient_profile_id = 'b0000000-0000-0000-0000-000000000001'),
     0,
     'Apartinator cu legatura PENDING (neacceptata) NU vede tratamentele pacientului'
@@ -96,7 +106,12 @@ select is(
 -- 4. Apartinator cu legatura REVOCATA -> UPDATE pe treatments -> 0 randuri afectate, deloc scris.
 select pg_temp.authenticate_as('a0000000-0000-0000-0000-000000000012');
 update public.treatments set dosage = 'HACKED' where id = 'c0000000-0000-0000-0000-000000000001';
-select is(
+-- Verificarea trebuie facuta cu un actor care POATE vedea tratamentul (Pacientul A, owner) — daca
+-- am ramane autentificati ca apartinatorul revocat, RLS SELECT il blocheaza si pe el, iar
+-- verificarea ar primi NULL (0 randuri) in loc de valoarea reala, indiferent daca UPDATE-ul a
+-- reusit sau nu (fals negativ, nu o dovada ca RLS a blocat scrierea).
+select pg_temp.authenticate_as('a0000000-0000-0000-0000-000000000001');
+insert into test_output(line) select is(
     (select dosage from public.treatments where id = 'c0000000-0000-0000-0000-000000000001'),
     '500mg',
     'Apartinator revocat NU poate modifica tratamentul (RLS treatments_owner_all)'
@@ -105,7 +120,7 @@ select is(
 -- 5. Control pozitiv — Apartinator ACCEPTAT poate insera un rand de audit legitim pt. Pacientul A
 --    (confirma ca hardening-ul din migrarea 0014 NU blocheaza cazul legitim).
 select pg_temp.authenticate_as('a0000000-0000-0000-0000-000000000011');
-select lives_ok(
+insert into test_output(line) select lives_ok(
     $$ insert into public.audit_log (actor_user_id, patient_profile_id, action, entity)
        values ('a0000000-0000-0000-0000-000000000011', 'b0000000-0000-0000-0000-000000000001', 'view', 'patient_data') $$,
     'Apartinator ACCEPTAT poate insera audit_log legitim pt. pacientul lui (migrarea 0014, caz pozitiv)'
@@ -115,15 +130,23 @@ select lives_ok(
 --    cu Pacientul A, incearca sa insereze un rand de audit FABRICAT pt. Pacientul A -> trebuie
 --    respins de RLS.
 select pg_temp.authenticate_as('a0000000-0000-0000-0000-000000000002');
-select throws_ok(
+-- throws_ok(sql, errcode) cu 2 argumente foloseste al 2-lea ca SQLSTATE asteptat (descriere auto).
+-- throws_ok(sql, errcode, X) cu 3 argumente foloseste X ca MESAJ de eroare asteptat, NU ca
+-- descriere — de-aia rularea anterioara arata "wanted: 42501: <descrierea noastra>" comparat gresit
+-- cu mesajul real Postgres. Fix: forma cu 4 argumente — errcode, NULL (nu verificam mesajul exact,
+-- ca sa nu cuplam testul de formularea exacta Postgres, posibil sa difere intre versiuni), apoi
+-- descrierea pe a 4-a pozitie.
+insert into test_output(line) select throws_ok(
     $$ insert into public.audit_log (actor_user_id, patient_profile_id, action, entity)
        values ('a0000000-0000-0000-0000-000000000002', 'b0000000-0000-0000-0000-000000000001', 'view', 'patient_data') $$,
+    '42501',
+    null,
     'Insert de audit_log FABRICAT, fara nicio legatura reala, e respins de RLS (migrarea 0014)'
 );
 
 -- 7. Pacientul B -> SELECT pe audit_log-ul Pacientului A -> 0 randuri (nu vede istoricul altcuiva).
 select pg_temp.authenticate_as('a0000000-0000-0000-0000-000000000002');
-select is(
+insert into test_output(line) select is(
     (select count(*)::int from public.audit_log where patient_profile_id = 'b0000000-0000-0000-0000-000000000001'),
     0,
     'Pacientul B NU vede trail-ul de audit al Pacientului A'
@@ -131,12 +154,16 @@ select is(
 
 -- 8. Control pozitiv — Pacientul A (owner) VEDE randul de audit legitim inserat la pasul 5.
 select pg_temp.authenticate_as('a0000000-0000-0000-0000-000000000001');
-select is(
+insert into test_output(line) select is(
     (select count(*)::int from public.audit_log where patient_profile_id = 'b0000000-0000-0000-0000-000000000001'),
     1,
     'Pacientul A vede propriul trail de audit (control pozitiv)'
 );
 
-select * from finish();
+insert into test_output(line) select * from finish();
+
+-- Unicul rezultat vizibil in SQL Editor: toate liniile TAP (plan/ok/not ok/diag/finish), in ordine
+-- — foloseste asta ca sa vezi exact care teste au picat, nu doar ultimul rand de sumar.
+select line from test_output order by id;
 
 rollback;
