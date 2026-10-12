@@ -7,11 +7,9 @@ import androidx.work.WorkerParameters
 import com.pillpronto.data.notification.CaregiverAlertNotifier
 import com.pillpronto.data.notification.MissedDoseChecker
 import com.pillpronto.data.notification.NotifiedMissedDosesStore
-import com.pillpronto.domain.model.AccountRole
 import com.pillpronto.domain.model.AuthSessionState
 import com.pillpronto.domain.model.DoseStatus
 import com.pillpronto.domain.repository.AuthRepository
-import com.pillpronto.domain.repository.ProfileRepository
 import com.pillpronto.domain.usecase.GetLinkedPatientDataUseCase
 import com.pillpronto.domain.usecase.GetMyPatientsUseCase
 import dagger.assisted.Assisted
@@ -20,16 +18,20 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withTimeoutOrNull
 
 /**
- * Verificare periodica a dozelor ratate ale pacientilor legati — no-op daca userul curent nu e
- * autentificat ca Apartinator (Faza 1.5d). Vezi `MissedDoseChecker` pentru logica de deduplicare
- * (testabila separat).
+ * Verificare periodica a dozelor ratate ale pacientilor legati — capability-based (Faza 1.5h), nu
+ * role-based: ruleaza pt. orice cont autentificat, indiferent daca a fost vreodata "Apartinator"
+ * ca rol — `getMyPatients` intoarce lista goala daca nu exista legaturi acceptate, deci
+ * comportamentul ramane corect fara niciun gating explicit. **Bugfix colateral**: inainte, doar
+ * conturile cu `role == CAREGIVER` treceau gate-ul — Medic/Farmacist nu primeau NICIODATA alerta
+ * de doza ratata, desi vad exact aceleasi date in UI (`MyPatientsScreen`/`PatientDetailScreen`,
+ * deja agnostice la rol) — asimetrie reparata acum ca efect secundar al eliminarii gate-ului.
+ * Vezi `MissedDoseChecker` pentru logica de deduplicare (testabila separat).
  */
 @HiltWorker
 class CaregiverAlertWorker @AssistedInject constructor(
     @Assisted context: Context,
     @Assisted params: WorkerParameters,
     private val authRepository: AuthRepository,
-    private val profileRepository: ProfileRepository,
     private val getMyPatients: GetMyPatientsUseCase,
     private val getLinkedPatientData: GetLinkedPatientDataUseCase,
     private val notifiedDosesStore: NotifiedMissedDosesStore,
@@ -37,20 +39,18 @@ class CaregiverAlertWorker @AssistedInject constructor(
 ) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result = try {
-        val userId = currentCaregiverUserId()
+        val userId = currentUserId()
         if (userId != null) checkPatients(userId)
         Result.success()
     } catch (e: Exception) {
         Result.retry()
     }
 
-    private suspend fun currentCaregiverUserId(): String? {
+    private suspend fun currentUserId(): String? {
         val session = withTimeoutOrNull(SESSION_SNAPSHOT_TIMEOUT_MS) {
             authRepository.sessionStatus.first { it !is AuthSessionState.Loading }
         } ?: return null
-        val userId = (session as? AuthSessionState.Authenticated)?.userId ?: return null
-        val profile = profileRepository.getProfile(userId) ?: return null
-        return userId.takeIf { profile.role == AccountRole.CAREGIVER }
+        return (session as? AuthSessionState.Authenticated)?.userId
     }
 
     private suspend fun checkPatients(userId: String) {

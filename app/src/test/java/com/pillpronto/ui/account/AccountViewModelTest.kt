@@ -1,15 +1,16 @@
 package com.pillpronto.ui.account
 
-import com.pillpronto.domain.model.AccountRole
 import com.pillpronto.domain.model.AuthSessionState
+import com.pillpronto.domain.model.ClinicianType
 import com.pillpronto.domain.model.Profile
 import com.pillpronto.domain.usecase.GetProfileUseCase
 import com.pillpronto.domain.usecase.ObserveAuthSessionUseCase
+import com.pillpronto.domain.usecase.SaveDisplayNameUseCase
+import com.pillpronto.domain.usecase.SetDeclaredClinicianTypeUseCase
 import com.pillpronto.domain.usecase.SignInUseCase
 import com.pillpronto.domain.usecase.SignInWithGoogleUseCase
 import com.pillpronto.domain.usecase.SignOutUseCase
 import com.pillpronto.domain.usecase.SignUpUseCase
-import app.cash.turbine.test
 import com.pillpronto.util.FakeAuthRepository
 import com.pillpronto.util.FakeProfileRepository
 import com.pillpronto.util.MainDispatcherRule
@@ -33,7 +34,9 @@ class AccountViewModelTest {
         SignInUseCase(authRepository),
         SignInWithGoogleUseCase(authRepository),
         SignOutUseCase(authRepository),
-        GetProfileUseCase(profileRepository)
+        GetProfileUseCase(profileRepository),
+        SaveDisplayNameUseCase(profileRepository),
+        SetDeclaredClinicianTypeUseCase(profileRepository)
     )
 
     @Test
@@ -135,7 +138,7 @@ class AccountViewModelTest {
 
     @Test
     fun `dupa autentificare, profilul e preluat automat`() = runTest {
-        profileRepository.profiles["u1"] = Profile("u1", AccountRole.PATIENT, "Ana")
+        profileRepository.profiles["u1"] = Profile("u1", "Ana")
         val vm = createViewModel()
 
         authRepository.emit(AuthSessionState.Authenticated("u1"))
@@ -145,20 +148,52 @@ class AccountViewModelTest {
     }
 
     @Test
-    fun `refresh dupa onboarding reface profilul chiar daca sesiunea nu s-a schimbat`() = runTest {
+    fun `profil negasit dupa autentificare arata formularul de nume, fara eroare`() = runTest {
+        val vm = createViewModel()
+
+        authRepository.emit(AuthSessionState.Authenticated("u1"))
+
+        assertEquals(true, vm.state.value.profileChecked)
+        assertEquals(null, vm.state.value.profile)
+    }
+
+    @Test
+    fun `refresh dupa salvarea numelui in fundal reface profilul chiar daca sesiunea nu s-a schimbat`() = runTest {
         val vm = createViewModel()
         authRepository.emit(AuthSessionState.Authenticated("u1")) // profil inca inexistent aici
         assertEquals(true, vm.state.value.profileChecked)
         assertEquals(null, vm.state.value.profile)
 
-        // Onboarding scrie profilul "in fundal" (alt ViewModel, ca in fluxul real) — sesiunea nu
-        // se schimba, deci doar refresh() explicit (AccountScreen, ON_RESUME) il poate prinde.
-        profileRepository.profiles["u1"] = Profile("u1", AccountRole.CAREGIVER, "Maria")
+        profileRepository.profiles["u1"] = Profile("u1", "Maria")
 
         vm.refresh()
 
         assertEquals(true, vm.state.value.profileChecked)
         assertEquals("Maria", vm.state.value.profile?.displayName)
+    }
+
+    @Test
+    fun `onSaveDisplayName salveaza numele si reface profilul`() = runTest {
+        val vm = createViewModel()
+        authRepository.emit(AuthSessionState.Authenticated("u1"))
+        vm.onDisplayNameChange("Ionel")
+
+        vm.onSaveDisplayName()
+
+        assertEquals("u1" to "Ionel", profileRepository.lastSaveDisplayNameCall)
+        assertEquals("Ionel", vm.state.value.profile?.displayName)
+    }
+
+    @Test
+    fun `onDeclareClinicianType seteaza tipul declarat si reface profilul`() = runTest {
+        profileRepository.profiles["u1"] = Profile("u1", "Ana")
+        val vm = createViewModel()
+        authRepository.emit(AuthSessionState.Authenticated("u1"))
+
+        vm.onDeclareClinicianType(ClinicianType.DOCTOR)
+
+        assertEquals("u1" to ClinicianType.DOCTOR, profileRepository.lastDeclaredClinicianTypeCall)
+        assertEquals(ClinicianType.DOCTOR, vm.state.value.profile?.declaredClinicianType)
     }
 
     @Test
@@ -180,27 +215,6 @@ class AccountViewModelTest {
         vm.onGoogleIdToken("id-token-123", "raw-nonce-456")
 
         assertEquals(AccountError.GOOGLE_SIGN_IN_FAILED, vm.state.value.error)
-    }
-
-    @Test
-    fun `profil negasit dupa autentificare emite eveniment de onboarding`() = runTest {
-        val vm = createViewModel()
-
-        vm.needsOnboardingEvents.test {
-            authRepository.emit(AuthSessionState.Authenticated("u1")) // profil inca inexistent
-            assertEquals(Unit, awaitItem())
-        }
-    }
-
-    @Test
-    fun `profil gasit dupa autentificare NU emite eveniment de onboarding`() = runTest {
-        profileRepository.profiles["u1"] = Profile("u1", AccountRole.PATIENT, "Ana")
-        val vm = createViewModel()
-
-        vm.needsOnboardingEvents.test {
-            authRepository.emit(AuthSessionState.Authenticated("u1"))
-            expectNoEvents()
-        }
     }
 
     @Test

@@ -116,7 +116,7 @@ class AssociateGtinViewModelTest {
     fun `alegerea unei sugestii de catre un contribuitor de incredere marcheaza contributia`() = runTest {
         authRepository.emit(AuthSessionState.Authenticated("user-1"))
         profileRepository.profiles["user-1"] = com.pillpronto.domain.model.Profile(
-            "user-1", com.pillpronto.domain.model.AccountRole.PHARMACIST, "Test", isTrustedContributor = true
+            "user-1", "Test", isTrustedContributor = true
         )
         vm.onBarcodeScanned(ScannedBarcode("05901234123457", null))
 

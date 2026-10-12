@@ -5,7 +5,6 @@ import com.pillpronto.data.local.entity.PendingRemoteDeleteEntity
 import com.pillpronto.data.local.entity.TreatmentEntity
 import com.pillpronto.data.mapper.toIsoInstant
 import com.pillpronto.data.remote.dto.TreatmentDto
-import com.pillpronto.domain.model.AccountRole
 import com.pillpronto.domain.model.AuthSessionState
 import com.pillpronto.domain.model.Profile
 import com.pillpronto.domain.usecase.GenerateDosesUseCase
@@ -57,7 +56,7 @@ class SyncManagerTest {
 
     private fun authenticateAsPatient(userId: String = "user-1") {
         authRepository.emit(AuthSessionState.Authenticated(userId))
-        profileRepository.profiles[userId] = Profile(userId, AccountRole.PATIENT, "Pacient")
+        profileRepository.profiles[userId] = Profile(userId, "Pacient")
     }
 
     private fun treatment(
@@ -98,7 +97,7 @@ class SyncManagerTest {
     }
 
     @Test
-    fun `sync nu re-leaga patient_profiles daca userul nu e autentificat ca Pacient`() = runTest {
+    fun `sync nu re-leaga patient_profiles daca userul nu e autentificat`() = runTest {
         syncManager.sync()
 
         assertTrue(profileRepository.linkedPatientProfiles.isEmpty())
@@ -116,14 +115,16 @@ class SyncManagerTest {
     }
 
     @Test
-    fun `sync nu face nimic daca rolul nu e Pacient`() = runTest {
+    fun `sync ruleaza pentru orice cont autentificat, indiferent daca a acceptat vreodata legaturi ca grantee`() = runTest {
+        // Faza 1.5h — nu mai exista un "rol" de cont care sa blocheze sync-ul; fiecare cont
+        // autentificat cu profil salvat e implicit Pacient.
         authRepository.emit(AuthSessionState.Authenticated("user-1"))
-        profileRepository.profiles["user-1"] = Profile("user-1", AccountRole.CAREGIVER, "Aparținător")
+        profileRepository.profiles["user-1"] = Profile("user-1", "Cont oarecare")
         treatmentDao.upsert(treatment("r1"))
 
         syncManager.sync()
 
-        assertTrue(remoteDataSource.treatments.isEmpty())
+        assertTrue(remoteDataSource.treatments.containsKey("r1"))
     }
 
     @Test

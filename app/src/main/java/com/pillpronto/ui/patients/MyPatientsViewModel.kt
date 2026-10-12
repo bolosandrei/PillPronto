@@ -54,16 +54,6 @@ class MyPatientsViewModel @Inject constructor(
 
     private var userId: String? = null
 
-    // Debounce pe TIMP, nu doar pe "job in curs" — refresh() e declansat din 2 surse independente
-    // (observarea sesiunii de mai jos + LifecycleEventEffect(ON_RESUME) din MyPatientsScreen, care
-    // s-a confirmat live ca poate re-declansa de mai multe ori la o singura intrare pe ecran, un
-    // artefact cunoscut de lifecycle Compose/Activity), plus emisii repetate ale sessionStatus.
-    // Apelurile redundante vin adesea SECVENTIAL, nu suprapuse (confirmat live: pana la ~3s intre
-    // ele) — o garda de tip "job activ" nu le prinde daca fiecare apel apucă sa se termine inainte
-    // de urmatorul. Debounce-ul ignora orice apel nou la mai putin de REFRESH_DEBOUNCE_MS de la
-    // ultimul, indiferent de sursa sau daca precedentul s-a terminat deja.
-    private var lastRefreshAtMs = 0L
-
     init {
         observeAuthSession().onEach { session ->
             // session.userId != userId: sessionStatus-ul Supabase poate re-emite Authenticated
@@ -82,9 +72,6 @@ class MyPatientsViewModel @Inject constructor(
 
     fun refresh() {
         val uid = userId ?: return
-        val now = System.currentTimeMillis()
-        if (now - lastRefreshAtMs < REFRESH_DEBOUNCE_MS) return
-        lastRefreshAtMs = now
         viewModelScope.launch {
             _state.update { it.copy(isLoadingPatients = true) }
             val summaries = runCatching { getMyPatients(uid) }
@@ -124,6 +111,5 @@ class MyPatientsViewModel @Inject constructor(
 
     private companion object {
         const val TAG = "MyPatientsViewModel"
-        const val REFRESH_DEBOUNCE_MS = 4000L
     }
 }

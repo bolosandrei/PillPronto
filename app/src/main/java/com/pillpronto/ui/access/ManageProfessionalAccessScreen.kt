@@ -56,12 +56,12 @@ fun ManageProfessionalAccessScreen(
                 FilterChip(
                     selected = state.selectedRole == LinkRole.DOCTOR,
                     onClick = { vm.onRoleSelected(LinkRole.DOCTOR) },
-                    label = { Text(stringResource(R.string.account_role_doctor)) }
+                    label = { Text(stringResource(R.string.link_role_doctor)) }
                 )
                 FilterChip(
                     selected = state.selectedRole == LinkRole.PHARMACIST,
                     onClick = { vm.onRoleSelected(LinkRole.PHARMACIST) },
-                    label = { Text(stringResource(R.string.account_role_pharmacist)) }
+                    label = { Text(stringResource(R.string.link_role_pharmacist)) }
                 )
             }
 

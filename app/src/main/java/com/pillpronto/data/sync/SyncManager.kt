@@ -12,7 +12,6 @@ import com.pillpronto.data.mapper.toIsoInstant
 import com.pillpronto.data.reminder.ReminderSync
 import com.pillpronto.data.remote.dto.DoseLogDto
 import com.pillpronto.data.remote.dto.TreatmentDto
-import com.pillpronto.domain.model.AccountRole
 import com.pillpronto.domain.model.AuthSessionState
 import com.pillpronto.domain.model.Profile
 import com.pillpronto.domain.repository.AuthRepository
@@ -73,15 +72,14 @@ class SyncManager @Inject constructor(
         reminderSync.syncReminders()
     }
 
-    // Doar Pacientul are date locale de sincronizat — Apartinator/Medic/Farmacist n-au tratamente
-    // proprii in Room (vor citi datele pacientilor legati abia in 1.5d, prin `links`, nu de aici).
+    // Fiecare cont autentificat e implicit Pacient (Faza 1.5h) — nu mai exista un "rol" separat
+    // de verificat; singura conditie e sa existe o sesiune activa + un profil salvat (nume).
     private suspend fun eligiblePatient(): Pair<String, Profile>? {
         val session = withTimeoutOrNull(SESSION_SNAPSHOT_TIMEOUT_MS) {
             authRepository.sessionStatus.first { it !is AuthSessionState.Loading }
         } ?: return null
         val userId = (session as? AuthSessionState.Authenticated)?.userId ?: return null
         val profile = profileRepository.getProfile(userId) ?: return null
-        if (profile.role != AccountRole.PATIENT) return null
         return userId to profile
     }
 

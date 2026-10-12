@@ -109,11 +109,6 @@
     <string name="adherence_status_ok">Status: adherent (PDC ≥ 0.80)</string>
     <string name="adherence_status_low">Status: below threshold (PDC &lt; 0.80)</string>
 
-    <!-- Account roles — reused on the Account and Onboarding screens -->
-    <string name="account_role_patient">Patient</string>
-    <string name="account_role_caregiver">Caregiver</string>
-    <string name="account_role_doctor">Doctor</string>
-    <string name="account_role_pharmacist">Pharmacist</string>
 
     <!-- "Account" screen -->
     <string name="account_title_sign_in">Sign in</string>
@@ -129,8 +124,19 @@
     <string name="account_confirmation_pending_title">Check your email</string>
     <string name="account_confirmation_pending_body">We sent a confirmation link to %1$s. Open it, then come back here and sign in.</string>
     <string name="account_logged_in_as">Signed in as %1$s</string>
-    <string name="account_role_label">Role: %1$s</string>
     <string name="account_sign_out">Sign out</string>
+    <!-- Phase 1.5h: inline name form (replaces the removed Onboarding screen) -->
+    <string name="account_display_name_title">What should we call you?</string>
+    <string name="account_display_name_label">Your name</string>
+    <string name="account_save_display_name_button">Save</string>
+    <!-- Phase 1.5h: optional clinician-type self-declaration, independent of any "role" -->
+    <string name="account_declare_clinician_title">Are you a healthcare professional?</string>
+    <string name="account_declare_doctor_button">Doctor</string>
+    <string name="account_declare_pharmacist_button">Pharmacist</string>
+    <string name="account_undeclare_button">None</string>
+    <!-- Labels for the link-type selector (ManageProfessionalAccessScreen) -->
+    <string name="link_role_doctor">Doctor</string>
+    <string name="link_role_pharmacist">Pharmacist</string>
     <string name="account_error_empty_email">Enter your email address</string>
     <string name="account_error_invalid_email">This email address isn\'t valid</string>
     <string name="account_error_password_too_short">Password must be at least 6 characters</string>
@@ -190,14 +196,6 @@
     <string name="recognize_medication_no_match">Unknown — no sufficiently similar match in the local gallery.</string>
 
     <!-- Onboarding screen (role choice, after first account created) -->
-    <string name="onboarding_title">What kind of account do you have?</string>
-    <string name="onboarding_subtitle">Choose the right role — you can change this later.</string>
-    <string name="onboarding_display_name_label">Your name</string>
-    <string name="onboarding_submit">Continue</string>
-    <string name="onboarding_error_no_role">Choose a role</string>
-    <string name="onboarding_error_empty_name">Enter a name</string>
-    <string name="onboarding_error_not_authenticated">Session expired — sign in again</string>
-    <string name="onboarding_error_save_failed">Error saving. Try again.</string>
 
     <!-- Phase 1.5f: Patient — audit trail ("Who sees my data") -->
     <string name="account_audit_log_button">Who sees my data</string>
