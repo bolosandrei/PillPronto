@@ -6,6 +6,7 @@ import com.pillpronto.data.local.PillProntoDatabase
 import com.pillpronto.data.local.dao.DoseDao
 import com.pillpronto.data.local.dao.EnrolledMedicationDao
 import com.pillpronto.data.local.dao.GtinMappingDao
+import com.pillpronto.data.local.dao.LocalAccountProfileDao
 import com.pillpronto.data.local.dao.PendingRemoteDeleteDao
 import com.pillpronto.data.local.dao.TreatmentDao
 import dagger.Module
@@ -41,4 +42,7 @@ object DatabaseModule {
 
     @Provides
     fun provideEnrolledMedicationDao(db: PillProntoDatabase): EnrolledMedicationDao = db.enrolledMedicationDao()
+
+    @Provides
+    fun provideLocalAccountProfileDao(db: PillProntoDatabase): LocalAccountProfileDao = db.localAccountProfileDao()
 }

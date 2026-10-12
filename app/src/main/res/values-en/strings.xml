@@ -129,6 +129,12 @@
     <string name="account_display_name_title">What should we call you?</string>
     <string name="account_display_name_label">Your name</string>
     <string name="account_save_display_name_button">Save</string>
+    <!-- Local data isolation fix: migration prompt for "guest" (no-account) data -->
+    <string name="account_migration_prompt_title">Treatments without an account, on this phone</string>
+    <string name="account_migration_prompt_body">You added treatments without an account on this phone. You can add them to this account (nothing gets deleted), or continue signed in without them — they stay unassociated, accessible only while signed out.</string>
+    <string name="account_migration_prompt_body_existing_account">This account already has its own saved treatments. We also found treatments added without an account on this phone — you can add them to the account\'s existing ones (nothing gets deleted, neither the account\'s nor the local ones), or continue signed in with only the account\'s existing data — the local ones stay unassociated, accessible only while signed out.</string>
+    <string name="account_migration_prompt_keep">Add them to this account</string>
+    <string name="account_migration_prompt_start_fresh">Continue without them (with the account\'s data)</string>
     <!-- Phase 1.5h: optional clinician-type self-declaration, independent of any "role" -->
     <string name="account_declare_clinician_title">Are you a healthcare professional?</string>
     <string name="account_declare_doctor_button">Doctor</string>

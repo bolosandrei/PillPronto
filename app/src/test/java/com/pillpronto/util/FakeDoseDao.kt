@@ -26,17 +26,17 @@ class FakeDoseDao : DoseDao {
         doses.forEach { seed(it) }
     }
 
-    override fun observeForDate(dateIso: String): Flow<List<DoseItemView>> =
+    override fun observeForDate(dateIso: String, patientProfileId: String): Flow<List<DoseItemView>> =
         throw UnsupportedOperationException("nefolosit de SyncManagerTest")
 
-    override suspend fun getUpcomingPendingItems(nowIso: String, untilIso: String): List<DoseItemView> =
+    override suspend fun getUpcomingPendingItems(nowIso: String, untilIso: String, patientProfileId: String): List<DoseItemView> =
         throw UnsupportedOperationException("nefolosit de SyncManagerTest")
 
     override suspend fun getItemById(doseId: Long): DoseItemView? =
         throw UnsupportedOperationException("nefolosit de SyncManagerTest")
 
-    override suspend fun getBetween(startIso: String, endIso: String): List<DoseLogEntity> =
-        rows.values.filter { it.scheduledAt in startIso..endIso }
+    override suspend fun getBetween(startIso: String, endIso: String, patientProfileId: String): List<DoseLogEntity> =
+        rows.values.filter { it.scheduledAt in startIso..endIso && it.patientProfileId == patientProfileId }
 
     override fun observeHistoryForTreatment(treatmentId: Long): Flow<List<DoseLogEntity>> =
         throw UnsupportedOperationException("nefolosit de SyncManagerTest")
@@ -46,12 +46,21 @@ class FakeDoseDao : DoseDao {
         rows[doseId] = current.copy(status = status, takenAt = takenAt, dirty = true, updatedAt = updatedAt)
     }
 
-    override suspend fun countForDate(dateIso: String): Int =
-        rows.values.count { it.scheduledAt.startsWith(dateIso) }
+    override suspend fun countForDate(dateIso: String, patientProfileId: String): Int =
+        rows.values.count { it.scheduledAt.startsWith(dateIso) && it.patientProfileId == patientProfileId }
 
-    override suspend fun markOverdueMissed(cutoffIso: String, updatedAt: Long) {
+    override suspend fun reassignProfile(fromPatientProfileId: String, toPatientProfileId: String) {
+        rows.keys.toList().forEach { id ->
+            val current = rows.getValue(id)
+            if (current.patientProfileId == fromPatientProfileId) {
+                rows[id] = current.copy(patientProfileId = toPatientProfileId, dirty = true)
+            }
+        }
+    }
+
+    override suspend fun markOverdueMissed(cutoffIso: String, updatedAt: Long, patientProfileId: String) {
         rows.replaceAll { _, dose ->
-            if (dose.status == "PENDING" && dose.scheduledAt < cutoffIso) {
+            if (dose.patientProfileId == patientProfileId && dose.status == "PENDING" && dose.scheduledAt < cutoffIso) {
                 dose.copy(status = "MISSED", dirty = true, updatedAt = updatedAt)
             } else dose
         }
@@ -70,8 +79,8 @@ class FakeDoseDao : DoseDao {
     override suspend fun getMaxScheduled(treatmentId: Long): String? =
         rows.values.filter { it.treatmentId == treatmentId }.maxOfOrNull { it.scheduledAt }
 
-    override suspend fun getDirtySyncable(): List<DoseSyncView> =
-        rows.values.filter { it.dirty && it.status != "PENDING" }.map { dose ->
+    override suspend fun getDirtySyncable(patientProfileId: String): List<DoseSyncView> =
+        rows.values.filter { it.dirty && it.status != "PENDING" && it.patientProfileId == patientProfileId }.map { dose ->
             DoseSyncView(dose = dose, treatmentRemoteId = treatmentRemoteIdByTreatmentId.getValue(dose.treatmentId))
         }
 

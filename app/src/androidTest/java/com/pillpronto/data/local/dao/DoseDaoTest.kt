@@ -15,6 +15,9 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 
+private const val PROFILE_A = "test-patient"
+private const val PROFILE_B = "test-patient-b"
+
 @RunWith(AndroidJUnit4::class)
 class DoseDaoTest {
 
@@ -37,10 +40,10 @@ class DoseDaoTest {
         db.close()
     }
 
-    private suspend fun insertTreatment(name: String = "Paracetamol"): Long =
+    private suspend fun insertTreatment(name: String = "Paracetamol", patientProfileId: String = PROFILE_A): Long =
         treatmentDao.upsert(
             TreatmentEntity(
-                patientProfileId = "test-patient",
+                patientProfileId = patientProfileId,
                 medicationName = name,
                 dosage = "500 mg",
                 timesCsv = "08:00,20:00",
@@ -52,14 +55,21 @@ class DoseDaoTest {
             )
         )
 
-    private fun dose(treatmentId: Long, scheduledAt: String, status: String = "PENDING") = DoseLogEntity(
-        patientProfileId = "test-patient",
+    private fun dose(
+        treatmentId: Long,
+        scheduledAt: String,
+        status: String = "PENDING",
+        patientProfileId: String = PROFILE_A,
+        dirty: Boolean = false
+    ) = DoseLogEntity(
+        patientProfileId = patientProfileId,
         treatmentId = treatmentId,
         scheduledAt = scheduledAt,
         status = status,
         takenAt = null,
         remoteId = java.util.UUID.randomUUID().toString(),
-        updatedAt = 0L
+        updatedAt = 0L,
+        dirty = dirty
     )
 
     @Test
@@ -72,7 +82,7 @@ class DoseDaoTest {
             )
         )
 
-        val items = doseDao.observeForDate("2026-01-05").first()
+        val items = doseDao.observeForDate("2026-01-05", PROFILE_A).first()
 
         assertEquals(1, items.size)
         assertEquals("Paracetamol", items.first().medicationName)
@@ -82,7 +92,7 @@ class DoseDaoTest {
     fun updateStatus_changesStatusAndTakenAt() = runTest {
         val treatmentId = insertTreatment()
         doseDao.insertAll(listOf(dose(treatmentId, "2026-01-05T08:00:00")))
-        val doseId = doseDao.observeForDate("2026-01-05").first().first().dose.id
+        val doseId = doseDao.observeForDate("2026-01-05", PROFILE_A).first().first().dose.id
 
         doseDao.updateStatus(doseId, "TAKEN", "2026-01-05T08:05:00", 1L)
 
@@ -97,12 +107,12 @@ class DoseDaoTest {
         doseDao.insertAll(
             listOf(dose(treatmentId, "2026-01-05T08:00:00"), dose(treatmentId, "2026-01-05T20:00:00"))
         )
-        assertEquals(2, doseDao.getBetween("2026-01-01T00:00:00", "2026-12-31T23:59:59").size)
+        assertEquals(2, doseDao.getBetween("2026-01-01T00:00:00", "2026-12-31T23:59:59", PROFILE_A).size)
 
         treatmentDao.deleteById(treatmentId)
 
         // ForeignKey.CASCADE pe DoseLogEntity.treatmentId -> dozele orfane trebuie sa dispara.
-        assertTrue(doseDao.getBetween("2026-01-01T00:00:00", "2026-12-31T23:59:59").isEmpty())
+        assertTrue(doseDao.getBetween("2026-01-01T00:00:00", "2026-12-31T23:59:59", PROFILE_A).isEmpty())
     }
 
     @Test
@@ -121,8 +131,108 @@ class DoseDaoTest {
 
         doseDao.deleteFuturePending(treatmentId, "2026-01-05T00:00:00")
 
-        val remaining = doseDao.getBetween("2026-01-01T00:00:00", "2026-12-31T23:59:59")
+        val remaining = doseDao.getBetween("2026-01-01T00:00:00", "2026-12-31T23:59:59", PROFILE_A)
         assertEquals(1, remaining.size)
         assertEquals("TAKEN", remaining.first().status)
+    }
+
+    // --- fix izolare date locale: query-urile scopate pe profil nu scurg date intre conturi ---
+
+    @Test
+    fun observeForDate_nuAratDozeleAltuiProfilPentruAceeasiZi() = runTest {
+        val treatmentA = insertTreatment(patientProfileId = PROFILE_A)
+        val treatmentB = insertTreatment(patientProfileId = PROFILE_B)
+        doseDao.insertAll(
+            listOf(
+                dose(treatmentA, "2026-01-05T08:00:00", patientProfileId = PROFILE_A),
+                dose(treatmentB, "2026-01-05T08:00:00", patientProfileId = PROFILE_B)
+            )
+        )
+
+        val forA = doseDao.observeForDate("2026-01-05", PROFILE_A).first()
+        val forB = doseDao.observeForDate("2026-01-05", PROFILE_B).first()
+
+        assertEquals(1, forA.size)
+        assertEquals(1, forB.size)
+    }
+
+    @Test
+    fun getBetween_nuAratDozeleAltuiProfil() = runTest {
+        val treatmentA = insertTreatment(patientProfileId = PROFILE_A)
+        val treatmentB = insertTreatment(patientProfileId = PROFILE_B)
+        doseDao.insertAll(
+            listOf(
+                dose(treatmentA, "2026-01-05T08:00:00", patientProfileId = PROFILE_A),
+                dose(treatmentB, "2026-01-05T08:00:00", patientProfileId = PROFILE_B)
+            )
+        )
+
+        val forA = doseDao.getBetween("2026-01-01T00:00:00", "2026-12-31T23:59:59", PROFILE_A)
+
+        assertEquals(1, forA.size)
+    }
+
+    @Test
+    fun countForDate_nuContorizeazaDozeleAltuiProfil() = runTest {
+        val treatmentA = insertTreatment(patientProfileId = PROFILE_A)
+        val treatmentB = insertTreatment(patientProfileId = PROFILE_B)
+        doseDao.insertAll(
+            listOf(
+                dose(treatmentA, "2026-01-05T08:00:00", patientProfileId = PROFILE_A),
+                dose(treatmentB, "2026-01-05T08:00:00", patientProfileId = PROFILE_B),
+                dose(treatmentB, "2026-01-05T20:00:00", patientProfileId = PROFILE_B)
+            )
+        )
+
+        assertEquals(1, doseDao.countForDate("2026-01-05", PROFILE_A))
+        assertEquals(2, doseDao.countForDate("2026-01-05", PROFILE_B))
+    }
+
+    @Test
+    fun markOverdueMissed_nuAtingeDozeleAltuiProfil() = runTest {
+        val treatmentA = insertTreatment(patientProfileId = PROFILE_A)
+        val treatmentB = insertTreatment(patientProfileId = PROFILE_B)
+        doseDao.insertAll(
+            listOf(
+                dose(treatmentA, "2026-01-01T08:00:00", patientProfileId = PROFILE_A),
+                dose(treatmentB, "2026-01-01T08:00:00", patientProfileId = PROFILE_B)
+            )
+        )
+
+        doseDao.markOverdueMissed("2026-06-01T00:00:00", 1L, PROFILE_A)
+
+        val forA = doseDao.getBetween("2026-01-01T00:00:00", "2026-12-31T23:59:59", PROFILE_A)
+        val forB = doseDao.getBetween("2026-01-01T00:00:00", "2026-12-31T23:59:59", PROFILE_B)
+        assertEquals("MISSED", forA.first().status)
+        assertEquals("PENDING", forB.first().status) // neatins — alt profil
+    }
+
+    @Test
+    fun getDirtySyncable_nuArataRandurileAltuiProfil() = runTest {
+        val treatmentA = insertTreatment(patientProfileId = PROFILE_A)
+        val treatmentB = insertTreatment(patientProfileId = PROFILE_B)
+        doseDao.insertAll(
+            listOf(
+                dose(treatmentA, "2026-01-05T08:00:00", status = "TAKEN", patientProfileId = PROFILE_A, dirty = true),
+                dose(treatmentB, "2026-01-05T08:00:00", status = "TAKEN", patientProfileId = PROFILE_B, dirty = true)
+            )
+        )
+
+        val dirtyForA = doseDao.getDirtySyncable(PROFILE_A)
+
+        assertEquals(1, dirtyForA.size)
+    }
+
+    @Test
+    fun reassignProfile_mutaRandurileSiLeMarcheazaDirty() = runTest {
+        val treatmentA = insertTreatment(patientProfileId = PROFILE_A)
+        doseDao.insertAll(listOf(dose(treatmentA, "2026-01-05T08:00:00", patientProfileId = PROFILE_A, dirty = false)))
+
+        doseDao.reassignProfile(fromPatientProfileId = PROFILE_A, toPatientProfileId = PROFILE_B)
+
+        assertTrue(doseDao.getBetween("2026-01-01T00:00:00", "2026-12-31T23:59:59", PROFILE_A).isEmpty())
+        val moved = doseDao.getBetween("2026-01-01T00:00:00", "2026-12-31T23:59:59", PROFILE_B)
+        assertEquals(1, moved.size)
+        assertTrue(moved.first().dirty)
     }
 }

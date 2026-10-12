@@ -6,8 +6,11 @@ import androidx.lifecycle.viewModelScope
 import com.pillpronto.domain.model.AuthSessionState
 import com.pillpronto.domain.model.ClinicianType
 import com.pillpronto.domain.model.Profile
+import com.pillpronto.domain.repository.LocalDataMigrationPrompt
 import com.pillpronto.domain.usecase.GetProfileUseCase
 import com.pillpronto.domain.usecase.ObserveAuthSessionUseCase
+import com.pillpronto.domain.usecase.ObserveLocalDataMigrationPromptUseCase
+import com.pillpronto.domain.usecase.ResolveLocalDataMigrationChoiceUseCase
 import com.pillpronto.domain.usecase.SaveDisplayNameUseCase
 import com.pillpronto.domain.usecase.SetDeclaredClinicianTypeUseCase
 import com.pillpronto.domain.usecase.SignInUseCase
@@ -42,7 +45,10 @@ data class AccountUiState(
     // Faza 1.5h — formular inline de nume (profile == null && profileChecked, in loc de navigare
     // separata catre un ecran de Onboarding, eliminat).
     val displayNameInput: String = "",
-    val isSavingDisplayName: Boolean = false
+    val isSavingDisplayName: Boolean = false,
+    // Fix izolare date locale — prompt o singura data per cont nou, cand bucket-ul "guest" (fara
+    // cont) are date locale neclaimate pe acest device (vezi ActivePatientProfileCoordinator).
+    val pendingMigrationPrompt: LocalDataMigrationPrompt? = null
 )
 
 private val EMAIL_REGEX = Regex("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$")
@@ -57,7 +63,9 @@ class AccountViewModel @Inject constructor(
     private val signOut: SignOutUseCase,
     private val getProfile: GetProfileUseCase,
     private val saveDisplayName: SaveDisplayNameUseCase,
-    private val setDeclaredClinicianType: SetDeclaredClinicianTypeUseCase
+    private val setDeclaredClinicianType: SetDeclaredClinicianTypeUseCase,
+    private val observeMigrationPrompt: ObserveLocalDataMigrationPromptUseCase,
+    private val resolveMigrationChoice: ResolveLocalDataMigrationChoiceUseCase
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(AccountUiState())
@@ -76,6 +84,19 @@ class AccountViewModel @Inject constructor(
                 else -> _state.update { it.copy(profile = null, profileChecked = false) }
             }
         }.launchIn(viewModelScope)
+
+        observeMigrationPrompt().onEach { prompt ->
+            _state.update { it.copy(pendingMigrationPrompt = prompt) }
+        }.launchIn(viewModelScope)
+    }
+
+    fun onResolveMigrationPrompt(keepGuestData: Boolean) {
+        val prompt = _state.value.pendingMigrationPrompt ?: return
+        viewModelScope.launch {
+            runCatching { resolveMigrationChoice(prompt.userId, keepGuestData) }
+                .onFailure { Log.e(TAG, "Nu am putut rezolva promptul de migrare a datelor locale", it) }
+            refreshProfile(prompt.userId)
+        }
     }
 
     /** Reface fetch-ul de profil la cerere — apelat de AccountScreen la fiecare revenire pe ecran,

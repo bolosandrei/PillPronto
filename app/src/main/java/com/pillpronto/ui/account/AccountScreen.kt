@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -69,6 +70,14 @@ fun AccountScreen(
     // se reface (deci LaunchedEffect(Unit) de mai sus nu ruleaza din nou), doar Lifecycle-ul
     // trece prin ON_RESUME.
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { vm.refresh() }
+
+    state.pendingMigrationPrompt?.let { prompt ->
+        LocalDataMigrationDialog(
+            accountHasExistingRemoteIdentity = prompt.accountHasExistingRemoteIdentity,
+            onKeep = { vm.onResolveMigrationPrompt(keepGuestData = true) },
+            onStartFresh = { vm.onResolveMigrationPrompt(keepGuestData = false) }
+        )
+    }
 
     Column(
         Modifier.fillMaxSize().padding(padding).padding(16.dp).verticalScroll(rememberScrollState()),
@@ -175,6 +184,35 @@ private fun LanguageSelector() {
             }
         }
     }
+}
+
+/** Fix izolare date locale — prompt de cate ori un cont fara mapare locala pe acest device gaseste
+ * date "guest" (fara cont). Mesaj diferit cand contul are deja o identitate remote stabilita (alt
+ * device/sesiune anterioara) — "pastreaza" MUTA randurile guest in acea identitate, nu le lasa
+ * separate. Fara dismiss implicit (back/tap-outside) — decizia e obligatorie, altfel
+ * ActivePatientProfileCoordinator ar ramane blocat in asteptare. */
+@Composable
+private fun LocalDataMigrationDialog(
+    accountHasExistingRemoteIdentity: Boolean,
+    onKeep: () -> Unit,
+    onStartFresh: () -> Unit
+) {
+    val bodyRes = if (accountHasExistingRemoteIdentity) {
+        R.string.account_migration_prompt_body_existing_account
+    } else {
+        R.string.account_migration_prompt_body
+    }
+    AlertDialog(
+        onDismissRequest = {},
+        title = { Text(stringResource(R.string.account_migration_prompt_title)) },
+        text = { Text(stringResource(bodyRes)) },
+        confirmButton = {
+            TextButton(onClick = onKeep) { Text(stringResource(R.string.account_migration_prompt_keep)) }
+        },
+        dismissButton = {
+            TextButton(onClick = onStartFresh) { Text(stringResource(R.string.account_migration_prompt_start_fresh)) }
+        }
+    )
 }
 
 @Composable

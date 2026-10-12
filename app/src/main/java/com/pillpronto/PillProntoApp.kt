@@ -5,6 +5,7 @@ import android.content.Context
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
 import com.pillpronto.core.localization.AppLocale
+import com.pillpronto.data.local.ActivePatientProfileCoordinator
 import com.pillpronto.data.notification.CaregiverAlertNotifier
 import com.pillpronto.data.notification.ExpiryAlertNotifier
 import com.pillpronto.data.reminder.ReminderScheduler
@@ -26,6 +27,7 @@ class PillProntoApp : Application(), Configuration.Provider {
     @Inject lateinit var caregiverAlertNotifier: CaregiverAlertNotifier
     @Inject lateinit var expiryAlertNotifier: ExpiryAlertNotifier
     @Inject lateinit var maintenanceScheduler: MaintenanceScheduler
+    @Inject lateinit var activePatientProfileCoordinator: ActivePatientProfileCoordinator
     @Inject lateinit var workerFactory: HiltWorkerFactory
 
     override val workManagerConfiguration: Configuration
@@ -33,6 +35,7 @@ class PillProntoApp : Application(), Configuration.Provider {
 
     override fun onCreate() {
         super.onCreate()
+        activePatientProfileCoordinator.start()
         reminderScheduler.createNotificationChannel()
         caregiverAlertNotifier.createNotificationChannel()
         expiryAlertNotifier.createNotificationChannel()

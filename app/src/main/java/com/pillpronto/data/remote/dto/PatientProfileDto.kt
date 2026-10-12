@@ -23,3 +23,9 @@ data class PatientProfileSummaryDto(
     val id: String,
     @SerialName("display_name") val displayName: String
 )
+
+/** Citire minima, doar `id` — folosita de `ProfileRepositoryImpl.findExistingPatientProfileId`
+ * ca sa detecteze un cont care are deja o identitate remote (de pe alt device/sesiune) inainte
+ * de a-i genera un profil local nou (fix izolare date locale, vezi CLAUDE.md). */
+@Serializable
+data class PatientProfileIdOnlyDto(val id: String)

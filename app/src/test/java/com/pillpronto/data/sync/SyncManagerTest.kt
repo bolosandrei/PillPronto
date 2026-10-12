@@ -3,6 +3,7 @@ package com.pillpronto.data.sync
 import com.pillpronto.data.local.entity.DoseLogEntity
 import com.pillpronto.data.local.entity.PendingRemoteDeleteEntity
 import com.pillpronto.data.local.entity.TreatmentEntity
+import com.pillpronto.data.mapper.remoteInstantToLocalDateTime
 import com.pillpronto.data.mapper.toIsoInstant
 import com.pillpronto.data.remote.dto.TreatmentDto
 import com.pillpronto.domain.model.AuthSessionState
@@ -152,6 +153,27 @@ class SyncManagerTest {
 
         assertTrue(remoteDataSource.doseLogs.containsKey("taken-dose"))
         assertFalse(remoteDataSource.doseLogs.containsKey("pending-dose"))
+    }
+
+    // Bug real gasit 2026-10-12 (testare Faza 1.5h, scenariul 5): Apartinatorul vedea orele
+    // dozelor decalate cu offset-ul de fus orar — scheduledAt/takenAt se trimiteau neconvertite
+    // (LocalDateTime "naiv" interpretat gresit ca UTC de Postgres). Vezi Mappers.kt.
+    @Test
+    fun `push converteste scheduledAt si takenAt in instant UTC, nu stringul local naiv`() = runTest {
+        authenticateAsPatient()
+        doseDao.treatmentRemoteIdByTreatmentId = mapOf(1L to "tr-1")
+        doseDao.seed(dose(treatmentId = 1L, status = "TAKEN", remoteId = "taken-dose"))
+
+        syncManager.sync()
+
+        val pushed = remoteDataSource.doseLogs["taken-dose"]!!
+        assertTrue("scheduledAt trebuie sa fie un Instant UTC (termina in Z)", pushed.scheduledAt.endsWith("Z"))
+        assertTrue("takenAt trebuie sa fie un Instant UTC (termina in Z)", pushed.takenAt!!.endsWith("Z"))
+        // LocalDateTime.toString() omite secundele cand sunt 0 — "...T08:00:00" normalizeaza la
+        // "...T08:00" (acelasi format in care DoseLogEntity.scheduledAt e stocat local, vezi
+        // DoseLog.toEntity() in Mappers.kt).
+        assertEquals("2026-01-05T08:00", pushed.scheduledAt.remoteInstantToLocalDateTime())
+        assertEquals("2026-01-05T08:05", pushed.takenAt!!.remoteInstantToLocalDateTime())
     }
 
     @Test

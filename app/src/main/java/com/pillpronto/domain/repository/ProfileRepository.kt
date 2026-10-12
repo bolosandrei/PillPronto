@@ -28,4 +28,11 @@ interface ProfileRepository {
      * pt. UUID-ul local curent.
      */
     suspend fun ensurePatientProfileLinked(userId: String, patientProfileId: String, displayName: String)
+
+    /** Cauta un rand `patient_profiles` deja existent pt. acest `userId` — folosit la fix-ul de
+     * izolare a datelor locale: un cont care se autentifica pt. prima data pe ACEST device poate
+     * avea deja o identitate remote (de pe alt device/sesiune anterioara) — daca da, acel id se
+     * adopta ca profil local, in loc sa se genereze unul nou, orfan. Null daca nu exista niciun
+     * rand (cont genuin nou). */
+    suspend fun findExistingPatientProfileId(userId: String): String?
 }
