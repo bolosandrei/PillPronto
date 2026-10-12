@@ -5,6 +5,7 @@ import com.pillpronto.domain.model.DoseSlot
 import com.pillpronto.domain.model.DoseStatus
 import com.pillpronto.domain.model.Treatment
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -90,5 +91,25 @@ class MappersTest {
         assertEquals(original.status, restored.status)
         assertEquals(original.takenAt, restored.takenAt)
         assertEquals(original.cantitate, restored.cantitate)
+    }
+
+    // --- bug real gasit 2026-10-12: Apartinatorul vedea orele dozelor decalate cu offset-ul de
+    // fus orar (ex. 8:00 -> 11:00 vara, Romania) — scheduledAt/takenAt se trimiteau spre Supabase
+    // ca LocalDateTime "naiv", interpretat gresit ca UTC. Vezi localDateTimeToRemoteInstant/
+    // remoteInstantToLocalDateTime in Mappers.kt.
+
+    @Test
+    fun `localDateTimeToRemoteInstant si remoteInstantToLocalDateTime fac round-trip exact`() {
+        val local = LocalDateTime.of(2026, 10, 12, 8, 0).toString()
+        val remote = local.localDateTimeToRemoteInstant()
+        assertEquals(local, remote.remoteInstantToLocalDateTime())
+    }
+
+    @Test
+    fun `localDateTimeToRemoteInstant produce un instant UTC valid, nu stringul naiv netransformat`() {
+        val local = LocalDateTime.of(2026, 10, 12, 8, 0).toString()
+        val remote = local.localDateTimeToRemoteInstant()
+        // Un Instant UTC valid se termina mereu in "Z" — stringul local naiv ("...T08:00") nu.
+        assertTrue(remote.endsWith("Z"))
     }
 }

@@ -7,6 +7,8 @@ import com.pillpronto.data.local.dao.TreatmentDao
 import com.pillpronto.data.local.entity.DoseLogEntity
 import com.pillpronto.data.local.entity.TreatmentEntity
 import com.pillpronto.data.mapper.isoInstantToEpochMillis
+import com.pillpronto.data.mapper.localDateTimeToRemoteInstant
+import com.pillpronto.data.mapper.remoteInstantToLocalDateTime
 import com.pillpronto.data.mapper.toDomain
 import com.pillpronto.data.mapper.toIsoInstant
 import com.pillpronto.data.reminder.ReminderSync
@@ -202,9 +204,9 @@ private fun TreatmentDto.toEntity(localId: Long, patientProfileId: String) = Tre
 private fun DoseSyncView.toDto() = DoseLogDto(
     id = dose.remoteId,
     treatmentId = treatmentRemoteId,
-    scheduledAt = dose.scheduledAt,
+    scheduledAt = dose.scheduledAt.localDateTimeToRemoteInstant(),
     status = dose.status,
-    takenAt = dose.takenAt,
+    takenAt = dose.takenAt?.localDateTimeToRemoteInstant(),
     isAsNeeded = dose.isAsNeeded,
     cantitate = dose.cantitate,
     updatedAt = dose.updatedAt.toIsoInstant()
@@ -214,9 +216,9 @@ private fun DoseLogDto.toEntity(localId: Long, localTreatmentId: Long, patientPr
     id = localId,
     patientProfileId = patientProfileId,
     treatmentId = localTreatmentId,
-    scheduledAt = scheduledAt,
+    scheduledAt = scheduledAt.remoteInstantToLocalDateTime(),
     status = status,
-    takenAt = takenAt,
+    takenAt = takenAt?.remoteInstantToLocalDateTime(),
     isAsNeeded = isAsNeeded,
     cantitate = cantitate,
     remoteId = id,

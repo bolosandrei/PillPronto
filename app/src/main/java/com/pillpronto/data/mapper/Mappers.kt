@@ -12,6 +12,7 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.UUID
 
@@ -21,6 +22,19 @@ private val TIME_FMT: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
 // (timestamptz ISO-8601), vezi data/remote/dto/TreatmentDto.kt si DoseLogDto.kt.
 fun Long.toIsoInstant(): String = Instant.ofEpochMilli(this).toString()
 fun String.isoInstantToEpochMillis(): Long = Instant.parse(this).toEpochMilli()
+
+// --- scheduledAt/takenAt (ora ADMINISTRARII, legata de fusul orar al Pacientului) local
+// (LocalDateTime "naiv", fara zona, ex. "2026-10-12T08:00") <-> remote (dose_logs.scheduled_at/
+// taken_at, coloane `timestamptz`). Bug real gasit 2026-10-12: fara aceasta conversie, stringul
+// naiv era trimis ca atare — Postgres il interpreteaza ca UTC, deci "8:00" (ora Romaniei) se
+// stoca drept "8:00 UTC" (= 11:00 Romania, vara) — Apartinatorul vedea ora gresita desi citirea
+// lui (LinkedPatientDataRepositoryImpl.toLocalDateTimeFromRemote) era deja corecta: problema era
+// exclusiv la scriere, nu la citire.
+fun String.localDateTimeToRemoteInstant(): String =
+    LocalDateTime.parse(this).atZone(ZoneId.systemDefault()).toInstant().toString()
+
+fun String.remoteInstantToLocalDateTime(): String =
+    Instant.parse(this).atZone(ZoneId.systemDefault()).toLocalDateTime().toString()
 
 // --- schedule (List<DoseSlot>) <-> (timesCsv, slotCantitateCsv) — Faza 2a. Functii publice, nu
 // private: reutilizate si de LinkedPatientDataRepositoryImpl.kt (a doua conversie TreatmentDto,
