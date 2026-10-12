@@ -222,4 +222,17 @@ class DoseDaoTest {
 
         assertEquals(1, dirtyForA.size)
     }
+
+    @Test
+    fun reassignProfile_mutaRandurileSiLeMarcheazaDirty() = runTest {
+        val treatmentA = insertTreatment(patientProfileId = PROFILE_A)
+        doseDao.insertAll(listOf(dose(treatmentA, "2026-01-05T08:00:00", patientProfileId = PROFILE_A, dirty = false)))
+
+        doseDao.reassignProfile(fromPatientProfileId = PROFILE_A, toPatientProfileId = PROFILE_B)
+
+        assertTrue(doseDao.getBetween("2026-01-01T00:00:00", "2026-12-31T23:59:59", PROFILE_A).isEmpty())
+        val moved = doseDao.getBetween("2026-01-01T00:00:00", "2026-12-31T23:59:59", PROFILE_B)
+        assertEquals(1, moved.size)
+        assertTrue(moved.first().dirty)
+    }
 }

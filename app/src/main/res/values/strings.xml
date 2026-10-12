@@ -131,6 +131,7 @@
     <!-- Fix izolare date locale: prompt de migrare a datelor "guest" (fara cont) -->
     <string name="account_migration_prompt_title">Ai date locale pe acest device</string>
     <string name="account_migration_prompt_body">Am găsit tratamente adăugate fără cont pe acest telefon. Vrei să le asociezi acestui cont, sau începi cu un profil gol?</string>
+    <string name="account_migration_prompt_body_existing_account">Acest cont are deja date proprii salvate. Am găsit și tratamente adăugate fără cont pe acest telefon — vrei să le adaugi la contul tău, sau rămân separate?</string>
     <string name="account_migration_prompt_keep">Păstrează datele existente</string>
     <string name="account_migration_prompt_start_fresh">Începe cu profil gol</string>
     <!-- Faza 1.5h: auto-declarare optionala de tip clinician, independenta de orice "rol" -->

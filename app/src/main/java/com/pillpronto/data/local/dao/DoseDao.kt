@@ -67,6 +67,13 @@ interface DoseDao {
     @Query("SELECT COUNT(*) FROM dose_logs WHERE patientProfileId = :patientProfileId AND substr(scheduledAt, 1, 10) = :dateIso")
     suspend fun countForDate(dateIso: String, patientProfileId: String): Int
 
+    // Fix izolare date locale — vezi TreatmentDao.reassignProfile pt. justificare (muta efectiv
+    // randurile in loc de a eticheta bucket-ul guest ca fiind contul). dirty=1 doar informativ
+    // aici — getDirtySyncable filtreaza oricum status != PENDING, deci doze finale mutate vor
+    // intra automat in sincronizare, cele PENDING raman neatinse de sync, ca de obicei.
+    @Query("UPDATE dose_logs SET patientProfileId = :toPatientProfileId, dirty = 1 WHERE patientProfileId = :fromPatientProfileId")
+    suspend fun reassignProfile(fromPatientProfileId: String, toPatientProfileId: String)
+
     @Query(
         "UPDATE dose_logs SET status = 'MISSED', dirty = 1, updatedAt = :updatedAt " +
             "WHERE patientProfileId = :patientProfileId AND status = 'PENDING' AND scheduledAt < :cutoffIso"

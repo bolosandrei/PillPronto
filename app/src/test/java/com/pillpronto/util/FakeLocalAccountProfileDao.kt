@@ -8,9 +8,6 @@ class FakeLocalAccountProfileDao : LocalAccountProfileDao {
 
     override suspend fun getByUserId(userId: String): LocalAccountProfileEntity? = rows[userId]
 
-    override suspend fun getByPatientProfileId(patientProfileId: String): LocalAccountProfileEntity? =
-        rows.values.firstOrNull { it.patientProfileId == patientProfileId }
-
     override suspend fun insert(entity: LocalAccountProfileEntity) {
         rows[entity.userId] = entity
     }

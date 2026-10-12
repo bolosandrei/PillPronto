@@ -49,20 +49,6 @@ class LocalAccountProfileDaoTest {
     }
 
     @Test
-    fun getByPatientProfileId_gasesteContulCareLAClaimit() = runTest {
-        dao.insert(LocalAccountProfileEntity("user-1", "profile-1", 1000L))
-
-        val loaded = dao.getByPatientProfileId("profile-1")
-
-        assertEquals("user-1", loaded?.userId)
-    }
-
-    @Test
-    fun getByPatientProfileId_fataClaim_intoarceNull() = runTest {
-        assertNull(dao.getByPatientProfileId("profile-neclaimat"))
-    }
-
-    @Test
     fun insert_cuAcelasiPatientProfileId_eRespinsaDeIndexUnic() = runTest {
         dao.insert(LocalAccountProfileEntity("user-1", "profile-1", 1000L))
 

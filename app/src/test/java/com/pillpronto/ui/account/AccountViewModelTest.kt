@@ -239,16 +239,16 @@ class AccountViewModelTest {
     fun `promptul de migrare aparut pe coordonator se reflecta in state`() = runTest {
         val vm = createViewModel()
 
-        migrationCoordinator.emit(LocalDataMigrationPrompt("u1", "guest-id"))
+        migrationCoordinator.emit(LocalDataMigrationPrompt("u1", "guest-id", "target-id", accountHasExistingRemoteIdentity = false))
 
-        assertEquals(LocalDataMigrationPrompt("u1", "guest-id"), vm.state.value.pendingMigrationPrompt)
+        assertEquals(LocalDataMigrationPrompt("u1", "guest-id", "target-id", accountHasExistingRemoteIdentity = false), vm.state.value.pendingMigrationPrompt)
     }
 
     @Test
     fun `onResolveMigrationPrompt cu keepGuestData trimite alegerea corecta si curata promptul`() = runTest {
         profileRepository.profiles["u1"] = Profile("u1", "Ana")
         val vm = createViewModel()
-        migrationCoordinator.emit(LocalDataMigrationPrompt("u1", "guest-id"))
+        migrationCoordinator.emit(LocalDataMigrationPrompt("u1", "guest-id", "target-id", accountHasExistingRemoteIdentity = false))
 
         vm.onResolveMigrationPrompt(keepGuestData = true)
 

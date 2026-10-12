@@ -2,6 +2,7 @@ package com.pillpronto.data.local
 
 import android.util.Log
 import com.pillpronto.core.di.ApplicationScope
+import com.pillpronto.data.local.dao.DoseDao
 import com.pillpronto.data.local.dao.LocalAccountProfileDao
 import com.pillpronto.data.local.dao.TreatmentDao
 import com.pillpronto.data.local.entity.LocalAccountProfileEntity
@@ -29,27 +30,33 @@ import javax.inject.Singleton
  * singur UUID exista per instalare, impartit de toate conturile, iar niciun query Room nu-l
  * folosea ca filtru la citire — un cont nou vedea local tratamentele contului anterior.
  *
- * Decizie confirmata cu userul (2026-10-12): FIECARE cont, inclusiv primul, primeste implicit un
- * profil local NOU si gol — fara adoptie automata a datelor "guest" (bucket-ul
- * `LocalPatientProfileProvider.guestProfileId`, folosit cand nu exista sesiune autentificata).
- * In loc de adoptie automata: prompt explicit, o singura data, cand un cont NOU (fara mapare
- * existenta, fara identitate remote existenta) gaseste bucket-ul guest cu date neclaimate.
+ * Decizie confirmata cu userul (2026-10-12, revizuita dupa testare live): FIECARE cont fara
+ * mapare locala existenta pe acest device primeste explicit alegerea — niciodata adoptie
+ * silentioasa a datelor "guest" (bucket-ul `LocalPatientProfileProvider.guestProfileId`, folosit
+ * cand nu exista sesiune autentificata), INDIFERENT daca contul are deja o identitate remote
+ * stabilita (`patient_profiles`, de pe alt device/sesiune anterioara) sau e genuin nou.
+ *
+ * "Pastreaza datele guest" MUTA efectiv randurile locale (`TreatmentDao`/`DoseDao.reassignProfile`)
+ * din bucket-ul guest in identitatea tinta a contului — NU face bucket-ul guest sa "devina" acel
+ * cont (ar intra in conflict cu `unique(user_id)` din `patient_profiles` daca contul are deja o
+ * alta identitate remote stabilita). Bucket-ul guest ramane mereu strict al utilizarii fara cont.
  *
  * Rezolvare la fiecare schimbare de sesiune (vezi `resolveForSession`):
- * 1. Mapare locala existenta pt. acest userId? -> se reutilizeaza (cont revine pe device cunoscut).
- * 2. Nu exista mapare, dar contul are deja un rand `patient_profiles` pe server (alt device/
- *    sesiune anterioara)? -> se adopta acel id remote, FARA prompt (nu amestecam date guest
- *    necunoscute cu identitatea deja stabilita a unui cont).
- * 3. Nu exista nici mapare, nici rand remote, dar bucket-ul guest are date locale neclaimate
- *    (niciun alt cont nu-l tinteste deja) -> prompt explicit in UI (AccountScreen), vezi
- *    `pendingPrompt`/`resolveMigrationChoice`.
- * 4. Niciuna din cele de mai sus -> profil local nou, gol, generat pe loc.
+ * 1. Mapare locala existenta pt. acest userId? -> se reutilizeaza (cont revine pe device cunoscut,
+ *    deja a trecut prin pasii de mai jos intr-o sesiune anterioara).
+ * 2. Nu exista mapare — se determina id-ul TINTA: randul `patient_profiles` existent al contului
+ *    (alt device/sesiune anterioara) sau, daca nu exista, un UUID nou.
+ * 3. Bucket-ul guest are date locale? -> prompt explicit in UI (AccountScreen), vezi
+ *    `pendingPrompt`/`resolveMigrationChoice` — userul alege intre "pastreaza" (muta randurile
+ *    guest in id-ul tinta) si "incepe cu profil gol" (id-ul tinta, bucket-ul guest neatins).
+ * 4. Bucket-ul guest e gol -> id-ul tinta se aplica direct, fara prompt (nimic de ales).
  */
 @Singleton
 class ActivePatientProfileCoordinator @Inject constructor(
     private val legacyProvider: GuestProfileIdProvider,
     private val localAccountProfileDao: LocalAccountProfileDao,
     private val treatmentDao: TreatmentDao,
+    private val doseDao: DoseDao,
     private val authRepository: AuthRepository,
     private val profileRepository: ProfileRepository,
     @ApplicationScope private val appScope: CoroutineScope
@@ -92,9 +99,15 @@ class ActivePatientProfileCoordinator @Inject constructor(
     private var hasResolvedCurrent = true
 
     override suspend fun resolveMigrationChoice(userId: String, keepGuestData: Boolean) {
-        val chosenId = if (keepGuestData) legacyProvider.guestProfileId else UUID.randomUUID().toString()
-        localAccountProfileDao.insert(LocalAccountProfileEntity(userId, chosenId, System.currentTimeMillis()))
-        _patientProfileId.value = chosenId
+        val prompt = _pendingPrompt.value ?: return
+        if (keepGuestData) {
+            val guestId = prompt.guestProfileId
+            val targetId = prompt.targetProfileId
+            treatmentDao.reassignProfile(fromPatientProfileId = guestId, toPatientProfileId = targetId)
+            doseDao.reassignProfile(fromPatientProfileId = guestId, toPatientProfileId = targetId)
+        }
+        localAccountProfileDao.insert(LocalAccountProfileEntity(userId, prompt.targetProfileId, System.currentTimeMillis()))
+        _patientProfileId.value = prompt.targetProfileId
         _pendingPrompt.value = null
         markResolved()
     }
@@ -125,7 +138,7 @@ class ActivePatientProfileCoordinator @Inject constructor(
     }
 
     /** @return false DOAR cand rezolvarea s-a oprit la un prompt in asteptare (nu e inca
-     * concreta) — orice alta ramura (mapare existenta/adoptie remote/profil nou) e concreta. */
+     * concreta) — orice alta ramura (mapare existenta/id tinta aplicat direct) e concreta. */
     private suspend fun resolveForAccountInternal(userId: String): Boolean {
         localAccountProfileDao.getByUserId(userId)?.let {
             _patientProfileId.value = it.patientProfileId
@@ -133,23 +146,21 @@ class ActivePatientProfileCoordinator @Inject constructor(
         }
 
         val remoteExistingId = profileRepository.findExistingPatientProfileId(userId)
-        if (remoteExistingId != null) {
-            localAccountProfileDao.insert(LocalAccountProfileEntity(userId, remoteExistingId, System.currentTimeMillis()))
-            _patientProfileId.value = remoteExistingId
-            return true
-        }
+        val targetId = remoteExistingId ?: UUID.randomUUID().toString()
 
         val guestId = legacyProvider.guestProfileId
-        val guestHasData = treatmentDao.hasAnyForProfile(guestId)
-        val guestAlreadyClaimed = localAccountProfileDao.getByPatientProfileId(guestId) != null
-        if (guestHasData && !guestAlreadyClaimed) {
-            _pendingPrompt.value = LocalDataMigrationPrompt(userId, guestId)
+        if (treatmentDao.hasAnyForProfile(guestId)) {
+            _pendingPrompt.value = LocalDataMigrationPrompt(
+                userId = userId,
+                guestProfileId = guestId,
+                targetProfileId = targetId,
+                accountHasExistingRemoteIdentity = remoteExistingId != null
+            )
             return false // asteapta decizia userului — vezi resolveMigrationChoice
         }
 
-        val newId = UUID.randomUUID().toString()
-        localAccountProfileDao.insert(LocalAccountProfileEntity(userId, newId, System.currentTimeMillis()))
-        _patientProfileId.value = newId
+        localAccountProfileDao.insert(LocalAccountProfileEntity(userId, targetId, System.currentTimeMillis()))
+        _patientProfileId.value = targetId
         return true
     }
 

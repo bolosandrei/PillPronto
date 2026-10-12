@@ -32,6 +32,13 @@ interface TreatmentDao {
     @Query("SELECT EXISTS(SELECT 1 FROM treatments WHERE patientProfileId = :patientProfileId)")
     suspend fun hasAnyForProfile(patientProfileId: String): Boolean
 
+    // Fix izolare date locale — "pastreaza datele guest" muta efectiv randurile (nu doar
+    // eticheteaza bucket-ul guest ca fiind contul), altfel un cont cu identitate remote deja
+    // stabilita ar intra in conflict cu unique(user_id) la ensurePatientProfileLinked. dirty=1 —
+    // randurile mutate trebuie sa se sincronizeze sub noua identitate la urmatorul ciclu.
+    @Query("UPDATE treatments SET patientProfileId = :toPatientProfileId, dirty = 1 WHERE patientProfileId = :fromPatientProfileId")
+    suspend fun reassignProfile(fromPatientProfileId: String, toPatientProfileId: String)
+
     // --- sync Room <-> Supabase (Faza 1.5c) ---
 
     @Query("SELECT * FROM treatments WHERE patientProfileId = :patientProfileId AND dirty = 1")

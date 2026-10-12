@@ -34,6 +34,12 @@ class FakeTreatmentDao : TreatmentDao {
     override suspend fun hasAnyForProfile(patientProfileId: String): Boolean =
         rows.value.values.any { it.patientProfileId == patientProfileId }
 
+    override suspend fun reassignProfile(fromPatientProfileId: String, toPatientProfileId: String) {
+        rows.value = rows.value.mapValues { (_, e) ->
+            if (e.patientProfileId == fromPatientProfileId) e.copy(patientProfileId = toPatientProfileId, dirty = true) else e
+        }
+    }
+
     override suspend fun getDirtyForProfile(patientProfileId: String): List<TreatmentEntity> =
         rows.value.values.filter { it.dirty && it.patientProfileId == patientProfileId }
 

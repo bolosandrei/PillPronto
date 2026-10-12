@@ -137,4 +137,16 @@ class TreatmentDaoTest {
         assertTrue(dao.hasAnyForProfile(PROFILE_A))
         assertFalse(dao.hasAnyForProfile(PROFILE_B))
     }
+
+    @Test
+    fun reassignProfile_mutaRandurileSiLeMarcheazaDirty() = runTest {
+        dao.upsert(treatment("Mutat", patientProfileId = PROFILE_A, dirty = false))
+
+        dao.reassignProfile(fromPatientProfileId = PROFILE_A, toPatientProfileId = PROFILE_B)
+
+        assertFalse(dao.hasAnyForProfile(PROFILE_A))
+        val moved = dao.getActiveForProfile(PROFILE_B).first()
+        assertEquals("Mutat", moved.medicationName)
+        assertTrue(moved.dirty)
+    }
 }

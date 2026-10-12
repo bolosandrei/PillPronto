@@ -49,6 +49,15 @@ class FakeDoseDao : DoseDao {
     override suspend fun countForDate(dateIso: String, patientProfileId: String): Int =
         rows.values.count { it.scheduledAt.startsWith(dateIso) && it.patientProfileId == patientProfileId }
 
+    override suspend fun reassignProfile(fromPatientProfileId: String, toPatientProfileId: String) {
+        rows.keys.toList().forEach { id ->
+            val current = rows.getValue(id)
+            if (current.patientProfileId == fromPatientProfileId) {
+                rows[id] = current.copy(patientProfileId = toPatientProfileId, dirty = true)
+            }
+        }
+    }
+
     override suspend fun markOverdueMissed(cutoffIso: String, updatedAt: Long, patientProfileId: String) {
         rows.replaceAll { _, dose ->
             if (dose.patientProfileId == patientProfileId && dose.status == "PENDING" && dose.scheduledAt < cutoffIso) {
