@@ -1,20 +1,25 @@
 package com.pillpronto.data.repository
 
-import com.pillpronto.data.local.LocalPatientProfileProvider
+import com.pillpronto.data.remote.dto.PatientProfileIdOnlyDto
 import com.pillpronto.data.remote.dto.PatientProfileInsertDto
 import com.pillpronto.data.remote.dto.ProfileDto
 import com.pillpronto.domain.model.ClinicianType
 import com.pillpronto.domain.model.Profile
+import com.pillpronto.domain.repository.PatientProfileIdProvider
 import com.pillpronto.domain.repository.ProfileRepository
+import dagger.Lazy
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.from
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import javax.inject.Inject
 
+// patientProfileIdProvider e `Lazy`: ActivePatientProfileCoordinator (implementarea reala a
+// PatientProfileIdProvider) depinde la randul lui de ProfileRepository (findExistingPatientProfileId)
+// — ciclu de dependinte real, rupt standard Dagger/Hilt cu Lazy pe una din cele doua laturi.
 class ProfileRepositoryImpl @Inject constructor(
     private val supabase: SupabaseClient,
-    private val localPatientProfileProvider: LocalPatientProfileProvider
+    private val patientProfileIdProvider: Lazy<PatientProfileIdProvider>
 ) : ProfileRepository {
 
     override suspend fun getProfile(userId: String): Profile? {
@@ -37,7 +42,7 @@ class ProfileRepositoryImpl @Inject constructor(
         supabase.from(PROFILES_TABLE).upsert(
             DisplayNameUpsertDto(id = userId, displayName = displayName)
         )
-        ensurePatientProfileLinked(userId, localPatientProfileProvider.patientProfileId, displayName)
+        ensurePatientProfileLinked(userId, patientProfileIdProvider.get().currentProfileId(), displayName)
     }
 
     override suspend fun setDeclaredClinicianType(userId: String, type: ClinicianType?) {
@@ -56,6 +61,11 @@ class ProfileRepositoryImpl @Inject constructor(
             ignoreDuplicates = true
         }
     }
+
+    override suspend fun findExistingPatientProfileId(userId: String): String? =
+        supabase.from(PATIENT_PROFILES_TABLE)
+            .select { filter { eq("user_id", userId) } }
+            .decodeSingleOrNull<PatientProfileIdOnlyDto>()?.id
 
     private fun String?.toClinicianType(): ClinicianType? = when (this) {
         "doctor" -> ClinicianType.DOCTOR

@@ -3,8 +3,11 @@ package com.pillpronto.ui.account
 import com.pillpronto.domain.model.AuthSessionState
 import com.pillpronto.domain.model.ClinicianType
 import com.pillpronto.domain.model.Profile
+import com.pillpronto.domain.repository.LocalDataMigrationPrompt
 import com.pillpronto.domain.usecase.GetProfileUseCase
 import com.pillpronto.domain.usecase.ObserveAuthSessionUseCase
+import com.pillpronto.domain.usecase.ObserveLocalDataMigrationPromptUseCase
+import com.pillpronto.domain.usecase.ResolveLocalDataMigrationChoiceUseCase
 import com.pillpronto.domain.usecase.SaveDisplayNameUseCase
 import com.pillpronto.domain.usecase.SetDeclaredClinicianTypeUseCase
 import com.pillpronto.domain.usecase.SignInUseCase
@@ -12,6 +15,7 @@ import com.pillpronto.domain.usecase.SignInWithGoogleUseCase
 import com.pillpronto.domain.usecase.SignOutUseCase
 import com.pillpronto.domain.usecase.SignUpUseCase
 import com.pillpronto.util.FakeAuthRepository
+import com.pillpronto.util.FakeLocalDataMigrationCoordinator
 import com.pillpronto.util.FakeProfileRepository
 import com.pillpronto.util.MainDispatcherRule
 import kotlinx.coroutines.test.runTest
@@ -27,6 +31,7 @@ class AccountViewModelTest {
 
     private val authRepository = FakeAuthRepository()
     private val profileRepository = FakeProfileRepository()
+    private val migrationCoordinator = FakeLocalDataMigrationCoordinator()
 
     private fun createViewModel() = AccountViewModel(
         ObserveAuthSessionUseCase(authRepository),
@@ -36,7 +41,9 @@ class AccountViewModelTest {
         SignOutUseCase(authRepository),
         GetProfileUseCase(profileRepository),
         SaveDisplayNameUseCase(profileRepository),
-        SetDeclaredClinicianTypeUseCase(profileRepository)
+        SetDeclaredClinicianTypeUseCase(profileRepository),
+        ObserveLocalDataMigrationPromptUseCase(migrationCoordinator),
+        ResolveLocalDataMigrationChoiceUseCase(migrationCoordinator)
     )
 
     @Test
@@ -224,5 +231,37 @@ class AccountViewModelTest {
         vm.onGoogleSignInFailed()
 
         assertEquals(AccountError.GOOGLE_SIGN_IN_FAILED, vm.state.value.error)
+    }
+
+    // --- fix izolare date locale: prompt de migrare a datelor "guest" ---
+
+    @Test
+    fun `promptul de migrare aparut pe coordonator se reflecta in state`() = runTest {
+        val vm = createViewModel()
+
+        migrationCoordinator.emit(LocalDataMigrationPrompt("u1", "guest-id"))
+
+        assertEquals(LocalDataMigrationPrompt("u1", "guest-id"), vm.state.value.pendingMigrationPrompt)
+    }
+
+    @Test
+    fun `onResolveMigrationPrompt cu keepGuestData trimite alegerea corecta si curata promptul`() = runTest {
+        profileRepository.profiles["u1"] = Profile("u1", "Ana")
+        val vm = createViewModel()
+        migrationCoordinator.emit(LocalDataMigrationPrompt("u1", "guest-id"))
+
+        vm.onResolveMigrationPrompt(keepGuestData = true)
+
+        assertEquals("u1" to true, migrationCoordinator.lastResolveCall)
+        assertNull(vm.state.value.pendingMigrationPrompt)
+    }
+
+    @Test
+    fun `onResolveMigrationPrompt fara prompt in asteptare nu face nimic`() = runTest {
+        val vm = createViewModel()
+
+        vm.onResolveMigrationPrompt(keepGuestData = false)
+
+        assertNull(migrationCoordinator.lastResolveCall)
     }
 }

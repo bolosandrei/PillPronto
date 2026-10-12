@@ -1,5 +1,6 @@
 package com.pillpronto.core.di
 
+import com.pillpronto.data.local.ActivePatientProfileCoordinator
 import com.pillpronto.data.local.LocalPatientProfileProvider
 import com.pillpronto.data.reminder.ReminderCoordinator
 import com.pillpronto.data.reminder.ReminderSync
@@ -22,8 +23,10 @@ import com.pillpronto.domain.repository.AuthRepository
 import com.pillpronto.domain.repository.DoseRepository
 import com.pillpronto.domain.repository.EnrolledMedicationRepository
 import com.pillpronto.domain.repository.GtinMappingRepository
+import com.pillpronto.domain.repository.GuestProfileIdProvider
 import com.pillpronto.domain.repository.LinkRepository
 import com.pillpronto.domain.repository.LinkedPatientDataRepository
+import com.pillpronto.domain.repository.LocalDataMigrationCoordinator
 import com.pillpronto.domain.repository.NomenclatureRepository
 import com.pillpronto.domain.repository.PatientProfileIdProvider
 import com.pillpronto.domain.repository.ProfileRepository
@@ -64,7 +67,15 @@ abstract class RepositoryModule {
 
     @Binds
     @Singleton
-    abstract fun bindPatientProfileIdProvider(impl: LocalPatientProfileProvider): PatientProfileIdProvider
+    abstract fun bindPatientProfileIdProvider(impl: ActivePatientProfileCoordinator): PatientProfileIdProvider
+
+    @Binds
+    @Singleton
+    abstract fun bindLocalDataMigrationCoordinator(impl: ActivePatientProfileCoordinator): LocalDataMigrationCoordinator
+
+    @Binds
+    @Singleton
+    abstract fun bindGuestProfileIdProvider(impl: LocalPatientProfileProvider): GuestProfileIdProvider
 
     @Binds
     @Singleton

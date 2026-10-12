@@ -2,28 +2,30 @@ package com.pillpronto.data.local
 
 import android.content.Context
 import androidx.core.content.edit
-import com.pillpronto.domain.repository.PatientProfileIdProvider
+import com.pillpronto.domain.repository.GuestProfileIdProvider
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Identitatea locala a "profilului de pacient" curent de pe acest device — un UUID generat o
- * singura data la prima pornire si persistat local. Devine `patient_profiles.id` in Supabase
- * cand userul isi creeaza cont (Faza 1.5b+): UUID-ul e generat de client, nu de server, deci
- * legarea local <-> remote se face printr-un INSERT direct, fara nicio reconciliere de date.
+ * Sursa UUID-ului local original, generat o singura data la prima pornire si persistat (
+ * SharedPreferences `pillpronto_identity`) — NEMODIFICATA ca mecanism fata de versiunea initiala
+ * (Faza 1.5a). Devine `patient_profiles.id` in Supabase pt. PRIMUL cont care il adopta.
  *
- * Pana la introducerea conturilor, e folosit doar ca sa marcheze randurile din Room ca apartinand
- * unui singur profil implicit — nu exista inca notiunea de mai multe profiluri pe un device.
+ * De la fix-ul de izolare a datelor locale (vezi CLAUDE.md): acest id e strict bucket-ul "guest"
+ * — folosit cand NU exista sesiune autentificata, si oferit o singura data ca opțiune explicita
+ * de migrare primului cont care se autentifica pe acest device daca bucket-ul are date neclaimate
+ * (vezi `ActivePatientProfileCoordinator`). NU mai e identitatea implicita a oricarui cont — asta
+ * era bug-ul: un cont nou adopta tacit acest id si vedea local tratamentele contului anterior.
  */
 @Singleton
 class LocalPatientProfileProvider @Inject constructor(
     @ApplicationContext context: Context
-) : PatientProfileIdProvider {
+) : GuestProfileIdProvider {
     private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
-    override val patientProfileId: String by lazy {
+    override val guestProfileId: String by lazy {
         prefs.getString(KEY_PATIENT_PROFILE_ID, null) ?: UUID.randomUUID().toString().also { id ->
             prefs.edit { putString(KEY_PATIENT_PROFILE_ID, id) }
         }

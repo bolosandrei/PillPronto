@@ -57,7 +57,7 @@ class SyncManager @Inject constructor(
 ) {
     suspend fun sync() {
         val (userId, profile) = eligiblePatient() ?: return
-        val patientProfileId = localPatientProfileProvider.patientProfileId
+        val patientProfileId = localPatientProfileProvider.currentProfileId()
 
         // Re-leaga UUID-ul local de contul curent daca legatura lipseste (vezi doc pe
         // ensurePatientProfileLinked) — DOAR insert-daca-lipseste, niciodata overwrite, deci sigur
@@ -68,9 +68,9 @@ class SyncManager @Inject constructor(
 
         pushPendingDeletes()
         pushDirtyTreatments(patientProfileId)
-        pushDirtyDoseLogs()
+        pushDirtyDoseLogs(patientProfileId)
         pullTreatments(patientProfileId)
-        pullDoseLogs()
+        pullDoseLogs(patientProfileId)
         reminderSync.syncReminders()
     }
 
@@ -93,14 +93,14 @@ class SyncManager @Inject constructor(
     }
 
     private suspend fun pushDirtyTreatments(patientProfileId: String) {
-        treatmentDao.getDirty().forEach { entity ->
+        treatmentDao.getDirtyForProfile(patientProfileId).forEach { entity ->
             runCatching { remoteDataSource.pushTreatment(entity.toDto(patientProfileId)) }
                 .onSuccess { treatmentDao.clearDirtyIfUnchanged(entity.id, entity.updatedAt) }
         }
     }
 
-    private suspend fun pushDirtyDoseLogs() {
-        doseDao.getDirtySyncable().forEach { view ->
+    private suspend fun pushDirtyDoseLogs(patientProfileId: String) {
+        doseDao.getDirtySyncable(patientProfileId).forEach { view ->
             runCatching { remoteDataSource.pushDoseLog(view.toDto()) }
                 .onSuccess { doseDao.clearDirtyIfUnchanged(view.dose.id, view.dose.updatedAt) }
         }
@@ -129,13 +129,13 @@ class SyncManager @Inject constructor(
         generateDoses(entity.copy(id = resolvedId).toDomain(), HORIZON_DAYS)
     }
 
-    private suspend fun pullDoseLogs() {
+    private suspend fun pullDoseLogs(patientProfileId: String) {
         remoteDataSource.pullDoseLogs().forEach { dto ->
-            runCatching { applyRemoteDoseLog(dto) }
+            runCatching { applyRemoteDoseLog(dto, patientProfileId) }
         }
     }
 
-    private suspend fun applyRemoteDoseLog(dto: DoseLogDto) {
+    private suspend fun applyRemoteDoseLog(dto: DoseLogDto, patientProfileId: String) {
         // Garantat gasit — pullTreatments ruleaza inaintea acestui pas in acelasi ciclu.
         val localTreatmentId = treatmentDao.getByRemoteId(dto.treatmentId)?.id ?: return
         val local = doseDao.getByRemoteId(dto.id)
@@ -146,7 +146,7 @@ class SyncManager @Inject constructor(
         val entity = dto.toEntity(
             localId = local?.id ?: 0L,
             localTreatmentId = localTreatmentId,
-            patientProfileId = localPatientProfileProvider.patientProfileId
+            patientProfileId = patientProfileId
         )
         doseDao.upsert(entity)
     }

@@ -13,26 +13,29 @@ interface DoseDao {
     @Insert
     suspend fun insertAll(doses: List<DoseLogEntity>)
 
+    // Scopate pe patientProfileId (fix izolare date locale, vezi CLAUDE.md) — "datele mele
+    // curente", nu tot ce exista in baza de date a acestei instalari.
     @Query(
         """
         SELECT d.*, t.medicationName AS medicationName, t.dosage AS dosage
         FROM dose_logs d INNER JOIN treatments t ON d.treatmentId = t.id
-        WHERE substr(d.scheduledAt, 1, 10) = :dateIso
+        WHERE d.patientProfileId = :patientProfileId AND substr(d.scheduledAt, 1, 10) = :dateIso
         ORDER BY d.scheduledAt
         """
     )
-    fun observeForDate(dateIso: String): Flow<List<DoseItemView>>
+    fun observeForDate(dateIso: String, patientProfileId: String): Flow<List<DoseItemView>>
 
     /** Doze PENDING intr-o fereastra [now, until], cu info medicament — pentru programarea alarmelor. */
     @Query(
         """
         SELECT d.*, t.medicationName AS medicationName, t.dosage AS dosage
         FROM dose_logs d INNER JOIN treatments t ON d.treatmentId = t.id
-        WHERE d.status = 'PENDING' AND d.scheduledAt BETWEEN :nowIso AND :untilIso
+        WHERE d.patientProfileId = :patientProfileId AND d.status = 'PENDING'
+            AND d.scheduledAt BETWEEN :nowIso AND :untilIso
         ORDER BY d.scheduledAt
         """
     )
-    suspend fun getUpcomingPendingItems(nowIso: String, untilIso: String): List<DoseItemView>
+    suspend fun getUpcomingPendingItems(nowIso: String, untilIso: String, patientProfileId: String): List<DoseItemView>
 
     @Query(
         """
@@ -43,8 +46,8 @@ interface DoseDao {
     )
     suspend fun getItemById(doseId: Long): DoseItemView?
 
-    @Query("SELECT * FROM dose_logs WHERE scheduledAt BETWEEN :startIso AND :endIso")
-    suspend fun getBetween(startIso: String, endIso: String): List<DoseLogEntity>
+    @Query("SELECT * FROM dose_logs WHERE patientProfileId = :patientProfileId AND scheduledAt BETWEEN :startIso AND :endIso")
+    suspend fun getBetween(startIso: String, endIso: String, patientProfileId: String): List<DoseLogEntity>
 
     /** Istoricul de administrare al unui tratament (doar doze cu status final — nu cele programate/viitoare). */
     @Query(
@@ -61,14 +64,14 @@ interface DoseDao {
     @Query("UPDATE dose_logs SET status = :status, takenAt = :takenAt, dirty = 1, updatedAt = :updatedAt WHERE id = :doseId")
     suspend fun updateStatus(doseId: Long, status: String, takenAt: String?, updatedAt: Long)
 
-    @Query("SELECT COUNT(*) FROM dose_logs WHERE substr(scheduledAt, 1, 10) = :dateIso")
-    suspend fun countForDate(dateIso: String): Int
+    @Query("SELECT COUNT(*) FROM dose_logs WHERE patientProfileId = :patientProfileId AND substr(scheduledAt, 1, 10) = :dateIso")
+    suspend fun countForDate(dateIso: String, patientProfileId: String): Int
 
     @Query(
         "UPDATE dose_logs SET status = 'MISSED', dirty = 1, updatedAt = :updatedAt " +
-            "WHERE status = 'PENDING' AND scheduledAt < :cutoffIso"
+            "WHERE patientProfileId = :patientProfileId AND status = 'PENDING' AND scheduledAt < :cutoffIso"
     )
-    suspend fun markOverdueMissed(cutoffIso: String, updatedAt: Long)
+    suspend fun markOverdueMissed(cutoffIso: String, updatedAt: Long, patientProfileId: String)
 
     // --- pentru editare/stergere si extindere orizont ---
 
@@ -88,10 +91,10 @@ interface DoseDao {
         """
         SELECT d.*, t.remoteId AS treatmentRemoteId
         FROM dose_logs d INNER JOIN treatments t ON d.treatmentId = t.id
-        WHERE d.dirty = 1 AND d.status != 'PENDING'
+        WHERE d.patientProfileId = :patientProfileId AND d.dirty = 1 AND d.status != 'PENDING'
         """
     )
-    suspend fun getDirtySyncable(): List<DoseSyncView>
+    suspend fun getDirtySyncable(patientProfileId: String): List<DoseSyncView>
 
     @Query("UPDATE dose_logs SET dirty = 0 WHERE id = :id AND updatedAt = :updatedAt")
     suspend fun clearDirtyIfUnchanged(id: Long, updatedAt: Long)

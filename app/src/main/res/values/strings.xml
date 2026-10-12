@@ -128,6 +128,11 @@
     <string name="account_display_name_title">Cum te numim?</string>
     <string name="account_display_name_label">Numele tău</string>
     <string name="account_save_display_name_button">Salvează</string>
+    <!-- Fix izolare date locale: prompt de migrare a datelor "guest" (fara cont) -->
+    <string name="account_migration_prompt_title">Ai date locale pe acest device</string>
+    <string name="account_migration_prompt_body">Am găsit tratamente adăugate fără cont pe acest telefon. Vrei să le asociezi acestui cont, sau începi cu un profil gol?</string>
+    <string name="account_migration_prompt_keep">Păstrează datele existente</string>
+    <string name="account_migration_prompt_start_fresh">Începe cu profil gol</string>
     <!-- Faza 1.5h: auto-declarare optionala de tip clinician, independenta de orice "rol" -->
     <string name="account_declare_clinician_title">Ești profesionist medical?</string>
     <string name="account_declare_doctor_button">Medic</string>

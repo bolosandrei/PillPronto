@@ -34,4 +34,9 @@ class FakeProfileRepository : ProfileRepository {
         ensurePatientProfileLinkedError?.let { throw it }
         linkedPatientProfiles.putIfAbsent(patientProfileId, userId to displayName)
     }
+
+    var existingRemotePatientProfileIds: MutableMap<String, String> = mutableMapOf()
+
+    override suspend fun findExistingPatientProfileId(userId: String): String? =
+        existingRemotePatientProfileIds[userId]
 }

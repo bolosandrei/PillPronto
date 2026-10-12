@@ -129,6 +129,11 @@
     <string name="account_display_name_title">What should we call you?</string>
     <string name="account_display_name_label">Your name</string>
     <string name="account_save_display_name_button">Save</string>
+    <!-- Local data isolation fix: migration prompt for "guest" (no-account) data -->
+    <string name="account_migration_prompt_title">You have local data on this device</string>
+    <string name="account_migration_prompt_body">We found treatments added without an account on this phone. Do you want to associate them with this account, or start with a blank profile?</string>
+    <string name="account_migration_prompt_keep">Keep existing data</string>
+    <string name="account_migration_prompt_start_fresh">Start with a blank profile</string>
     <!-- Phase 1.5h: optional clinician-type self-declaration, independent of any "role" -->
     <string name="account_declare_clinician_title">Are you a healthcare professional?</string>
     <string name="account_declare_doctor_button">Doctor</string>

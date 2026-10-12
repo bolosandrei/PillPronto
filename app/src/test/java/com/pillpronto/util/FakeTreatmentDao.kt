@@ -13,9 +13,11 @@ class FakeTreatmentDao : TreatmentDao {
     private val rows = MutableStateFlow<Map<Long, TreatmentEntity>>(emptyMap())
     private var nextId = 1L
 
-    override fun observeAll(): Flow<List<TreatmentEntity>> = rows.map { it.values.toList() }
+    override fun observeAllForProfile(patientProfileId: String): Flow<List<TreatmentEntity>> =
+        rows.map { it.values.filter { e -> e.patientProfileId == patientProfileId } }
 
-    override suspend fun getActive(): List<TreatmentEntity> = rows.value.values.filter { it.active }
+    override suspend fun getActiveForProfile(patientProfileId: String): List<TreatmentEntity> =
+        rows.value.values.filter { it.active && it.patientProfileId == patientProfileId }
 
     override suspend fun getById(id: Long): TreatmentEntity? = rows.value[id]
 
@@ -29,7 +31,11 @@ class FakeTreatmentDao : TreatmentDao {
         rows.value = rows.value - id
     }
 
-    override suspend fun getDirty(): List<TreatmentEntity> = rows.value.values.filter { it.dirty }
+    override suspend fun hasAnyForProfile(patientProfileId: String): Boolean =
+        rows.value.values.any { it.patientProfileId == patientProfileId }
+
+    override suspend fun getDirtyForProfile(patientProfileId: String): List<TreatmentEntity> =
+        rows.value.values.filter { it.dirty && it.patientProfileId == patientProfileId }
 
     override suspend fun getByRemoteId(remoteId: String): TreatmentEntity? =
         rows.value.values.firstOrNull { it.remoteId == remoteId }
