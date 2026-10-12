@@ -41,14 +41,14 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.pillpronto.BuildConfig
 import com.pillpronto.R
 import com.pillpronto.core.localization.AppLocale
-import com.pillpronto.domain.model.AccountRole
 import com.pillpronto.domain.model.AuthSessionState
+import com.pillpronto.domain.model.ClinicianType
+import com.pillpronto.domain.model.Profile
 import kotlinx.coroutines.launch
 
 @Composable
 fun AccountScreen(
     padding: PaddingValues,
-    onNeedsOnboarding: () -> Unit,
     onManageAccess: () -> Unit,
     onManageProfessionalAccess: () -> Unit,
     onMyPatients: () -> Unit,
@@ -61,28 +61,14 @@ fun AccountScreen(
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
 
-    // Reface profilul de fiecare data cand AccountScreen intra in compozitie (ex. dupa onboarding
-    // reusit, cand popBackStack() aduce inapoi acest ecran) — necesar, altfel un onboarding reusit
-    // cat timp sesiunea era deja Authenticated ramane "invizibil" pentru cache-ul local.
+    // Reface profilul de fiecare data cand AccountScreen intra in compozitie — necesar, altfel o
+    // salvare de nume/declarare de tip clinician reusita cat timp sesiunea era deja Authenticated
+    // ramane "invizibila" pentru cache-ul local.
     LaunchedEffect(Unit) { vm.refresh() }
     // Pastrat si acesta — acopera revenirea din fundal (Android real resume), unde compozitia NU
     // se reface (deci LaunchedEffect(Unit) de mai sus nu ruleaza din nou), doar Lifecycle-ul
     // trece prin ON_RESUME.
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { vm.refresh() }
-
-    // Autentificat dar fara rand in `profiles` (cont nou sau onboarding neterminat) -> onboarding.
-    // Evenimentul vine direct din ViewModel (vezi AccountViewModel.needsOnboardingEvents), NU mai
-    // e derivat aici dintr-un LaunchedEffect care compara (sessionState, profileChecked, profile)
-    // separate — acela citea `state` (Compose State derivat din collectAsStateWithLifecycle) care
-    // se putea actualiza cu un hop de coroutine in urma lui `vm.state.value` (actualizat sincron
-    // de vm.refresh()), ducand la o cursa reala: efectul citea profileChecked=true STALE exact in
-    // fereastra in care ViewModel-ul deja il setase pe false. Bug confirmat cu logcat la
-    // onboarding dupa Google Sign-In (userul retrimis pe onboarding desi datele erau deja
-    // salvate). Emitand evenimentul direct din ViewModel, in aceeasi coroutina care actualizeaza
-    // starea, eliminam cursa complet.
-    LaunchedEffect(Unit) {
-        vm.needsOnboardingEvents.collect { onNeedsOnboarding() }
-    }
 
     Column(
         Modifier.fillMaxSize().padding(padding).padding(16.dp).verticalScroll(rememberScrollState()),
@@ -136,19 +122,23 @@ fun AccountScreen(
                 // (profileChecked=false temporar la fiecare revenire pe tab, vezi LaunchedEffect
                 // de mai sus) — altfel ecranul clipeste la spinner de fiecare data cand userul
                 // reintra pe tab-ul "Cont", desi datele vechi erau oricum corecte in >99% din
-                // cazuri. Spinner-ul ramane doar pentru primul fetch real (profile == null).
-                if (state.profile != null) {
-                    LoggedInView(
-                        displayName = state.profile!!.displayName,
-                        role = state.profile!!.role,
+                // cazuri. Spinner-ul ramane doar pentru primul fetch real.
+                when {
+                    state.profile != null -> LoggedInView(
+                        profile = state.profile!!,
                         onSignOut = vm::onSignOut,
                         onManageAccess = onManageAccess,
                         onManageProfessionalAccess = onManageProfessionalAccess,
                         onMyPatients = onMyPatients,
-                        onAuditLog = onAuditLog
+                        onAuditLog = onAuditLog,
+                        onDeclareClinicianType = vm::onDeclareClinicianType
                     )
-                } else {
-                    LoadingIndicator()
+                    // Faza 1.5h — niciun profil salvat inca (cont nou): formular inline de nume,
+                    // in loc de navigare catre un ecran separat de Onboarding (eliminat) — vezi
+                    // CLAUDE.md sectiunea 7 pt. clasa de bug "cursa onboarding->bounce-back" pe
+                    // care aceasta simplificare o elimina structural.
+                    state.profileChecked -> DisplayNameForm(state = state, vm = vm)
+                    else -> LoadingIndicator()
                 }
         }
     }
@@ -266,65 +256,99 @@ private fun SignUpConfirmationPending(email: String, onBackToSignIn: () -> Unit)
     }
 }
 
+/** Faza 1.5h — cont autentificat, fara niciun rand `profiles` inca (nume niciodata salvat).
+ * Inlocuieste ecranul separat de Onboarding — un singur camp, salvat inline, fara navigare. */
+@Composable
+private fun DisplayNameForm(state: AccountUiState, vm: AccountViewModel) {
+    Text(stringResource(R.string.account_display_name_title), style = MaterialTheme.typography.headlineSmall)
+    OutlinedTextField(
+        state.displayNameInput, vm::onDisplayNameChange,
+        label = { Text(stringResource(R.string.account_display_name_label)) },
+        modifier = Modifier.fillMaxWidth()
+    )
+    Button(
+        onClick = vm::onSaveDisplayName,
+        enabled = !state.isSavingDisplayName && state.displayNameInput.isNotBlank(),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Text(stringResource(R.string.account_save_display_name_button))
+    }
+}
+
 @Composable
 private fun LoggedInView(
-    displayName: String?,
-    role: AccountRole,
+    profile: Profile,
     onSignOut: () -> Unit,
     onManageAccess: () -> Unit,
     onManageProfessionalAccess: () -> Unit,
     onMyPatients: () -> Unit,
-    onAuditLog: () -> Unit
+    onAuditLog: () -> Unit,
+    onDeclareClinicianType: (ClinicianType?) -> Unit
 ) {
     Text(
-        stringResource(R.string.account_logged_in_as, displayName ?: "—"),
+        stringResource(R.string.account_logged_in_as, profile.displayName ?: "—"),
         style = MaterialTheme.typography.headlineSmall
     )
-    Text(stringResource(R.string.account_role_label, roleLabel(role)), style = MaterialTheme.typography.bodyMedium)
-    if (role == AccountRole.DOCTOR || role == AccountRole.PHARMACIST) {
-        // Faza 1.5e: auto-declarare, fara validare reala a numarului de ordin/CUIM — vezi
-        // docs/user-management-plan.md sectiunea 9. Vizibil si aici (propriul cont), nu doar la
-        // Pacient (ManageProfessionalAccessScreen).
-        Text(
-            stringResource(R.string.account_unverified_badge),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.error
-        )
+
+    // Mereu vizibile, independent unele de altele — fiecare cont e implicit Pacient (Faza 1.5h)
+    // SI poate revendica oricand un cod ca Apartinator/Medic/Farmacist pt. alti pacienti, fara
+    // nicio declarare in prealabil (revendicarea insasi e suficienta). "Pacientii mei" ramane
+    // NECONDIȚIONAT vizibil, nu doar dupa ce ai deja o legatura acceptata — altfel n-ai avea cum
+    // sa revendici PRIMUL cod (bug real gasit prin testare live: butonul care contine campul de
+    // introducere a codului nu poate fi ascuns pana ai deja o legatura, ar fi o bucla imposibila).
+    OutlinedButton(onClick = onManageAccess, modifier = Modifier.fillMaxWidth()) {
+        Text(stringResource(R.string.account_manage_access_button))
+    }
+    OutlinedButton(onClick = onManageProfessionalAccess, modifier = Modifier.fillMaxWidth()) {
+        Text(stringResource(R.string.account_manage_professional_access_button))
+    }
+    OutlinedButton(onClick = onAuditLog, modifier = Modifier.fillMaxWidth()) {
+        Text(stringResource(R.string.account_audit_log_button))
+    }
+    OutlinedButton(onClick = onMyPatients, modifier = Modifier.fillMaxWidth()) {
+        Text(stringResource(R.string.account_my_patients_button))
     }
 
-    // Faza 1.5d/1.5e: legatura Pacient<->Apartinator/Medic/Farmacist — fiecare rol isi vede
-    // butonul relevant. Pacientul are doua ecrane separate (decizie explicita), restul rolurilor
-    // (care REVENDICA acces, nu genereaza) reutilizeaza acelasi ecran "Pacientii mei", agnostic
-    // la rol.
-    when (role) {
-        AccountRole.PATIENT -> {
-            OutlinedButton(onClick = onManageAccess, modifier = Modifier.fillMaxWidth()) {
-                Text(stringResource(R.string.account_manage_access_button))
-            }
-            OutlinedButton(onClick = onManageProfessionalAccess, modifier = Modifier.fillMaxWidth()) {
-                Text(stringResource(R.string.account_manage_professional_access_button))
-            }
-            OutlinedButton(onClick = onAuditLog, modifier = Modifier.fillMaxWidth()) {
-                Text(stringResource(R.string.account_audit_log_button))
-            }
-        }
-        AccountRole.CAREGIVER, AccountRole.DOCTOR, AccountRole.PHARMACIST ->
-            OutlinedButton(onClick = onMyPatients, modifier = Modifier.fillMaxWidth()) {
-                Text(stringResource(R.string.account_my_patients_button))
-            }
-    }
+    ClinicianDeclarationSection(profile.declaredClinicianType, onDeclareClinicianType)
 
     OutlinedButton(onClick = onSignOut, modifier = Modifier.fillMaxWidth()) {
         Text(stringResource(R.string.account_sign_out))
     }
 }
 
+/** Auto-declarare optionala, independenta de tot restul (Faza 1.5h) — folosita STRICT ca poarta
+ * pt. revendicarea unei invitatii de tip doctor/pharmacist (`claim_link`). Fara validare CUIM. */
 @Composable
-internal fun roleLabel(role: AccountRole): String = when (role) {
-    AccountRole.PATIENT -> stringResource(R.string.account_role_patient)
-    AccountRole.CAREGIVER -> stringResource(R.string.account_role_caregiver)
-    AccountRole.DOCTOR -> stringResource(R.string.account_role_doctor)
-    AccountRole.PHARMACIST -> stringResource(R.string.account_role_pharmacist)
+private fun ClinicianDeclarationSection(
+    declared: ClinicianType?,
+    onDeclare: (ClinicianType?) -> Unit
+) {
+    Column(Modifier.fillMaxWidth()) {
+        Text(stringResource(R.string.account_declare_clinician_title), style = MaterialTheme.typography.labelLarge)
+        val options = listOf(
+            null to R.string.account_undeclare_button,
+            ClinicianType.DOCTOR to R.string.account_declare_doctor_button,
+            ClinicianType.PHARMACIST to R.string.account_declare_pharmacist_button
+        )
+        SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+            options.forEachIndexed { index, (type, labelRes) ->
+                SegmentedButton(
+                    selected = declared == type,
+                    onClick = { onDeclare(type) },
+                    shape = SegmentedButtonDefaults.itemShape(index = index, count = options.size)
+                ) {
+                    Text(stringResource(labelRes))
+                }
+            }
+        }
+        if (declared != null) {
+            Text(
+                stringResource(R.string.account_unverified_badge),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error
+            )
+        }
+    }
 }
 
 @Composable

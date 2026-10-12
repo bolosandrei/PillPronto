@@ -33,7 +33,6 @@ import com.pillpronto.ui.vision.VisionScanScreen
 import com.pillpronto.ui.access.ManageProfessionalAccessScreen
 import com.pillpronto.ui.account.AccountScreen
 import com.pillpronto.ui.adherence.AdherenceScreen
-import com.pillpronto.ui.onboarding.OnboardingScreen
 import com.pillpronto.ui.patients.MyPatientsScreen
 import com.pillpronto.ui.patients.PatientDetailScreen
 import com.pillpronto.ui.today.TodayScreen
@@ -133,13 +132,6 @@ fun PillProntoNavHost(
             composable(Route.Account.path) {
                 AccountScreen(
                     padding,
-                    // launchSingleTop: plasa de siguranta — daca AccountScreen ar mai declansa
-                    // aceasta navigare de mai multe ori la rand (ex. o viitoare regresie a
-                    // fix-ului din AccountScreen.kt), nu se mai stivuiesc mai multe instante de
-                    // Onboarding, care ar cere userului sa apese Back de mai multe ori.
-                    onNeedsOnboarding = {
-                        navController.navigate(Route.Onboarding.path) { launchSingleTop = true }
-                    },
                     onManageAccess = { navController.navigate(Route.ManageAccess.path) },
                     onManageProfessionalAccess = { navController.navigate(Route.ManageProfessionalAccess.path) },
                     onMyPatients = { navController.navigate(Route.MyPatients.create()) },
@@ -148,13 +140,6 @@ fun PillProntoNavHost(
                     onVisionScan = { navController.navigate(Route.VisionScan.path) },
                     onEnrollMedication = { navController.navigate(Route.EnrollMedication.path) },
                     onRecognizeMedication = { navController.navigate(Route.RecognizeMedication.path) }
-                )
-            }
-            composable(Route.Onboarding.path) {
-                OnboardingScreen(
-                    padding,
-                    onDone = { navController.popBackStack() },
-                    onBack = { navController.popBackStack() }
                 )
             }
             composable(Route.ManageAccess.path) {

@@ -4,21 +4,21 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.pillpronto.domain.model.AuthSessionState
+import com.pillpronto.domain.model.ClinicianType
 import com.pillpronto.domain.model.Profile
 import com.pillpronto.domain.usecase.GetProfileUseCase
 import com.pillpronto.domain.usecase.ObserveAuthSessionUseCase
+import com.pillpronto.domain.usecase.SaveDisplayNameUseCase
+import com.pillpronto.domain.usecase.SetDeclaredClinicianTypeUseCase
 import com.pillpronto.domain.usecase.SignInUseCase
 import com.pillpronto.domain.usecase.SignInWithGoogleUseCase
 import com.pillpronto.domain.usecase.SignOutUseCase
 import com.pillpronto.domain.usecase.SignUpUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.launchIn
-import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -38,7 +38,11 @@ data class AccountUiState(
     // Tri-state real: null pana la primul fetch reusit dupa autentificare (vezi profileChecked).
     val profile: Profile? = null,
     val profileChecked: Boolean = false,
-    val signUpAwaitingConfirmation: Boolean = false
+    val signUpAwaitingConfirmation: Boolean = false,
+    // Faza 1.5h — formular inline de nume (profile == null && profileChecked, in loc de navigare
+    // separata catre un ecran de Onboarding, eliminat).
+    val displayNameInput: String = "",
+    val isSavingDisplayName: Boolean = false
 )
 
 private val EMAIL_REGEX = Regex("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$")
@@ -51,25 +55,13 @@ class AccountViewModel @Inject constructor(
     private val signIn: SignInUseCase,
     private val signInWithGoogle: SignInWithGoogleUseCase,
     private val signOut: SignOutUseCase,
-    private val getProfile: GetProfileUseCase
+    private val getProfile: GetProfileUseCase,
+    private val saveDisplayName: SaveDisplayNameUseCase,
+    private val setDeclaredClinicianType: SetDeclaredClinicianTypeUseCase
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(AccountUiState())
     val state = _state.asStateFlow()
-
-    // Eveniment "one-shot" emis de ViewModel exact cand un fetch de profil se termina cu profil
-    // null — NU derivat de UI din (sessionState, profileChecked, profile) separate, ca inainte.
-    // Motiv: `by vm.state.collectAsStateWithLifecycle()` in AccountScreen e un State Compose
-    // DERIVAT dintr-un colector intern al StateFlow-ului — actualizarea lui necesita un hop de
-    // coroutine suplimentar fata de `_state.value` (care se schimba sincron). Un LaunchedEffect
-    // separat care verifica `state.profileChecked` dupa un `vm.refresh()` sincron poate citi in
-    // continuare valoarea VECHE a lui `state` (Compose State-ul inca nu s-a actualizat), desi
-    // `vm.state.value` e deja corect — bug real, confirmat cu logcat, la onboarding dupa Google
-    // Sign-In (userul retrimis pe onboarding desi datele erau deja salvate). Emitand evenimentul
-    // direct din ViewModel, in aceeasi coroutina care actualizeaza `_state`, eliminam complet
-    // aceasta cursa — nu se mai deriveaza intentia din stare Compose asincrona.
-    private val _needsOnboardingEvents = Channel<Unit>(Channel.CONFLATED)
-    val needsOnboardingEvents: Flow<Unit> = _needsOnboardingEvents.receiveAsFlow()
 
     init {
         observeAuthSession().onEach { session ->
@@ -86,31 +78,33 @@ class AccountViewModel @Inject constructor(
         }.launchIn(viewModelScope)
     }
 
-    /** Reface fetch-ul de profil la cerere — apelat de AccountScreen la fiecare revenire pe ecran
-     * (ex. dupa ce onboarding-ul se termina cu succes), nu doar cand se schimba sesiunea. Fara
-     * asta, un onboarding reusit in timp ce sesiunea era deja Authenticated ramane "invizibil"
-     * pentru cache-ul local si utilizatorul e retrimis la nesfarsit pe ecranul de onboarding. */
+    /** Reface fetch-ul de profil la cerere — apelat de AccountScreen la fiecare revenire pe ecran,
+     * nu doar cand se schimba sesiunea. */
     fun refresh() {
         val session = _state.value.sessionState
         if (session is AuthSessionState.Authenticated) refreshProfile(session.userId)
     }
 
     private fun refreshProfile(userId: String) {
-        // profileChecked=false IMEDIAT (sincron, inainte de fetch-ul async): altfel, intre
-        // apelul acesta si raspunsul retelei, AccountScreen se poate recompune cu starea veche
-        // (profileChecked=true, profile=null, ramasa de dinainte de onboarding) si LaunchedEffect-ul
-        // ei sare direct inapoi pe onboarding, inainte ca fetch-ul proaspat sa apuce sa raspunda —
-        // exact bug-ul raportat la testarea 1.5d (onboarding reusit -> bounce imediat inapoi).
+        // profileChecked=false IMEDIAT (sincron, inainte de fetch-ul async) — vezi lectia din
+        // istoricul proiectului despre cursa onboarding->bounce-back (CLAUDE.md sectiunea 7):
+        // altfel AccountScreen se poate recompune intre acest apel si raspunsul retelei cu starea
+        // veche (profileChecked=true, profile=null), aratand tranzitoriu formularul de nume.
         _state.update { it.copy(profileChecked = false) }
         viewModelScope.launch {
             val profile = runCatching { getProfile(userId) }
-                .onFailure { Log.e("AccountViewModel", "Nu am putut prelua profilul", it) }
+                .onFailure { Log.e(TAG, "Nu am putut prelua profilul", it) }
                 .getOrNull()
-            _state.update { it.copy(profile = profile, profileChecked = true) }
             // Verificam sesiunea curenta (nu userId-ul capturat la inceputul fetch-ului) — daca
-            // userul s-a delogat intre timp, nu are sens sa mai trimitem catre onboarding.
-            if (profile == null && _state.value.sessionState is AuthSessionState.Authenticated) {
-                _needsOnboardingEvents.trySend(Unit)
+            // userul s-a delogat intre timp, nu are sens sa mai actualizam starea.
+            if (_state.value.sessionState is AuthSessionState.Authenticated) {
+                _state.update {
+                    it.copy(
+                        profile = profile,
+                        profileChecked = true,
+                        displayNameInput = profile?.displayName.orEmpty()
+                    )
+                }
             }
         }
     }
@@ -154,7 +148,7 @@ class AccountViewModel @Inject constructor(
                     _state.update { it.copy(isSubmitting = false) }
                 }
             } catch (e: Exception) {
-                Log.e("AccountViewModel", "Autentificare/inregistrare esuata", e)
+                Log.e(TAG, "Autentificare/inregistrare esuata", e)
                 // Limita de emailuri a serviciului implicit Supabase (2-4/ora pe SMTP-ul shared,
                 // gratuit) — nu e o problema cu datele introduse, merita mesaj distinct.
                 val isRateLimit = e.message?.contains("rate_limit", ignoreCase = true) == true
@@ -176,7 +170,7 @@ class AccountViewModel @Inject constructor(
                 signInWithGoogle(idToken, rawNonce)
                 _state.update { it.copy(isSubmitting = false) }
             } catch (e: Exception) {
-                Log.e("AccountViewModel", "Autentificare Google esuata", e)
+                Log.e(TAG, "Autentificare Google esuata", e)
                 _state.update { it.copy(isSubmitting = false, error = AccountError.GOOGLE_SIGN_IN_FAILED) }
             }
         }
@@ -192,5 +186,34 @@ class AccountViewModel @Inject constructor(
      * pastrat (userul urmeaza sa se autentifice cu acelasi cont dupa ce confirma). */
     fun onBackToSignIn() = _state.update {
         it.copy(mode = AccountMode.SIGN_IN, signUpAwaitingConfirmation = false, password = "", confirmPassword = "")
+    }
+
+    fun onDisplayNameChange(value: String) = _state.update { it.copy(displayNameInput = value) }
+
+    fun onSaveDisplayName() {
+        val session = _state.value.sessionState
+        val name = _state.value.displayNameInput.trim()
+        if (session !is AuthSessionState.Authenticated || name.isBlank()) return
+        viewModelScope.launch {
+            _state.update { it.copy(isSavingDisplayName = true) }
+            runCatching { saveDisplayName(session.userId, name) }
+                .onFailure { Log.e(TAG, "Nu am putut salva numele", it) }
+            _state.update { it.copy(isSavingDisplayName = false) }
+            refreshProfile(session.userId)
+        }
+    }
+
+    fun onDeclareClinicianType(type: ClinicianType?) {
+        val session = _state.value.sessionState
+        if (session !is AuthSessionState.Authenticated) return
+        viewModelScope.launch {
+            runCatching { setDeclaredClinicianType(session.userId, type) }
+                .onFailure { Log.e(TAG, "Nu am putut actualiza tipul de clinician declarat", it) }
+            refreshProfile(session.userId)
+        }
+    }
+
+    private companion object {
+        const val TAG = "AccountViewModel"
     }
 }
