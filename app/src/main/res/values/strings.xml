@@ -158,6 +158,15 @@
     <string name="account_vision_scan_button">Scanare vizuală (experimental)</string>
     <string name="account_enroll_medication_button">Înrolare medicament (experimental)</string>
     <string name="account_recognize_medication_button">Recunoaștere medicament (experimental)</string>
+    <string name="account_section_title">Cont</string>
+    <string name="account_settings_button">Setări</string>
+
+    <!-- Refactor meniu — ecran nou "Setari", separat de "Cont" (identitate/auth) -->
+    <string name="settings_title">Setări</string>
+    <string name="settings_access_section_title">Acces &amp; pacienți</string>
+    <string name="settings_access_locked_hint">Autentifică-te din Cont pentru a gestiona accesul pacienților.</string>
+    <string name="settings_vision_section_title">Experimental — Viziune</string>
+    <string name="settings_vision_section_hint">Funcții de recunoaștere vizuală a medicamentelor, încă în dezvoltare.</string>
 
     <!-- Selector de limba aplicatie -->
     <string name="account_language_title">Limbă aplicație</string>
