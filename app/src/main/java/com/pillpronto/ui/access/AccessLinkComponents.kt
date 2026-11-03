@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
@@ -22,11 +23,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import com.pillpronto.R
+import com.pillpronto.domain.model.ClinicianType
 import com.pillpronto.domain.model.LinkStatus
 import com.pillpronto.domain.model.PatientLink
+import com.pillpronto.ui.verification.clinicianTypeLabel
 
 /**
  * Rândul unei legături + QR + distribuire + eroare, partajate între `ManageAccessScreen`
@@ -38,7 +43,13 @@ import com.pillpronto.domain.model.PatientLink
 internal fun LinkRow(
     link: PatientLink,
     grantedName: String?,
-    unverified: Boolean,
+    // null = conceptul de verificare clinician nu se aplica (ManageAccessScreen, Aparținători) —
+    // fara sufix deloc. true/false = ManageProfessionalAccessScreen, sufix (verificat)/(neverificat).
+    isVerified: Boolean?,
+    // Tipul verificat (Medic/Farmacist) — invitatia e generica (0019), tipul rezultat nu mai e
+    // pre-ales de Pacient, se afla doar din verificarea proprie a profesionistului. null pt.
+    // ManageAccessScreen (Aparținători) sau cat timp tipul nu e cunoscut.
+    clinicianType: ClinicianType? = null,
     onShare: (String) -> Unit,
     onRevoke: (String) -> Unit
 ) {
@@ -49,13 +60,19 @@ internal fun LinkRow(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column {
-                    Text(linkStatusLabel(link.status, grantedName, unverified), style = MaterialTheme.typography.bodyMedium)
+                Column(Modifier.weight(1f)) {
+                    Text(linkStatusLabel(link.status, grantedName, isVerified, clinicianType), style = MaterialTheme.typography.bodyMedium)
                     if (link.status == LinkStatus.PENDING && link.inviteCode != null) {
-                        Text(
-                            stringResource(R.string.manage_access_code_label, link.inviteCode),
-                            style = MaterialTheme.typography.titleMedium
-                        )
+                        val clipboard = LocalClipboardManager.current
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                stringResource(R.string.manage_access_code_label, link.inviteCode),
+                                style = MaterialTheme.typography.titleMedium
+                            )
+                            IconButton(onClick = { clipboard.setText(AnnotatedString(link.inviteCode)) }) {
+                                Icon(Icons.Filled.ContentCopy, contentDescription = stringResource(R.string.manage_access_copy_code_button))
+                            }
+                        }
                     }
                 }
                 when (link.status) {
@@ -112,18 +129,21 @@ internal fun shareInviteCode(context: Context, code: String) {
 }
 
 @Composable
-private fun linkStatusLabel(status: LinkStatus, grantedName: String?, unverified: Boolean): String {
+private fun linkStatusLabel(status: LinkStatus, grantedName: String?, isVerified: Boolean?, clinicianType: ClinicianType?): String {
     val base = when (status) {
         LinkStatus.PENDING -> stringResource(R.string.manage_access_status_pending)
         LinkStatus.ACCEPTED -> grantedName?.let { stringResource(R.string.manage_access_status_accepted_named, it) }
             ?: stringResource(R.string.manage_access_status_accepted)
         LinkStatus.REVOKED -> stringResource(R.string.manage_access_status_revoked)
     }
-    return if (unverified && status == LinkStatus.ACCEPTED) {
-        "$base ${stringResource(R.string.manage_access_unverified_suffix)}"
-    } else {
-        base
+    if (status != LinkStatus.ACCEPTED || isVerified == null) return base
+    val suffix = when {
+        isVerified && clinicianType != null ->
+            stringResource(R.string.manage_access_verified_suffix_typed, clinicianTypeLabel(clinicianType))
+        isVerified -> stringResource(R.string.manage_access_verified_suffix)
+        else -> stringResource(R.string.manage_access_unverified_suffix)
     }
+    return "$base $suffix"
 }
 
 @Composable

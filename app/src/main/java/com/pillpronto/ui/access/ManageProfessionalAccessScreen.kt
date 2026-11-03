@@ -11,7 +11,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -29,9 +28,10 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.pillpronto.R
 import com.pillpronto.core.ui.components.BackTopAppBar
-import com.pillpronto.domain.model.LinkRole
 
-/** Pacient — gestionarea accesului Medic/Farmacist (Faza 1.5e). Vezi `ManageAccessScreen`
+/** Pacient — gestionarea accesului Medic/Farmacist (Faza 1.5e). Invitația e GENERICĂ (0019) —
+ * fără selector de rol la generare, orice cont verificat (Medic SAU Farmacist) poate revendica,
+ * tipul rezultat apare pe rândul legăturii (`state.verifiedTypes`). Vezi `ManageAccessScreen`
  * (Aparținători) pentru ecranul analog; componente de listă/QR/share partajate în
  * `AccessLinkComponents.kt`. */
 @Composable
@@ -51,19 +51,6 @@ fun ManageProfessionalAccessScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Text(stringResource(R.string.manage_professional_access_subtitle), style = MaterialTheme.typography.bodyMedium)
-
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilterChip(
-                    selected = state.selectedRole == LinkRole.DOCTOR,
-                    onClick = { vm.onRoleSelected(LinkRole.DOCTOR) },
-                    label = { Text(stringResource(R.string.link_role_doctor)) }
-                )
-                FilterChip(
-                    selected = state.selectedRole == LinkRole.PHARMACIST,
-                    onClick = { vm.onRoleSelected(LinkRole.PHARMACIST) },
-                    label = { Text(stringResource(R.string.link_role_pharmacist)) }
-                )
-            }
 
             Button(
                 onClick = vm::onGenerateInvite,
@@ -102,7 +89,8 @@ fun ManageProfessionalAccessScreen(
                         LinkRow(
                             link,
                             grantedName = link.granteeUserId?.let { state.grantedNames[it] },
-                            unverified = true,
+                            isVerified = link.granteeUserId?.let { it in state.verifiedGrantees } ?: false,
+                            clinicianType = link.granteeUserId?.let { state.verifiedTypes[it] },
                             onShare = { shareInviteCode(context, it) },
                             onRevoke = vm::onRevoke
                         )

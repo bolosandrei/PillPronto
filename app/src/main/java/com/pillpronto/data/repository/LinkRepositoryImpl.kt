@@ -6,6 +6,7 @@ import com.pillpronto.data.remote.dto.LinkInviteInsertDto
 import com.pillpronto.data.remote.dto.PatientProfileSummaryDto
 import com.pillpronto.data.remote.dto.ProfileDto
 import com.pillpronto.domain.model.CaregiverSummary
+import com.pillpronto.domain.model.ClinicianType
 import com.pillpronto.domain.model.LinkRole
 import com.pillpronto.domain.model.LinkStatus
 import com.pillpronto.domain.model.PatientLink
@@ -86,7 +87,18 @@ class LinkRepositoryImpl @Inject constructor(
         return supabase.from(PROFILES_TABLE)
             .select { filter { isIn("id", granteeIds) } }
             .decodeList<ProfileDto>()
-            .map { CaregiverSummary(userId = it.id, displayName = it.displayName) }
+            .map {
+                CaregiverSummary(
+                    userId = it.id,
+                    displayName = it.displayName,
+                    isVerifiedClinician = it.isVerifiedClinician,
+                    clinicianVerificationType = when (it.clinicianVerificationType) {
+                        "doctor" -> ClinicianType.DOCTOR
+                        "pharmacist" -> ClinicianType.PHARMACIST
+                        else -> null
+                    }
+                )
+            }
     }
 
     private fun generateInviteCode(): String =
@@ -107,6 +119,7 @@ class LinkRepositoryImpl @Inject constructor(
         LinkRole.CAREGIVER_DELEGATE -> "caregiver_delegate"
         LinkRole.DOCTOR -> "doctor"
         LinkRole.PHARMACIST -> "pharmacist"
+        LinkRole.PROFESSIONAL -> "professional"
     }
 
     private fun String.toLinkRole(): LinkRole = when (this) {
@@ -114,6 +127,7 @@ class LinkRepositoryImpl @Inject constructor(
         "caregiver_delegate" -> LinkRole.CAREGIVER_DELEGATE
         "doctor" -> LinkRole.DOCTOR
         "pharmacist" -> LinkRole.PHARMACIST
+        "professional" -> LinkRole.PROFESSIONAL
         else -> LinkRole.CAREGIVER_VIEWER
     }
 

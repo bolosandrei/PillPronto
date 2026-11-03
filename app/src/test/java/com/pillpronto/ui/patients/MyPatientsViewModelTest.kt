@@ -18,7 +18,6 @@ import com.pillpronto.util.FakeLinkedPatientDataRepository
 import com.pillpronto.util.MainDispatcherRule
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import java.time.LocalDateTime
@@ -71,20 +70,32 @@ class MyPatientsViewModelTest {
 
         assertEquals("ABC123", linkRepository.lastClaimedCode)
         assertEquals("", vm.state.value.codeInput)
-        assertEquals(false, vm.state.value.claimError)
+        assertEquals(null, vm.state.value.claimError)
     }
 
     @Test
-    fun `revendicarea unui cod invalid seteaza claimError`() = runTest {
-        linkRepository.claimInviteResult = Result.failure(RuntimeException("cod invalid"))
+    fun `revendicarea unui cod invalid seteaza claimError INVALID_OR_USED`() = runTest {
+        linkRepository.claimInviteResult = Result.failure(RuntimeException("invite code invalid or already used"))
         val vm = createViewModel()
         authRepository.emit(AuthSessionState.Authenticated("user-1"))
         vm.onCodeChange("BAD")
 
         vm.onClaim()
 
-        assertTrue(vm.state.value.claimError)
+        assertEquals(ClaimInviteError.INVALID_OR_USED, vm.state.value.claimError)
         assertEquals("BAD", vm.state.value.codeInput) // pastrat, userul poate corecta
+    }
+
+    @Test
+    fun `revendicarea fara verificare profesionala seteaza claimError VERIFICATION_REQUIRED`() = runTest {
+        linkRepository.claimInviteResult = Result.failure(RuntimeException("professional account verification required for this invite"))
+        val vm = createViewModel()
+        authRepository.emit(AuthSessionState.Authenticated("user-1"))
+        vm.onCodeChange("DOC123")
+
+        vm.onClaim()
+
+        assertEquals(ClaimInviteError.VERIFICATION_REQUIRED, vm.state.value.claimError)
     }
 
     @Test

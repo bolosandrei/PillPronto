@@ -69,8 +69,8 @@ fun MyPatientsScreen(
                 },
                 modifier = Modifier.fillMaxWidth()
             )
-            if (state.claimError) {
-                Text(stringResource(R.string.my_patients_claim_error), color = MaterialTheme.colorScheme.error)
+            state.claimError?.let {
+                Text(myPatientsClaimErrorMessage(it), color = MaterialTheme.colorScheme.error)
             }
             Button(
                 onClick = vm::onClaim,
@@ -121,6 +121,12 @@ private fun PatientRow(patient: PatientListItem, onClick: () -> Unit) {
 @Composable
 private fun adherenceSummary(stats: AdherenceStats): String =
     stringResource(R.string.my_patients_adherence_summary, (stats.pdc * 100).toInt())
+
+@Composable
+private fun myPatientsClaimErrorMessage(error: ClaimInviteError): String = when (error) {
+    ClaimInviteError.INVALID_OR_USED -> stringResource(R.string.my_patients_claim_error)
+    ClaimInviteError.VERIFICATION_REQUIRED -> stringResource(R.string.my_patients_claim_error_verification_required)
+}
 
 /** Scaner QR gata facut de Google Play Services — UI de camera + permisiune, gestionate integral
  * de modul, fara sa fie nevoie de CAMERA in manifest sau de CameraX (acela ramane pt. Faza 2,

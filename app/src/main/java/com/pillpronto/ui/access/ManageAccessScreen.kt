@@ -87,7 +87,7 @@ fun ManageAccessScreen(
                         LinkRow(
                             link,
                             grantedName = link.granteeUserId?.let { state.caregiverNames[it] },
-                            unverified = false,
+                            isVerified = null,
                             onShare = { shareInviteCode(context, it) },
                             onRevoke = vm::onRevoke
                         )

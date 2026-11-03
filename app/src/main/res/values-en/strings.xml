@@ -135,14 +135,33 @@
     <string name="account_migration_prompt_body_existing_account">This account already has its own saved treatments. We also found treatments added without an account on this phone — you can add them to the account\'s existing ones (nothing gets deleted, neither the account\'s nor the local ones), or continue signed in with only the account\'s existing data — the local ones stay unassociated, accessible only while signed out.</string>
     <string name="account_migration_prompt_keep">Add them to this account</string>
     <string name="account_migration_prompt_start_fresh">Continue without them (with the account\'s data)</string>
-    <!-- Phase 1.5h: optional clinician-type self-declaration, independent of any "role" -->
-    <string name="account_declare_clinician_title">Are you a healthcare professional?</string>
     <string name="account_declare_doctor_button">Doctor</string>
     <string name="account_declare_pharmacist_button">Pharmacist</string>
-    <string name="account_undeclare_button">None</string>
-    <!-- Labels for the link-type selector (ManageProfessionalAccessScreen) -->
-    <string name="link_role_doctor">Doctor</string>
-    <string name="link_role_pharmacist">Pharmacist</string>
+    <!-- Professional verification via request + manual approval (replaces self-declaration) -->
+    <string name="clinician_verification_title">Professional verification</string>
+    <string name="clinician_verification_form_title">Are you a healthcare professional? Submit a verification request</string>
+    <string name="clinician_verification_cuim_label">CUIM code</string>
+    <string name="clinician_verification_full_name_label">Full name</string>
+    <string name="clinician_verification_submit_button">Submit request</string>
+    <string name="clinician_verification_pending_title">Verification request submitted</string>
+    <string name="clinician_verification_pending_hint">Awaiting manual approval — you\'ll see the updated status here.</string>
+    <string name="clinician_verification_verified_title">Verified account as</string>
+    <string name="clinician_verification_resubmit_button">Submit a new request</string>
+    <string name="clinician_verification_rejected_title">Request rejected</string>
+    <string name="clinician_verification_rejected_hint">Your verification request was rejected — you can submit a new one with corrected details.</string>
+    <!-- Settings row subtitle (at-a-glance status, without entering the screen) -->
+    <string name="settings_clinician_verification_status_none">No request submitted</string>
+    <string name="settings_clinician_verification_status_pending">Request pending</string>
+    <string name="settings_clinician_verification_status_verified">Verified as %1$s</string>
+    <string name="settings_clinician_verification_status_rejected">Request rejected</string>
+    <!-- Manually-designated clinician-verification reviewers -->
+    <string name="review_verifications_title">Review verification requests</string>
+    <string name="review_verifications_empty">No pending requests.</string>
+    <string name="review_verifications_unknown_name">Unknown user</string>
+    <string name="review_verifications_cuim_line">CUIM: %1$s</string>
+    <string name="review_verifications_full_name_line">Full name: %1$s</string>
+    <string name="review_verifications_approve_button">Approve</string>
+    <string name="review_verifications_reject_button">Reject</string>
     <string name="account_error_empty_email">Enter your email address</string>
     <string name="account_error_invalid_email">This email address isn\'t valid</string>
     <string name="account_error_password_too_short">Password must be at least 6 characters</string>
@@ -154,7 +173,6 @@
     <string name="account_manage_access_button">Manage Caregiver access</string>
     <string name="account_manage_professional_access_button">Manage Doctor/Pharmacist access</string>
     <string name="account_my_patients_button">My patients</string>
-    <string name="account_unverified_badge">Unverified account — self-declared details</string>
     <string name="account_associate_gtin_button">Associate codes (GTIN)</string>
     <string name="account_vision_scan_button">Visual scan (experimental)</string>
     <string name="account_enroll_medication_button">Enroll medication (experimental)</string>
@@ -233,11 +251,14 @@
     <string name="manage_access_qr_description">Invitation QR code — scan it with the Caregiver\'s phone</string>
     <string name="manage_access_status_revoked">Access revoked</string>
     <string name="manage_access_code_label">Code: %1$s</string>
+    <string name="manage_access_copy_code_button">Copy code</string>
     <string name="manage_access_share_button">Share</string>
     <string name="manage_access_share_text">PillPronto access code: %1$s\nEnter it in the app, under “My patients”, to see my treatments and adherence — or scan the QR code below.</string>
     <string name="manage_access_revoke_button">Revoke</string>
     <string name="manage_access_cancel_button">Cancel</string>
     <string name="manage_access_unverified_suffix">(unverified)</string>
+    <string name="manage_access_verified_suffix">(verified)</string>
+    <string name="manage_access_verified_suffix_typed">(verified as %1$s)</string>
 
     <!-- Phase 1.5e: Patient — manage Doctor/Pharmacist access (same structure as above, just
          filtered by role; the manage_access_* strings above are reused) -->
@@ -250,6 +271,7 @@
     <string name="my_patients_scan_button">Scan QR code</string>
     <string name="my_patients_claim_button">Add patient</string>
     <string name="my_patients_claim_error">Invalid or already used code.</string>
+    <string name="my_patients_claim_error_verification_required">This code requires a verified professional account (Doctor/Pharmacist) of the matching type — submit a verification request from Settings.</string>
     <string name="my_patients_empty">You don\'t have any linked patients yet. Enter a code received from a patient.</string>
     <string name="my_patients_adherence_summary">PDC %1$d%%</string>
 
