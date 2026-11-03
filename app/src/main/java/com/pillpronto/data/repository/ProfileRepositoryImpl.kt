@@ -1,15 +1,20 @@
 package com.pillpronto.data.repository
 
+import com.pillpronto.data.remote.dto.ClinicianVerificationReviewParams
 import com.pillpronto.data.remote.dto.PatientProfileIdOnlyDto
 import com.pillpronto.data.remote.dto.PatientProfileInsertDto
+import com.pillpronto.data.remote.dto.PendingClinicianVerificationDto
 import com.pillpronto.data.remote.dto.ProfileDto
 import com.pillpronto.domain.model.ClinicianType
+import com.pillpronto.domain.model.PendingClinicianVerification
 import com.pillpronto.domain.model.Profile
 import com.pillpronto.domain.repository.PatientProfileIdProvider
 import com.pillpronto.domain.repository.ProfileRepository
 import dagger.Lazy
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.from
+import io.github.jan.supabase.postgrest.postgrest
+import io.github.jan.supabase.postgrest.rpc
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import javax.inject.Inject
@@ -29,8 +34,13 @@ class ProfileRepositoryImpl @Inject constructor(
         return Profile(
             userId = dto.id,
             displayName = dto.displayName,
-            declaredClinicianType = dto.clinicianType.toClinicianType(),
-            isTrustedContributor = dto.isTrustedContributor
+            isTrustedContributor = dto.isTrustedContributor,
+            clinicianVerificationCuim = dto.clinicianVerificationCuim,
+            clinicianVerificationFullName = dto.clinicianVerificationFullName,
+            clinicianVerificationType = dto.clinicianVerificationType.toClinicianType(),
+            isVerifiedClinician = dto.isVerifiedClinician,
+            clinicianVerificationRejected = dto.clinicianVerificationRejected,
+            isVerificationReviewer = dto.isVerificationReviewer
         )
     }
 
@@ -45,12 +55,49 @@ class ProfileRepositoryImpl @Inject constructor(
         ensurePatientProfileLinked(userId, patientProfileIdProvider.get().currentProfileId(), displayName)
     }
 
-    override suspend fun setDeclaredClinicianType(userId: String, type: ClinicianType?) {
+    override suspend fun submitClinicianVerificationRequest(
+        userId: String,
+        cuim: String,
+        fullName: String,
+        type: ClinicianType
+    ) {
+        // is_verified_clinician = false + clinician_verification_rejected = false FORTATE la
+        // fiecare (re)submisie — vezi doc-ul interfetei. Protejat si server-side (trigger din
+        // 0017/0020: doar current_user='postgres' sau o functie SECURITY DEFINER proprie poate
+        // flip-ui is_verified_clinician pe true), dar scrierea explicita aici e apararea de prim
+        // nivel, nu doar cea din DB.
         supabase.from(PROFILES_TABLE).update(
-            ClinicianTypeUpdateDto(clinicianType = type?.toDbValue())
+            ClinicianVerificationRequestUpdateDto(
+                cuim = cuim,
+                fullName = fullName,
+                type = type.toDbValue(),
+                isVerified = false,
+                isRejected = false
+            )
         ) {
             filter { eq("id", userId) }
         }
+    }
+
+    override suspend fun listPendingClinicianVerifications(): List<PendingClinicianVerification> =
+        supabase.postgrest.rpc("list_pending_clinician_verifications")
+            .decodeList<PendingClinicianVerificationDto>()
+            .map {
+                PendingClinicianVerification(
+                    userId = it.userId,
+                    displayName = it.displayName,
+                    cuim = it.cuim,
+                    fullName = it.fullName,
+                    type = it.verificationType.toClinicianType() ?: ClinicianType.DOCTOR
+                )
+            }
+
+    override suspend fun approveClinicianVerification(userId: String) {
+        supabase.postgrest.rpc("approve_clinician_verification", ClinicianVerificationReviewParams(userId))
+    }
+
+    override suspend fun rejectClinicianVerification(userId: String) {
+        supabase.postgrest.rpc("reject_clinician_verification", ClinicianVerificationReviewParams(userId))
     }
 
     override suspend fun ensurePatientProfileLinked(userId: String, patientProfileId: String, displayName: String) {
@@ -85,8 +132,12 @@ class ProfileRepositoryImpl @Inject constructor(
     )
 
     @Serializable
-    private data class ClinicianTypeUpdateDto(
-        @SerialName("clinician_type") val clinicianType: String?
+    private data class ClinicianVerificationRequestUpdateDto(
+        @SerialName("clinician_verification_cuim") val cuim: String,
+        @SerialName("clinician_verification_full_name") val fullName: String,
+        @SerialName("clinician_verification_type") val type: String,
+        @SerialName("is_verified_clinician") val isVerified: Boolean,
+        @SerialName("clinician_verification_rejected") val isRejected: Boolean
     )
 
     private companion object {

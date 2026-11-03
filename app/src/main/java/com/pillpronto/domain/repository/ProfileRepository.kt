@@ -1,6 +1,7 @@
 package com.pillpronto.domain.repository
 
 import com.pillpronto.domain.model.ClinicianType
+import com.pillpronto.domain.model.PendingClinicianVerification
 import com.pillpronto.domain.model.Profile
 
 interface ProfileRepository {
@@ -14,9 +15,28 @@ interface ProfileRepository {
      */
     suspend fun saveDisplayName(userId: String, displayName: String)
 
-    /** Seteaza sau anuleaza (null) auto-declararea de tip clinician — independenta de orice alt
-     * camp, disponibila oricand din Cont, nu doar la primul setup. */
-    suspend fun setDeclaredClinicianType(userId: String, type: ClinicianType?)
+    /**
+     * Trimite/retrimite o cerere de verificare profesionala (CUIM + nume + tip) — aprobarea
+     * (`is_verified_clinician = true`) se face STRICT manual, direct in Supabase, niciodata din
+     * app. Forteaza intotdeauna `is_verified_clinician = false` pe scriere, inclusiv la o
+     * resubmisie — altfel userul ar putea schimba tipul cerut dupa o aprobare anterioara si ar
+     * ramane "verificat" pt. tipul nou, neaprobat.
+     */
+    suspend fun submitClinicianVerificationRequest(userId: String, cuim: String, fullName: String, type: ClinicianType)
+
+    /** Cererile in asteptare, vizibile DOAR unui reviewer desemnat manual
+     * (`Profile.isVerificationReviewer`) — vezi `list_pending_clinician_verifications`,
+     * supabase/migrations/0020_*.sql. Arunca daca apelantul nu e reviewer. */
+    suspend fun listPendingClinicianVerifications(): List<PendingClinicianVerification>
+
+    /** Aproba cererea userului — DOAR un reviewer desemnat manual poate apela cu succes
+     * (verificat server-side). */
+    suspend fun approveClinicianVerification(userId: String)
+
+    /** Respinge cererea userului (distinct de "in asteptare" — vezi
+     * `Profile.clinicianVerificationRejected`). DOAR un reviewer desemnat manual poate apela cu
+     * succes. */
+    suspend fun rejectClinicianVerification(userId: String)
 
     /**
      * Creeaza randul `patient_profiles` pt. (patientProfileId, userId) DOAR daca nu exista deja un

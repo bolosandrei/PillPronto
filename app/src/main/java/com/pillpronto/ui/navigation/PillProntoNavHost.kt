@@ -37,6 +37,8 @@ import com.pillpronto.ui.patients.MyPatientsScreen
 import com.pillpronto.ui.patients.PatientDetailScreen
 import com.pillpronto.ui.settings.SettingsScreen
 import com.pillpronto.ui.today.TodayScreen
+import com.pillpronto.ui.verification.ClinicianVerificationScreen
+import com.pillpronto.ui.verification.ReviewVerificationRequestsScreen
 import com.pillpronto.ui.treatments.AddTreatmentScreen
 import com.pillpronto.ui.treatments.TreatmentDetailScreen
 import com.pillpronto.ui.treatments.TreatmentsScreen
@@ -144,11 +146,19 @@ fun PillProntoNavHost(
                     onManageProfessionalAccess = { navController.navigate(Route.ManageProfessionalAccess.path) },
                     onMyPatients = { navController.navigate(Route.MyPatients.create()) },
                     onAuditLog = { navController.navigate(Route.AuditLog.path) },
+                    onClinicianVerification = { navController.navigate(Route.ClinicianVerification.path) },
+                    onReviewVerificationRequests = { navController.navigate(Route.ReviewVerificationRequests.path) },
                     onAssociateGtin = { navController.navigate(Route.AssociateGtin.path) },
                     onVisionScan = { navController.navigate(Route.VisionScan.path) },
                     onEnrollMedication = { navController.navigate(Route.EnrollMedication.path) },
                     onRecognizeMedication = { navController.navigate(Route.RecognizeMedication.path) }
                 )
+            }
+            composable(Route.ClinicianVerification.path) {
+                ClinicianVerificationScreen(padding, onBack = { navController.popBackStack() })
+            }
+            composable(Route.ReviewVerificationRequests.path) {
+                ReviewVerificationRequestsScreen(padding, onBack = { navController.popBackStack() })
             }
             composable(Route.ManageAccess.path) {
                 ManageAccessScreen(padding, onBack = { navController.popBackStack() })

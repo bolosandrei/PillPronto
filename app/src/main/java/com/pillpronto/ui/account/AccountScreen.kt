@@ -21,9 +21,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -46,8 +43,6 @@ import com.pillpronto.BuildConfig
 import com.pillpronto.R
 import com.pillpronto.core.ui.components.SettingsSectionCard
 import com.pillpronto.domain.model.AuthSessionState
-import com.pillpronto.domain.model.ClinicianType
-import com.pillpronto.domain.model.Profile
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -111,11 +106,7 @@ fun AccountScreen(
                     // reintra pe tab-ul "Cont", desi datele vechi erau oricum corecte in >99% din
                     // cazuri. Spinner-ul ramane doar pentru primul fetch real.
                     when {
-                        state.profile != null -> LoggedInView(
-                            profile = state.profile!!,
-                            onSignOut = vm::onSignOut,
-                            onDeclareClinicianType = vm::onDeclareClinicianType
-                        )
+                        state.profile != null -> LoggedInView(state = state, vm = vm)
                         // Faza 1.5h — niciun profil salvat inca (cont nou): formular inline de nume,
                         // in loc de navigare catre un ecran separat de Onboarding (eliminat) — vezi
                         // CLAUDE.md sectiunea 7 pt. clasa de bug "cursa onboarding->bounce-back" pe
@@ -256,11 +247,8 @@ private fun DisplayNameForm(state: AccountUiState, vm: AccountViewModel) {
 }
 
 @Composable
-private fun LoggedInView(
-    profile: Profile,
-    onSignOut: () -> Unit,
-    onDeclareClinicianType: (ClinicianType?) -> Unit
-) {
+private fun LoggedInView(state: AccountUiState, vm: AccountViewModel) {
+    val profile = state.profile!!
     // Gruparea vizuala (Card cu titlu) inlocuieste lista plata de butoane de inainte de refactor —
     // "Gestioneaza acces"/"Acces profesional"/"Pacientii mei"/"Audit log" s-au mutat in
     // SettingsScreen (vezi AccountScreen), ramane doar identitatea contului.
@@ -270,45 +258,8 @@ private fun LoggedInView(
             style = MaterialTheme.typography.headlineSmall
         )
 
-        ClinicianDeclarationSection(profile.declaredClinicianType, onDeclareClinicianType)
-
-        OutlinedButton(onClick = onSignOut, modifier = Modifier.fillMaxWidth()) {
+        OutlinedButton(onClick = vm::onSignOut, modifier = Modifier.fillMaxWidth()) {
             Text(stringResource(R.string.account_sign_out))
-        }
-    }
-}
-
-/** Auto-declarare optionala, independenta de tot restul (Faza 1.5h) — folosita STRICT ca poarta
- * pt. revendicarea unei invitatii de tip doctor/pharmacist (`claim_link`). Fara validare CUIM. */
-@Composable
-private fun ClinicianDeclarationSection(
-    declared: ClinicianType?,
-    onDeclare: (ClinicianType?) -> Unit
-) {
-    Column(Modifier.fillMaxWidth()) {
-        Text(stringResource(R.string.account_declare_clinician_title), style = MaterialTheme.typography.labelLarge)
-        val options = listOf(
-            null to R.string.account_undeclare_button,
-            ClinicianType.DOCTOR to R.string.account_declare_doctor_button,
-            ClinicianType.PHARMACIST to R.string.account_declare_pharmacist_button
-        )
-        SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-            options.forEachIndexed { index, (type, labelRes) ->
-                SegmentedButton(
-                    selected = declared == type,
-                    onClick = { onDeclare(type) },
-                    shape = SegmentedButtonDefaults.itemShape(index = index, count = options.size)
-                ) {
-                    Text(stringResource(labelRes))
-                }
-            }
-        }
-        if (declared != null) {
-            Text(
-                stringResource(R.string.account_unverified_badge),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.error
-            )
         }
     }
 }

@@ -8,6 +8,8 @@ sealed class Route(val path: String) {
     data object Adherence : Route("adherence")
     data object Account : Route("account")
     data object Settings : Route("settings")
+    data object ClinicianVerification : Route("clinician_verification")
+    data object ReviewVerificationRequests : Route("review_verification_requests")
     data object ManageAccess : Route("manage_access")
     data object AuditLog : Route("audit_log")
     data object AssociateGtin : Route("associate_gtin")

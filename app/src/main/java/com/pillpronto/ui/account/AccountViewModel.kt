@@ -4,7 +4,6 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.pillpronto.domain.model.AuthSessionState
-import com.pillpronto.domain.model.ClinicianType
 import com.pillpronto.domain.model.Profile
 import com.pillpronto.domain.repository.LocalDataMigrationPrompt
 import com.pillpronto.domain.usecase.GetProfileUseCase
@@ -12,7 +11,6 @@ import com.pillpronto.domain.usecase.ObserveAuthSessionUseCase
 import com.pillpronto.domain.usecase.ObserveLocalDataMigrationPromptUseCase
 import com.pillpronto.domain.usecase.ResolveLocalDataMigrationChoiceUseCase
 import com.pillpronto.domain.usecase.SaveDisplayNameUseCase
-import com.pillpronto.domain.usecase.SetDeclaredClinicianTypeUseCase
 import com.pillpronto.domain.usecase.SignInUseCase
 import com.pillpronto.domain.usecase.SignInWithGoogleUseCase
 import com.pillpronto.domain.usecase.SignOutUseCase
@@ -63,7 +61,6 @@ class AccountViewModel @Inject constructor(
     private val signOut: SignOutUseCase,
     private val getProfile: GetProfileUseCase,
     private val saveDisplayName: SaveDisplayNameUseCase,
-    private val setDeclaredClinicianType: SetDeclaredClinicianTypeUseCase,
     private val observeMigrationPrompt: ObserveLocalDataMigrationPromptUseCase,
     private val resolveMigrationChoice: ResolveLocalDataMigrationChoiceUseCase
 ) : ViewModel() {
@@ -220,16 +217,6 @@ class AccountViewModel @Inject constructor(
             runCatching { saveDisplayName(session.userId, name) }
                 .onFailure { Log.e(TAG, "Nu am putut salva numele", it) }
             _state.update { it.copy(isSavingDisplayName = false) }
-            refreshProfile(session.userId)
-        }
-    }
-
-    fun onDeclareClinicianType(type: ClinicianType?) {
-        val session = _state.value.sessionState
-        if (session !is AuthSessionState.Authenticated) return
-        viewModelScope.launch {
-            runCatching { setDeclaredClinicianType(session.userId, type) }
-                .onFailure { Log.e(TAG, "Nu am putut actualiza tipul de clinician declarat", it) }
             refreshProfile(session.userId)
         }
     }

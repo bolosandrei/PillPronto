@@ -26,10 +26,12 @@ data class PatientListItem(
     val stats: AdherenceStats
 )
 
+enum class ClaimInviteError { INVALID_OR_USED, VERIFICATION_REQUIRED }
+
 data class MyPatientsUiState(
     val codeInput: String = "",
     val isClaiming: Boolean = false,
-    val claimError: Boolean = false,
+    val claimError: ClaimInviteError? = null,
     val patients: List<PatientListItem> = emptyList(),
     val isLoadingPatients: Boolean = true
 )
@@ -91,20 +93,26 @@ class MyPatientsViewModel @Inject constructor(
         }
     }
 
-    fun onCodeChange(value: String) = _state.update { it.copy(codeInput = value, claimError = false) }
+    fun onCodeChange(value: String) = _state.update { it.copy(codeInput = value, claimError = null) }
 
     fun onClaim() {
         val code = _state.value.codeInput.trim()
         if (code.isBlank()) return
         viewModelScope.launch {
-            _state.update { it.copy(isClaiming = true, claimError = false) }
+            _state.update { it.copy(isClaiming = true, claimError = null) }
             val result = claimInvite(code)
             result.onFailure { Log.e(TAG, "Revendicare cod esuata", it) }
             if (result.isSuccess) {
                 _state.update { it.copy(isClaiming = false, codeInput = "") }
                 refresh()
             } else {
-                _state.update { it.copy(isClaiming = false, claimError = true) }
+                // claim_link (0018) arunca un mesaj distinct cand poarta e verificarea profesionala
+                // (nu codul invalid/folosit) — vezi substring-check identic cu AccountViewModel.submit()
+                // pt. rate_limit, aceeasi conventie a proiectului.
+                val isVerificationRequired = result.exceptionOrNull()?.message
+                    ?.contains("verification required", ignoreCase = true) == true
+                val error = if (isVerificationRequired) ClaimInviteError.VERIFICATION_REQUIRED else ClaimInviteError.INVALID_OR_USED
+                _state.update { it.copy(isClaiming = false, claimError = error) }
             }
         }
     }

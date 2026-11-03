@@ -3,6 +3,7 @@ package com.pillpronto.ui.access
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.pillpronto.domain.model.ClinicianType
 import com.pillpronto.domain.model.LinkRole
 import com.pillpronto.domain.model.PatientLink
 import com.pillpronto.domain.usecase.CreateInviteUseCase
@@ -18,22 +19,31 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 data class ManageProfessionalAccessUiState(
-    val selectedRole: LinkRole = LinkRole.DOCTOR,
     val links: List<PatientLink> = emptyList(),
     // granteeUserId -> nume afisat, doar pt. legaturile ACCEPTED (vezi GetMyCaregiversUseCase).
     val grantedNames: Map<String, String> = emptyMap(),
+    // granteeUserId ale celor cu is_verified_clinician == true — vezi 0017, poarta REALA de acces
+    // (claim_link), nu doar un badge cosmetic.
+    val verifiedGrantees: Set<String> = emptySet(),
+    // granteeUserId -> tipul verificat (Medic/Farmacist) — invitatia e generica (0019), tipul
+    // rezultat se afla DOAR din verificarea proprie a profesionistului, nu mai e pre-ales de
+    // Pacient la generare.
+    val verifiedTypes: Map<String, ClinicianType> = emptyMap(),
     val isLoading: Boolean = true,
     val isGenerating: Boolean = false,
     val error: ManageAccessError? = null
 )
 
-/** Pacient — gestionarea accesului Medic/Farmacist (`links.role in {doctor, pharmacist}`), Faza
- * 1.5e. Ecran separat de `ManageAccessScreen` (Aparținători, decizie explicită a utilizatorului),
- * dar aceeași logică de fond — reutilizează `GetMyOutgoingLinksUseCase`/`GetMyCaregiversUseCase`/
- * `RevokeLinkUseCase` neschimbate, doar filtrate pe alt set de roluri, plus un selector de rol la
- * generare (`createInvite` primește acum rolul ales, nu mai e hardcodat CAREGIVER_VIEWER). Toate
- * legăturile afișate aici sunt neverificate (fără validare reală CUIM — vezi
- * docs/user-management-plan.md secțiunea 9). */
+/** Pacient — gestionarea accesului Medic/Farmacist, Faza 1.5e. Ecran separat de
+ * `ManageAccessScreen` (Aparținători, decizie explicită a utilizatorului), dar aceeași logică de
+ * fond — reutilizează `GetMyOutgoingLinksUseCase`/`GetMyCaregiversUseCase`/`RevokeLinkUseCase`
+ * neschimbate, doar filtrate pe alt set de roluri. Invitația generată e genericĂ
+ * (`LinkRole.PROFESSIONAL`, vezi 0019) — Pacientul NU mai pre-alege Medic/Farmacist, orice cont
+ * verificat (indiferent de tip) poate revendica; tipul rezultat (`verifiedTypes`) se citește din
+ * verificarea proprie a profesionistului. Legăturile vechi, deja ACCEPTED cu rol `doctor`/
+ * `pharmacist` pre-0019, rămân vizibile (filtru include toate 3 valorile). Statusul de
+ * verificare per profesionist (`verifiedGrantees`) reflectă starea reală `is_verified_clinician`
+ * (cerere + aprobare manuală, vezi 0017/0018) — nu mai e o etichetă "neverificat" blanket. */
 @HiltViewModel
 class ManageProfessionalAccessViewModel @Inject constructor(
     private val getLocalPatientProfileId: GetLocalPatientProfileIdUseCase,
@@ -48,8 +58,6 @@ class ManageProfessionalAccessViewModel @Inject constructor(
 
     init { refresh() }
 
-    fun onRoleSelected(role: LinkRole) = _state.update { it.copy(selectedRole = role) }
-
     fun refresh() {
         viewModelScope.launch {
             _state.update { it.copy(isLoading = true) }
@@ -57,14 +65,24 @@ class ManageProfessionalAccessViewModel @Inject constructor(
             val links = runCatching { getMyOutgoingLinks(patientProfileId) }
                 .onFailure { Log.e(TAG, "Nu am putut incarca legaturile", it) }
                 .getOrDefault(emptyList())
-                .filter { it.role == LinkRole.DOCTOR || it.role == LinkRole.PHARMACIST }
+                .filter { it.role == LinkRole.PROFESSIONAL || it.role == LinkRole.DOCTOR || it.role == LinkRole.PHARMACIST }
             val granteeIds = links.mapNotNull { it.granteeUserId }.toSet()
-            val grantedNames = runCatching { getMyCaregivers(patientProfileId) }
+            val caregivers = runCatching { getMyCaregivers(patientProfileId) }
                 .onFailure { Log.e(TAG, "Nu am putut incarca numele profesionistilor", it) }
                 .getOrDefault(emptyList())
-                .filter { it.displayName != null && it.userId in granteeIds }
-                .associate { it.userId to it.displayName!! }
-            _state.update { it.copy(links = links, grantedNames = grantedNames, isLoading = false) }
+                .filter { it.userId in granteeIds }
+            val grantedNames = caregivers.filter { it.displayName != null }.associate { it.userId to it.displayName!! }
+            val verifiedGrantees = caregivers.filter { it.isVerifiedClinician }.map { it.userId }.toSet()
+            val verifiedTypes = caregivers.mapNotNull { c -> c.clinicianVerificationType?.let { c.userId to it } }.toMap()
+            _state.update {
+                it.copy(
+                    links = links,
+                    grantedNames = grantedNames,
+                    verifiedGrantees = verifiedGrantees,
+                    verifiedTypes = verifiedTypes,
+                    isLoading = false
+                )
+            }
         }
     }
 
@@ -72,7 +90,7 @@ class ManageProfessionalAccessViewModel @Inject constructor(
         viewModelScope.launch {
             _state.update { it.copy(isGenerating = true, error = null) }
             try {
-                createInvite(getLocalPatientProfileId(), _state.value.selectedRole)
+                createInvite(getLocalPatientProfileId(), LinkRole.PROFESSIONAL)
                 _state.update { it.copy(isGenerating = false) }
                 refresh()
             } catch (e: Exception) {

@@ -1,7 +1,6 @@
 package com.pillpronto.ui.account
 
 import com.pillpronto.domain.model.AuthSessionState
-import com.pillpronto.domain.model.ClinicianType
 import com.pillpronto.domain.model.Profile
 import com.pillpronto.domain.repository.LocalDataMigrationPrompt
 import com.pillpronto.domain.usecase.GetProfileUseCase
@@ -9,7 +8,6 @@ import com.pillpronto.domain.usecase.ObserveAuthSessionUseCase
 import com.pillpronto.domain.usecase.ObserveLocalDataMigrationPromptUseCase
 import com.pillpronto.domain.usecase.ResolveLocalDataMigrationChoiceUseCase
 import com.pillpronto.domain.usecase.SaveDisplayNameUseCase
-import com.pillpronto.domain.usecase.SetDeclaredClinicianTypeUseCase
 import com.pillpronto.domain.usecase.SignInUseCase
 import com.pillpronto.domain.usecase.SignInWithGoogleUseCase
 import com.pillpronto.domain.usecase.SignOutUseCase
@@ -41,7 +39,6 @@ class AccountViewModelTest {
         SignOutUseCase(authRepository),
         GetProfileUseCase(profileRepository),
         SaveDisplayNameUseCase(profileRepository),
-        SetDeclaredClinicianTypeUseCase(profileRepository),
         ObserveLocalDataMigrationPromptUseCase(migrationCoordinator),
         ResolveLocalDataMigrationChoiceUseCase(migrationCoordinator)
     )
@@ -189,18 +186,6 @@ class AccountViewModelTest {
 
         assertEquals("u1" to "Ionel", profileRepository.lastSaveDisplayNameCall)
         assertEquals("Ionel", vm.state.value.profile?.displayName)
-    }
-
-    @Test
-    fun `onDeclareClinicianType seteaza tipul declarat si reface profilul`() = runTest {
-        profileRepository.profiles["u1"] = Profile("u1", "Ana")
-        val vm = createViewModel()
-        authRepository.emit(AuthSessionState.Authenticated("u1"))
-
-        vm.onDeclareClinicianType(ClinicianType.DOCTOR)
-
-        assertEquals("u1" to ClinicianType.DOCTOR, profileRepository.lastDeclaredClinicianTypeCall)
-        assertEquals(ClinicianType.DOCTOR, vm.state.value.profile?.declaredClinicianType)
     }
 
     @Test

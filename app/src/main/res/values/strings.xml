@@ -134,14 +134,33 @@
     <string name="account_migration_prompt_body_existing_account">Acest cont are deja propriile tratamente salvate. Pe acest telefon mai există și tratamente adăugate fără cont — le poți adăuga la cele existente ale contului (nimic nu se șterge, nici ale contului, nici cele locale), sau continui autentificat doar cu datele deja existente ale contului — cele locale rămân neasociate, accesibile doar atunci când nu ești autentificat.</string>
     <string name="account_migration_prompt_keep">Adaugă-le la acest cont</string>
     <string name="account_migration_prompt_start_fresh">Continuă fără ele (cu datele contului)</string>
-    <!-- Faza 1.5h: auto-declarare optionala de tip clinician, independenta de orice "rol" -->
-    <string name="account_declare_clinician_title">Ești profesionist medical?</string>
     <string name="account_declare_doctor_button">Medic</string>
     <string name="account_declare_pharmacist_button">Farmacist</string>
-    <string name="account_undeclare_button">Niciunul</string>
-    <!-- Etichete pt. selectorul de tip legatura profesionala (ManageProfessionalAccessScreen) -->
-    <string name="link_role_doctor">Medic</string>
-    <string name="link_role_pharmacist">Farmacist</string>
+    <!-- Verificare profesionala prin cerere + aprobare manuala (inlocuieste auto-declararea) -->
+    <string name="clinician_verification_title">Verificare profesională</string>
+    <string name="clinician_verification_form_title">Ești profesionist medical? Trimite o cerere de verificare</string>
+    <string name="clinician_verification_cuim_label">Cod CUIM</string>
+    <string name="clinician_verification_full_name_label">Nume complet</string>
+    <string name="clinician_verification_submit_button">Trimite cererea</string>
+    <string name="clinician_verification_pending_title">Cerere de verificare trimisă</string>
+    <string name="clinician_verification_pending_hint">În așteptarea aprobării manuale — vei vedea statusul actualizat aici.</string>
+    <string name="clinician_verification_verified_title">Cont verificat ca</string>
+    <string name="clinician_verification_resubmit_button">Trimite o cerere nouă</string>
+    <string name="clinician_verification_rejected_title">Cerere respinsă</string>
+    <string name="clinician_verification_rejected_hint">Cererea de verificare a fost respinsă — poți trimite o cerere nouă cu date corectate.</string>
+    <!-- Subtitlu rand Setari (status la o privire, fara sa intri pe ecran) -->
+    <string name="settings_clinician_verification_status_none">Nicio cerere trimisă</string>
+    <string name="settings_clinician_verification_status_pending">Cerere în așteptare</string>
+    <string name="settings_clinician_verification_status_verified">Verificat ca %1$s</string>
+    <string name="settings_clinician_verification_status_rejected">Cerere respinsă</string>
+    <!-- Revizori de verificare profesionala (desemnati manual) -->
+    <string name="review_verifications_title">Revizuire cereri de verificare</string>
+    <string name="review_verifications_empty">Nicio cerere în așteptare.</string>
+    <string name="review_verifications_unknown_name">Utilizator necunoscut</string>
+    <string name="review_verifications_cuim_line">CUIM: %1$s</string>
+    <string name="review_verifications_full_name_line">Nume complet: %1$s</string>
+    <string name="review_verifications_approve_button">Aprobă</string>
+    <string name="review_verifications_reject_button">Respinge</string>
     <string name="account_error_empty_email">Introdu adresa de email</string>
     <string name="account_error_invalid_email">Adresa de email nu e validă</string>
     <string name="account_error_password_too_short">Parola trebuie să aibă cel puțin 6 caractere</string>
@@ -153,7 +172,6 @@
     <string name="account_manage_access_button">Gestionează accesul Aparținătorilor</string>
     <string name="account_manage_professional_access_button">Gestionează accesul Medic/Farmacist</string>
     <string name="account_my_patients_button">Pacienții mei</string>
-    <string name="account_unverified_badge">Cont neverificat — date auto-declarate</string>
     <string name="account_associate_gtin_button">Asociere coduri (GTIN)</string>
     <string name="account_vision_scan_button">Scanare vizuală (experimental)</string>
     <string name="account_enroll_medication_button">Înrolare medicament (experimental)</string>
@@ -230,11 +248,14 @@
     <string name="manage_access_qr_description">Cod QR de invitație — scanează-l cu telefonul Aparținătorului</string>
     <string name="manage_access_status_revoked">Acces revocat</string>
     <string name="manage_access_code_label">Cod: %1$s</string>
+    <string name="manage_access_copy_code_button">Copiază codul</string>
     <string name="manage_access_share_button">Distribuie</string>
     <string name="manage_access_share_text">Cod de acces PillPronto: %1$s\nIntrodu-l în aplicație, la „Pacienții mei”, ca să-mi vezi tratamentele și aderența — sau scanează codul QR de mai jos.</string>
     <string name="manage_access_revoke_button">Revocă</string>
     <string name="manage_access_cancel_button">Anulează</string>
     <string name="manage_access_unverified_suffix">(neverificat)</string>
+    <string name="manage_access_verified_suffix">(verificat)</string>
+    <string name="manage_access_verified_suffix_typed">(verificat ca %1$s)</string>
 
     <!-- Faza 1.5e: Pacient — gestionare acces Medic/Farmacist (aceeasi structura ca mai sus,
          doar filtrata pe rol; string-urile manage_access_* de mai sus sunt reutilizate) -->
@@ -247,6 +268,7 @@
     <string name="my_patients_scan_button">Scanează codul QR</string>
     <string name="my_patients_claim_button">Adaugă pacient</string>
     <string name="my_patients_claim_error">Cod invalid sau deja folosit.</string>
+    <string name="my_patients_claim_error_verification_required">Acest cod cere un cont profesional verificat (Medic/Farmacist), de tipul corect — trimite o cerere de verificare din Setări.</string>
     <string name="my_patients_empty">Nu ai încă niciun pacient legat. Introdu un cod primit de la un pacient.</string>
     <string name="my_patients_adherence_summary">PDC %1$d%%</string>
 

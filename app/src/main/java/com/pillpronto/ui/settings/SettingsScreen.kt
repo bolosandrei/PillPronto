@@ -13,7 +13,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.AddBox
+import androidx.compose.material.icons.filled.Badge
 import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.FactCheck
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.MedicalServices
 import androidx.compose.material.icons.filled.PersonAdd
@@ -49,6 +51,8 @@ import com.pillpronto.core.localization.AppLocale
 import com.pillpronto.core.ui.components.BackTopAppBar
 import com.pillpronto.core.ui.components.SettingsSectionCard
 import com.pillpronto.domain.model.AuthSessionState
+import com.pillpronto.domain.model.Profile
+import com.pillpronto.ui.verification.clinicianTypeLabel
 
 /** Ecran dedicat (Faza refactor meniu) — adună ce era înainte în "Cont" ca butoane plate
  * necondiționate/condiționate diferit: acces&pacienți (cere autentificare) + experimental-viziune
@@ -61,6 +65,8 @@ fun SettingsScreen(
     onManageProfessionalAccess: () -> Unit,
     onMyPatients: () -> Unit,
     onAuditLog: () -> Unit,
+    onClinicianVerification: () -> Unit,
+    onReviewVerificationRequests: () -> Unit,
     onAssociateGtin: () -> Unit,
     onVisionScan: () -> Unit,
     onEnrollMedication: () -> Unit,
@@ -87,6 +93,21 @@ fun SettingsScreen(
                     SettingsRow(Icons.Filled.MedicalServices, stringResource(R.string.account_manage_professional_access_button), onManageProfessionalAccess)
                     SettingsRow(Icons.Filled.Groups, stringResource(R.string.account_my_patients_button), onMyPatients)
                     SettingsRow(Icons.Filled.History, stringResource(R.string.account_audit_log_button), onAuditLog)
+                    SettingsRow(
+                        Icons.Filled.Badge,
+                        stringResource(R.string.clinician_verification_title),
+                        subtitle = clinicianVerificationStatusLabel(state.profile),
+                        onClick = onClinicianVerification
+                    )
+                    // Capability-flag ortogonal, ca isTrustedContributor — setat manual, direct
+                    // in Supabase. Vezi supabase/migrations/0020_clinician_verification_reviewers.sql.
+                    if (state.profile?.isVerificationReviewer == true) {
+                        SettingsRow(
+                            Icons.Filled.FactCheck,
+                            stringResource(R.string.review_verifications_title),
+                            onClick = onReviewVerificationRequests
+                        )
+                    }
                 } else {
                     Text(stringResource(R.string.settings_access_locked_hint), style = MaterialTheme.typography.bodySmall)
                 }
@@ -108,14 +129,26 @@ fun SettingsScreen(
 }
 
 @Composable
-private fun SettingsRow(icon: ImageVector, label: String, onClick: () -> Unit) {
+private fun SettingsRow(icon: ImageVector, label: String, onClick: () -> Unit, subtitle: String? = null) {
     ListItem(
         headlineContent = { Text(label) },
+        supportingContent = subtitle?.let { { Text(it) } },
         leadingContent = { Icon(icon, contentDescription = null) },
         trailingContent = { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null) },
         colors = ListItemDefaults.colors(containerColor = Color.Transparent),
         modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)
     )
+}
+
+@Composable
+private fun clinicianVerificationStatusLabel(profile: Profile?): String = when {
+    profile?.isVerifiedClinician == true -> stringResource(
+        R.string.settings_clinician_verification_status_verified,
+        clinicianTypeLabel(profile.clinicianVerificationType)
+    )
+    profile?.clinicianVerificationRejected == true -> stringResource(R.string.settings_clinician_verification_status_rejected)
+    profile?.clinicianVerificationType != null -> stringResource(R.string.settings_clinician_verification_status_pending)
+    else -> stringResource(R.string.settings_clinician_verification_status_none)
 }
 
 // Sistem/RO/EN — vezi AppLocale (core/localization/) pt. de ce nu folosim AppCompatDelegate
