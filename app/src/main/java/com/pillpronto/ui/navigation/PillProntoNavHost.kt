@@ -35,6 +35,7 @@ import com.pillpronto.ui.account.AccountScreen
 import com.pillpronto.ui.adherence.AdherenceScreen
 import com.pillpronto.ui.patients.MyPatientsScreen
 import com.pillpronto.ui.patients.PatientDetailScreen
+import com.pillpronto.ui.settings.SettingsScreen
 import com.pillpronto.ui.today.TodayScreen
 import com.pillpronto.ui.treatments.AddTreatmentScreen
 import com.pillpronto.ui.treatments.TreatmentDetailScreen
@@ -132,6 +133,13 @@ fun PillProntoNavHost(
             composable(Route.Account.path) {
                 AccountScreen(
                     padding,
+                    onSettings = { navController.navigate(Route.Settings.path) }
+                )
+            }
+            composable(Route.Settings.path) {
+                SettingsScreen(
+                    padding,
+                    onBack = { navController.popBackStack() },
                     onManageAccess = { navController.navigate(Route.ManageAccess.path) },
                     onManageProfessionalAccess = { navController.navigate(Route.ManageProfessionalAccess.path) },
                     onMyPatients = { navController.navigate(Route.MyPatients.create()) },

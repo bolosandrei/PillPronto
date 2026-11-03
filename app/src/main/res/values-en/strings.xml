@@ -159,6 +159,15 @@
     <string name="account_vision_scan_button">Visual scan (experimental)</string>
     <string name="account_enroll_medication_button">Enroll medication (experimental)</string>
     <string name="account_recognize_medication_button">Recognize medication (experimental)</string>
+    <string name="account_section_title">Account</string>
+    <string name="account_settings_button">Settings</string>
+
+    <!-- Menu refactor — new "Settings" screen, separate from "Account" (identity/auth) -->
+    <string name="settings_title">Settings</string>
+    <string name="settings_access_section_title">Access &amp; patients</string>
+    <string name="settings_access_locked_hint">Sign in from Account to manage patient access.</string>
+    <string name="settings_vision_section_title">Experimental — Vision</string>
+    <string name="settings_vision_section_hint">Visual medication recognition features, still under development.</string>
 
     <!-- App language selector -->
     <string name="account_language_title">App language</string>

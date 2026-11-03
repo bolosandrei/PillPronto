@@ -1,6 +1,5 @@
 package com.pillpronto.ui.account
 
-import android.app.Activity
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -10,24 +9,28 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -41,23 +44,17 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.pillpronto.BuildConfig
 import com.pillpronto.R
-import com.pillpronto.core.localization.AppLocale
+import com.pillpronto.core.ui.components.SettingsSectionCard
 import com.pillpronto.domain.model.AuthSessionState
 import com.pillpronto.domain.model.ClinicianType
 import com.pillpronto.domain.model.Profile
 import kotlinx.coroutines.launch
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AccountScreen(
     padding: PaddingValues,
-    onManageAccess: () -> Unit,
-    onManageProfessionalAccess: () -> Unit,
-    onMyPatients: () -> Unit,
-    onAuditLog: () -> Unit,
-    onAssociateGtin: () -> Unit,
-    onVisionScan: () -> Unit,
-    onEnrollMedication: () -> Unit,
-    onRecognizeMedication: () -> Unit,
+    onSettings: () -> Unit,
     vm: AccountViewModel = hiltViewModel()
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
@@ -79,108 +76,53 @@ fun AccountScreen(
         )
     }
 
-    Column(
-        Modifier.fillMaxSize().padding(padding).padding(16.dp).verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        // Selector de limba — vizibil necondiționat (setare globala, nu tine de autentificare).
-        LanguageSelector()
-
-        // Vizibil DOAR pt. contribuitori de incredere (profiles.is_trusted_contributor, setat
-        // manual — vezi Profile.kt) — un user obisnuit nu are ce cauta aici: propriile lui
-        // mapari se invata oricum automat din fluxul de scanare al AddTreatmentScreen, iar acest
-        // ecran e gandit special pt. construirea rapida a catalogului PARTAJAT, la care doar
-        // contribuitorii de incredere pot scrie (RLS server-side, dar ascundem si butonul —
-        // altfel un user obisnuit ar vedea un buton care nu face nimic util pt. el).
-        if (state.profile?.isTrustedContributor == true) {
-            OutlinedButton(onClick = onAssociateGtin, modifier = Modifier.fillMaxWidth()) {
-                Text(stringResource(R.string.account_associate_gtin_button))
-            }
-        }
-
-        // Faza 3a-i, experimental — doar feed live de camera, fara scriere de date, vizibil
-        // necondiționat (spre deosebire de asocierea GTIN de mai sus).
-        OutlinedButton(onClick = onVisionScan, modifier = Modifier.fillMaxWidth()) {
-            Text(stringResource(R.string.account_vision_scan_button))
-        }
-
-        // Faza 4b, experimental — inrolare medicament nou (embeddings). Date STRICT locale, fara
-        // sincronizare Supabase (health-adjacent) — spre deosebire de gtin_mappings, aici nu
-        // exista concept de "incredere"/catalog partajat, deci vizibil necondiționat, ca scanarea.
-        OutlinedButton(onClick = onEnrollMedication, modifier = Modifier.fillMaxWidth()) {
-            Text(stringResource(R.string.account_enroll_medication_button))
-        }
-
-        // Faza 4c-i, experimental — recunoastere pe un singur obiect central (fara detectie
-        // multi-obiect, vezi CLAUDE.md) folosind modelul de embeddings antrenat custom + galeria
-        // locala din Faza 4b. Vizibil necondiționat, ca inrolarea (aceleasi date strict locale).
-        OutlinedButton(onClick = onRecognizeMedication, modifier = Modifier.fillMaxWidth()) {
-            Text(stringResource(R.string.account_recognize_medication_button))
-        }
-
-        when (val session = state.sessionState) {
-            is AuthSessionState.Loading -> LoadingIndicator()
-            is AuthSessionState.Unauthenticated ->
-                if (state.signUpAwaitingConfirmation) {
-                    SignUpConfirmationPending(email = state.email, onBackToSignIn = vm::onBackToSignIn)
-                } else {
-                    LoggedOutForm(state = state, vm = vm)
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(stringResource(R.string.nav_account)) },
+                actions = {
+                    // Punct unic de intrare catre ecranul "Setari" (acces&pacienti +
+                    // experimental-viziune) — iconita rotita in loc de rand intreg in lista,
+                    // vizibila necondiționat (Setari ramane accesibil si delogat, vezi
+                    // SettingsScreen — scanarea/inrolarea/recunoasterea nu cer autentificare).
+                    IconButton(onClick = onSettings) {
+                        Icon(Icons.Filled.Settings, contentDescription = stringResource(R.string.account_settings_button))
+                    }
                 }
-            is AuthSessionState.Authenticated ->
-                // Afisam profilul de indata ce-l avem, chiar daca un refresh() e in curs pe fundal
-                // (profileChecked=false temporar la fiecare revenire pe tab, vezi LaunchedEffect
-                // de mai sus) — altfel ecranul clipeste la spinner de fiecare data cand userul
-                // reintra pe tab-ul "Cont", desi datele vechi erau oricum corecte in >99% din
-                // cazuri. Spinner-ul ramane doar pentru primul fetch real.
-                when {
-                    state.profile != null -> LoggedInView(
-                        profile = state.profile!!,
-                        onSignOut = vm::onSignOut,
-                        onManageAccess = onManageAccess,
-                        onManageProfessionalAccess = onManageProfessionalAccess,
-                        onMyPatients = onMyPatients,
-                        onAuditLog = onAuditLog,
-                        onDeclareClinicianType = vm::onDeclareClinicianType
-                    )
-                    // Faza 1.5h — niciun profil salvat inca (cont nou): formular inline de nume,
-                    // in loc de navigare catre un ecran separat de Onboarding (eliminat) — vezi
-                    // CLAUDE.md sectiunea 7 pt. clasa de bug "cursa onboarding->bounce-back" pe
-                    // care aceasta simplificare o elimina structural.
-                    state.profileChecked -> DisplayNameForm(state = state, vm = vm)
-                    else -> LoadingIndicator()
-                }
+            )
         }
-    }
-}
-
-// Sistem/RO/EN — vezi AppLocale (core/localization/) pt. de ce nu folosim AppCompatDelegate
-// (MainActivity extinde ComponentActivity, nu AppCompatActivity). Pe API 33+ recreate() e
-// tehnic redundant (sistemul recreeaza activitatea singur la schimbarea LocaleManager), dar il
-// pastram necondiționat ca schimbarea sa se vada instant si uniform pe toate versiunile.
-@Composable
-private fun LanguageSelector() {
-    val context = LocalContext.current
-    var selected by remember { mutableStateOf(AppLocale.getLanguage(context)) }
-    val options = listOf(
-        null to R.string.account_language_system,
-        AppLocale.LANGUAGE_ROMANIAN to R.string.account_language_romanian,
-        AppLocale.LANGUAGE_ENGLISH to R.string.account_language_english
-    )
-    Column(Modifier.fillMaxWidth()) {
-        Text(stringResource(R.string.account_language_title), style = MaterialTheme.typography.labelLarge)
-        SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-            options.forEachIndexed { index, (language, labelRes) ->
-                SegmentedButton(
-                    selected = selected == language,
-                    onClick = {
-                        selected = language
-                        AppLocale.setLanguage(context, language)
-                        (context as? Activity)?.recreate()
-                    },
-                    shape = SegmentedButtonDefaults.itemShape(index = index, count = options.size)
-                ) {
-                    Text(stringResource(labelRes))
-                }
+    ) { innerPadding ->
+        Column(
+            Modifier.fillMaxSize().padding(padding).padding(innerPadding).padding(16.dp).verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            when (val session = state.sessionState) {
+                is AuthSessionState.Loading -> LoadingIndicator()
+                is AuthSessionState.Unauthenticated ->
+                    if (state.signUpAwaitingConfirmation) {
+                        SignUpConfirmationPending(email = state.email, onBackToSignIn = vm::onBackToSignIn)
+                    } else {
+                        LoggedOutForm(state = state, vm = vm)
+                    }
+                is AuthSessionState.Authenticated ->
+                    // Afisam profilul de indata ce-l avem, chiar daca un refresh() e in curs pe fundal
+                    // (profileChecked=false temporar la fiecare revenire pe tab, vezi LaunchedEffect
+                    // de mai sus) — altfel ecranul clipeste la spinner de fiecare data cand userul
+                    // reintra pe tab-ul "Cont", desi datele vechi erau oricum corecte in >99% din
+                    // cazuri. Spinner-ul ramane doar pentru primul fetch real.
+                    when {
+                        state.profile != null -> LoggedInView(
+                            profile = state.profile!!,
+                            onSignOut = vm::onSignOut,
+                            onDeclareClinicianType = vm::onDeclareClinicianType
+                        )
+                        // Faza 1.5h — niciun profil salvat inca (cont nou): formular inline de nume,
+                        // in loc de navigare catre un ecran separat de Onboarding (eliminat) — vezi
+                        // CLAUDE.md sectiunea 7 pt. clasa de bug "cursa onboarding->bounce-back" pe
+                        // care aceasta simplificare o elimina structural.
+                        state.profileChecked -> DisplayNameForm(state = state, vm = vm)
+                        else -> LoadingIndicator()
+                    }
             }
         }
     }
@@ -317,40 +259,22 @@ private fun DisplayNameForm(state: AccountUiState, vm: AccountViewModel) {
 private fun LoggedInView(
     profile: Profile,
     onSignOut: () -> Unit,
-    onManageAccess: () -> Unit,
-    onManageProfessionalAccess: () -> Unit,
-    onMyPatients: () -> Unit,
-    onAuditLog: () -> Unit,
     onDeclareClinicianType: (ClinicianType?) -> Unit
 ) {
-    Text(
-        stringResource(R.string.account_logged_in_as, profile.displayName ?: "—"),
-        style = MaterialTheme.typography.headlineSmall
-    )
+    // Gruparea vizuala (Card cu titlu) inlocuieste lista plata de butoane de inainte de refactor —
+    // "Gestioneaza acces"/"Acces profesional"/"Pacientii mei"/"Audit log" s-au mutat in
+    // SettingsScreen (vezi AccountScreen), ramane doar identitatea contului.
+    SettingsSectionCard(title = stringResource(R.string.account_section_title)) {
+        Text(
+            stringResource(R.string.account_logged_in_as, profile.displayName ?: "—"),
+            style = MaterialTheme.typography.headlineSmall
+        )
 
-    // Mereu vizibile, independent unele de altele — fiecare cont e implicit Pacient (Faza 1.5h)
-    // SI poate revendica oricand un cod ca Apartinator/Medic/Farmacist pt. alti pacienti, fara
-    // nicio declarare in prealabil (revendicarea insasi e suficienta). "Pacientii mei" ramane
-    // NECONDIȚIONAT vizibil, nu doar dupa ce ai deja o legatura acceptata — altfel n-ai avea cum
-    // sa revendici PRIMUL cod (bug real gasit prin testare live: butonul care contine campul de
-    // introducere a codului nu poate fi ascuns pana ai deja o legatura, ar fi o bucla imposibila).
-    OutlinedButton(onClick = onManageAccess, modifier = Modifier.fillMaxWidth()) {
-        Text(stringResource(R.string.account_manage_access_button))
-    }
-    OutlinedButton(onClick = onManageProfessionalAccess, modifier = Modifier.fillMaxWidth()) {
-        Text(stringResource(R.string.account_manage_professional_access_button))
-    }
-    OutlinedButton(onClick = onAuditLog, modifier = Modifier.fillMaxWidth()) {
-        Text(stringResource(R.string.account_audit_log_button))
-    }
-    OutlinedButton(onClick = onMyPatients, modifier = Modifier.fillMaxWidth()) {
-        Text(stringResource(R.string.account_my_patients_button))
-    }
+        ClinicianDeclarationSection(profile.declaredClinicianType, onDeclareClinicianType)
 
-    ClinicianDeclarationSection(profile.declaredClinicianType, onDeclareClinicianType)
-
-    OutlinedButton(onClick = onSignOut, modifier = Modifier.fillMaxWidth()) {
-        Text(stringResource(R.string.account_sign_out))
+        OutlinedButton(onClick = onSignOut, modifier = Modifier.fillMaxWidth()) {
+            Text(stringResource(R.string.account_sign_out))
+        }
     }
 }
 
